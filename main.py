@@ -58,7 +58,6 @@ def run_app():
                 setattr(np, attr, builtin_type)
         
         # Explicitly ensure it's on the 'numpy' module object in sys.modules
-        import sys
         if 'numpy' in sys.modules:
             for attr, builtin_type in patch_map.items():
                 if not hasattr(sys.modules['numpy'], attr):
