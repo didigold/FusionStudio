@@ -1,0 +1,32 @@
+SOFTWARE LICENSE NOTICE
+
+This application, "Fusion Studio", is developed for internal use at Applus+ IDIADA.
+It incorporates third-party open source software components.
+
+COMPONENT: Qt for Python (PySide6)
+LICENSE: LGPLv3 (Lesser General Public License version 3)
+SOURCE: https://www.qt.io/qt-for-python
+COPYRIGHT: The Qt Company Ltd.
+
+This component is dynamically linked. Users may replace this library
+with their own compatible version in accordance with LGPLv3 requirements.
+
+COMPONENT: asammdf
+LICENSE: LGPLv3+
+SOURCE: https://github.com/danielhrisca/asammdf
+COPYRIGHT: Daniel Hrisca
+
+COMPONENT: PyQtGraph
+LICENSE: MIT License
+SOURCE: http://www.pyqtgraph.org/
+COPYRIGHT: Luke Campagnola
+
+COMPONENT: NumPy
+LICENSE: BSD 3-Clause License
+SOURCE: https://numpy.org/
+COPYRIGHT: NumPy Developers
+
+DISCLAIMER:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.

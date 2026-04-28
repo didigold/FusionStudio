@@ -1,0 +1,28 @@
+# Fusion Studio Dependencies
+# GUI Framework (LGPLv3)
+PySide6>=6.5.0
+
+# MDF4 File Processing (LGPLv3+)
+asammdf>=7.0.0
+
+# Signal Plotting and Visualization
+pyqtgraph>=0.13.0
+matplotlib>=3.7.0
+
+# Scientific Computing (BSD)
+# NOTE: Pinning numpy < 2.0.0 to avoid binary incompatibility with extensions like pandas/asammdf
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0
+
+# Computer Vision & Tracking
+opencv-python
+mediapipe
+
+# Data Analysis
+pandas
+openpyxl
+xlwings
+
+# Utilities
+Pillow
+packaging
