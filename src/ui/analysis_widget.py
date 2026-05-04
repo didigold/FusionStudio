@@ -1481,14 +1481,26 @@ class LogicTabWidget(QWidget):
         self._config_modified = False
         self._current_config_name = "Save config"
         
-        # Pulsing animation for Save button
-        self.save_btn_anim = QVariantAnimation(self)
-        self.save_btn_anim.setDuration(1500) # Smooth and slow
-        self.save_btn_anim.setStartValue(QColor("#444444"))
-        self.save_btn_anim.setEndValue(QColor("#FFFFFF"))
-        self.save_btn_anim.setEasingCurve(QEasingCurve.InOutSine)
+        # Pulsing animation for Save button (smooth yoyo)
+        self.save_btn_anim = QSequentialAnimationGroup(self)
+        
+        self._save_anim_up = QVariantAnimation(self)
+        self._save_anim_up.setDuration(1000)
+        self._save_anim_up.setStartValue(QColor("#444444"))
+        self._save_anim_up.setEndValue(QColor("#FFFFFF"))
+        self._save_anim_up.setEasingCurve(QEasingCurve.InOutSine)
+        self._save_anim_up.valueChanged.connect(self._update_save_btn_style)
+        
+        self._save_anim_down = QVariantAnimation(self)
+        self._save_anim_down.setDuration(1000)
+        self._save_anim_down.setStartValue(QColor("#FFFFFF"))
+        self._save_anim_down.setEndValue(QColor("#444444"))
+        self._save_anim_down.setEasingCurve(QEasingCurve.InOutSine)
+        self._save_anim_down.valueChanged.connect(self._update_save_btn_style)
+        
+        self.save_btn_anim.addAnimation(self._save_anim_up)
+        self.save_btn_anim.addAnimation(self._save_anim_down)
         self.save_btn_anim.setLoopCount(-1)
-        self.save_btn_anim.valueChanged.connect(self._update_save_btn_style)
         
         # GSR ADDW Image Mapping (Case Name -> Image File Name)
         self.gsr_image_mapping = {f"ADDW{i}": f"{i}.png" for i in range(1, 15)}
@@ -1546,7 +1558,7 @@ class LogicTabWidget(QWidget):
         self.btn_auto_load = QPushButton("Auto-Load data")
         self.btn_auto_load.setToolTip("Automatically load corresponding MF4 files for each category from the selected source directory")
         self.btn_auto_load.setIcon(QIcon(resource_path("assets/icons/folder_match_16dp_FFFFFF_FILL0_wght400_GRAD0_opsz20.png")))
-        self.btn_auto_load.setStyleSheet("background-color: #444; color: white; font-weight: normal; border: 1px solid #555; padding: 4px 10px; border-radius: 4px;")
+        self.btn_auto_load.setStyleSheet("padding: 0 10px; font-weight: normal;")
         self.btn_auto_load.setFixedHeight(32)
         self.btn_auto_load.setCursor(Qt.PointingHandCursor)
         self.btn_auto_load.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -1783,12 +1795,12 @@ class LogicTabWidget(QWidget):
         
         # Sliding Indicator (Animated Box)
         self.tab_indicator = QFrame(self.tabs_container)
-        self.tab_indicator.setStyleSheet(f"""
-            QFrame {{
+        self.tab_indicator.setStyleSheet("""
+            QFrame {
                 background-color: #2a2a2a;
-                border: 2px solid {IDIADA_ORANGE};
+                border: 1px solid #444;
                 border-radius: 6px;
-            }}
+            }
         """)
         self.tab_indicator.lower() # Place behind buttons
         
@@ -2076,15 +2088,15 @@ class LogicTabWidget(QWidget):
             btn.blockSignals(True)
             if cat == category:
                 btn.setChecked(True)
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        color: {IDIADA_ORANGE};
+                btn.setStyleSheet("""
+                    QPushButton {
+                        color: #FFFFFF;
                         border: none;
-                        font-weight: bold;
+                        font-weight: 600;
                         background-color: transparent;
                         padding: 6px 10px;
                         font-size: 11px;
-                    }}
+                    }
                 """)
             else:
                 btn.setChecked(False)
