@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
 from PySide6.QtWidgets import QMenu
 from PySide6.QtCore import (Qt, QSize, QThread, Signal, QPoint, QRect, QPropertyAnimation, QVariantAnimation,
                              QEasingCurve, QParallelAnimationGroup, QSequentialAnimationGroup, QTimer)
-from PySide6.QtGui import QIcon, QColor, QFont, QImage, QPixmap, QDragEnterEvent, QDropEvent, QPainter, QAction, QPen
+from PySide6.QtGui import QIcon, QColor, QFont, QImage, QPixmap, QDragEnterEvent, QDropEvent, QPainter, QAction, QPen, QTransform
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QVideoFrame
 from PySide6.QtMultimediaWidgets import QVideoWidget
 # Scientific and processing libraries are imported locally where needed
@@ -5304,59 +5304,64 @@ class AnalysisWidget(QWidget):
 
     def create_tab_report(self):
         tab = QWidget()
-        l = QVBoxLayout()
-        l.setContentsMargins(15, 15, 15, 15)
-        l.setSpacing(10)
+        main_layout = QVBoxLayout(tab)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(10)
 
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(1)
-        splitter.setChildrenCollapsible(False)
-        splitter.setStyleSheet("QSplitter::handle { background: #444; }")
-
-        # Left panel — OEM, Vehicle, Track
-        w_left = QWidget()
-        f_left = QFormLayout(w_left)
-        f_left.setContentsMargins(0, 0, 10, 0)
-        f_left.setVerticalSpacing(10)
-        f_left.setHorizontalSpacing(5)
-        f_left.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        # Use FadeStackedWidget for premium feel transition
+        self.report_stack = FadeStackedWidget()
+        
+        # --- PAGE 1: OEM, Vehicle, Track ---
+        page1 = QWidget()
+        l1 = QVBoxLayout(page1)
+        l1.setContentsMargins(0, 0, 0, 0)
+        
+        f1 = QFormLayout()
+        f1.setVerticalSpacing(15)
+        f1.setHorizontalSpacing(10)
+        f1.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         self.combo_oem = QComboBox()
         self.populate_oem_combo()
         self.combo_oem.setPlaceholderText("Select OEM")
-        self.combo_oem.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.combo_oem.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.txt_vehicle = QLineEdit()
         self.txt_vehicle.setPlaceholderText("VW Golf 8")
-        self.txt_vehicle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.txt_vehicle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.combo_track = QComboBox()
         self.combo_track.setEditable(True)
         self.populate_track_combo()
-        self.combo_track.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.combo_track.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         for text, field in [("OEM:", self.combo_oem), 
                             ("Vehicle:", self.txt_vehicle), 
                             ("Track:", self.combo_track)]:
             lbl = QLabel(text)
-            lbl.setMinimumWidth(70)
-            f_left.addRow(lbl, field)
+            lbl.setStyleSheet("font-weight: bold; color: #bbb;")
+            f1.addRow(lbl, field)
+            
+        l1.addLayout(f1)
+        l1.addStretch()
 
-        # Right panel — Engineer, Analyst, Euro NCAP
-        w_right = QWidget()
-        f_right = QFormLayout(w_right)
-        f_right.setContentsMargins(10, 0, 0, 0)
-        f_right.setVerticalSpacing(10)
-        f_right.setHorizontalSpacing(5)
-        f_right.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        # --- PAGE 2: Engineer, Analyst, Euro NCAP ---
+        page2 = QWidget()
+        l2 = QVBoxLayout(page2)
+        l2.setContentsMargins(0, 0, 0, 0)
+        
+        f2 = QFormLayout()
+        f2.setVerticalSpacing(15)
+        f2.setHorizontalSpacing(10)
+        f2.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         self.txt_engineer = QLineEdit()
         self.txt_engineer.setPlaceholderText("Firstname Lastname")
-        self.txt_engineer.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.txt_engineer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.txt_analyst = QLineEdit()
         self.txt_analyst.setPlaceholderText("Firstname Lastname")
-        self.txt_analyst.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.txt_analyst.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.toggle_ncap = AnimatedToggle()
 
@@ -5364,17 +5369,72 @@ class AnalysisWidget(QWidget):
                             ("Analyst:", self.txt_analyst), 
                             ("Euro NCAP:", self.toggle_ncap)]:
             lbl = QLabel(text)
-            lbl.setMinimumWidth(70)
-            f_right.addRow(lbl, field)
+            lbl.setStyleSheet("font-weight: bold; color: #bbb;")
+            f2.addRow(lbl, field)
+            
+        l2.addLayout(f2)
+        l2.addStretch()
 
-        splitter.addWidget(w_left)
-        splitter.addWidget(w_right)
-        splitter.setSizes([5000, 5000])  # force exact 50/50 split
+        self.report_stack.addWidget(page1)
+        self.report_stack.addWidget(page2)
+        
+        main_layout.addWidget(self.report_stack)
 
-        l.addWidget(splitter)
-        l.addStretch()
-        tab.setLayout(l)
+        # --- Navigation Controls (Visible always) ---
+        h_nav = QHBoxLayout()
+        
+        self.btn_report_prev = QPushButton(" Previous")
+        self.btn_report_next = QPushButton(" Next")
+        
+        for btn in [self.btn_report_prev, self.btn_report_next]:
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumSize(100, 32)
+            btn.setStyleSheet("""
+                QPushButton { 
+                    background-color: #333; 
+                    border: 1px solid #555;
+                    border-radius: 6px; 
+                    padding: 4px 10px; 
+                    font-weight: bold;
+                    color: white;
+                } 
+                QPushButton:hover { background-color: #444; border-color: #777; }
+                QPushButton:pressed { background-color: #222; }
+                QPushButton:disabled { background-color: #222; color: #555; border-color: #333; }
+            """)
+
+        icon_path = resource_path("assets/icons/keyboard_arrow_up_16dp_FFFFFF_FILL0_wght400_GRAD0_opsz20.png")
+        if os.path.exists(icon_path):
+            pix = QPixmap(icon_path)
+            # Next: Rotate 90
+            trans_next = QTransform().rotate(90)
+            self.btn_report_next.setIcon(QIcon(pix.transformed(trans_next, Qt.SmoothTransformation)))
+            # Prev: Rotate -90
+            trans_prev = QTransform().rotate(-90)
+            self.btn_report_prev.setIcon(QIcon(pix.transformed(trans_prev, Qt.SmoothTransformation)))
+            
+            self.btn_report_next.setIconSize(QSize(16, 16))
+            self.btn_report_prev.setIconSize(QSize(16, 16))
+
+        h_nav.addWidget(self.btn_report_prev)
+        h_nav.addStretch()
+        h_nav.addWidget(self.btn_report_next)
+        main_layout.addLayout(h_nav)
+
         self.tabs_left.addTab(tab, QIcon(resource_path("assets/icons/file_png_18dp_FFFFFF_FILL0_wght400_GRAD0_opsz20.png")), "Report")
+        
+        # Connections
+        self.btn_report_next.clicked.connect(lambda: self.report_stack.setCurrentIndex(1))
+        self.btn_report_prev.clicked.connect(lambda: self.report_stack.setCurrentIndex(0))
+        
+        # Update button states
+        def update_report_nav_buttons():
+            idx = self.report_stack.currentIndex()
+            self.btn_report_prev.setEnabled(idx > 0)
+            self.btn_report_next.setEnabled(idx < self.report_stack.count() - 1)
+            
+        self.report_stack.currentChanged.connect(update_report_nav_buttons)
+        update_report_nav_buttons() # Initial call
         
         self.combo_oem.currentTextChanged.connect(self.on_oem_changed)
         self.txt_vehicle.textChanged.connect(self.on_vehicle_changed)
@@ -5514,6 +5574,7 @@ class AnalysisWidget(QWidget):
             "(13) Misuse Area", 
             "(14) ADAS/CAV 1",
             "(15) ADAS/CAV 3"]
+        
         icpg = ["(1) High Speed Circuit", 
                     "(2) External Noise Track", 
                     "(3) Dynamic Platform", 
@@ -5532,8 +5593,13 @@ class AnalysisWidget(QWidget):
                     "(15) Test Hills", 
                     "(16) SLB B", 
                     "(17) Bend Line Braking"]
-        hq.sort()
-        icpg.sort()
+        
+        def natural_sort_key(s):
+            return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
+
+        hq.sort(key=natural_sort_key)
+        icpg.sort(key=natural_sort_key)
+        
         self.combo_track.addItem("---- HQ ----")
         for t in hq: self.combo_track.addItem(t)
         self.combo_track.addItem("---- ICPG ----")
