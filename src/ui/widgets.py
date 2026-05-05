@@ -356,8 +356,8 @@ class ExpandableSidebar(QFrame):
         
         self.layout.addSpacing(10)
         
-        # Block: Miscellaneous
-        sep_misc = SidebarSeparator("MISCELLANEOUS")
+        # Block: Labs
+        sep_misc = SidebarSeparator("LABS")
         self.layout.addWidget(sep_misc)
         self.separators.append(sep_misc)
         

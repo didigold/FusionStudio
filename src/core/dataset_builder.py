@@ -68,31 +68,42 @@ class DatasetBuilder(QObject):
             final_df.to_csv(output_csv, index=False)
             self.log.emit(f"Dataset created successfully: {len(final_df)} samples.")
             self.finished.emit(output_csv)
+            return True
             
         except Exception as e:
             import traceback
             self.log.emit(f"Error building dataset: {str(e)}")
             traceback.print_exc()
             self.error.emit(str(e))
+            return False
 
     def _resolve_mf4_path(self, root, case_key):
         """
         Attempts to locate the tracking file based on the key.
         """
+        # 1. Try direct relative to root (where marks.json is)
+        direct_root_path = os.path.normpath(os.path.join(root, case_key))
+        if os.path.exists(direct_root_path):
+            return direct_root_path
+            
+        # 2. Try treating case_key as a direct relative path from root's parent
+        parent_dir = os.path.dirname(root)
+        direct_parent_path = os.path.normpath(os.path.join(parent_dir, case_key))
+        if os.path.exists(direct_parent_path):
+            return direct_parent_path
+            
+        # 3. Fallback logic for older formats
         parts = case_key.split('/')
-        if len(parts) < 2: return None
-        
-        subject, case = parts[0], parts[1]
-        
-        # Try different common patterns
-        patterns = [
-            os.path.join(root, subject, f"{case}_tracking.mf4"),
-            os.path.join(root, subject, case, f"{case}_tracking.mf4"),
-            os.path.join(root, f"{case}_tracking.mf4")
-        ]
-        
-        for p in patterns:
-            if os.path.exists(p): return p
+        if len(parts) >= 2:
+            subject, case = parts[0], parts[1]
+            patterns = [
+                os.path.join(root, subject, f"{case}_tracking.mf4"),
+                os.path.join(root, subject, case, f"{case}_tracking.mf4"),
+                os.path.join(root, f"{case}_tracking.mf4")
+            ]
+            for p in patterns:
+                if os.path.exists(p): return p
+                
         return None
 
     def _extract_features_and_labels(self, mf4_path, ground_truth_ts):

@@ -3,56 +3,121 @@ ML Engine for FusionStudio - Model training and inference.
 """
 import os
 import joblib
+import json
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+import numpy as np
+from datetime import datetime
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, log_loss
 from PySide6.QtCore import QObject, Signal
 
 class MLEngine(QObject):
     log = Signal(str)
     trained = Signal(bool)
+    epoch_progress = Signal(int, float, float) # epoch, loss, acc
 
-    def __init__(self, model_path="models/gaze_model.pkl"):
+    def __init__(self, base_models_dir="models"):
         super().__init__()
-        self.model_path = model_path
+        self.base_models_dir = base_models_dir
         self.model = None
-        self.load_model()
+        self.metadata = {"projects": [], "history": {"loss": [], "acc": []}, "name": "Distraction Detector"}
 
-    def load_model(self):
-        if os.path.exists(self.model_path):
+    def load_model(self, model_path):
+        if os.path.exists(model_path):
             try:
-                self.model = joblib.load(self.model_path)
-                self.log.emit("AI Brain loaded successfully.")
+                data = joblib.load(model_path)
+                self.model = data.get("model")
+                self.metadata = data.get("metadata", {"projects": [], "history": {"loss": [], "acc": []}, "name": "Distraction Detector"})
+                self.model_path = model_path
+                self.log.emit(f"AI Brain loaded from {os.path.basename(os.path.dirname(model_path))}")
                 return True
             except Exception as e:
                 self.log.emit(f"Error loading model: {e}")
         return False
 
-    def train(self, dataset_csv):
+    def find_latest_model(self, model_name="distraction_detector"):
         """
-        Trains the model using the provided CSV.
+        Scans the models folder for the most recent build of a specific model.
+        """
+        model_root = os.path.join(self.base_models_dir, model_name)
+        if not os.path.exists(model_root):
+            return None
+            
+        builds = [d for d in os.listdir(model_root) if os.path.isdir(os.path.join(model_root, d)) and d.startswith("build_")]
+        if not builds:
+            return None
+            
+        # Sort by timestamp (build_YYYYMMDD_HHMMSS)
+        latest_build = sorted(builds)[-1]
+        latest_path = os.path.join(model_root, latest_build, "model.pkl")
+        
+        if os.path.exists(latest_path):
+            return latest_path
+        return None
+
+    def train(self, dataset_csv, model_name, epochs, lr, project_paths):
+        """
+        Trains the model using MLPClassifier to simulate real epochs and updates.
         """
         try:
-            self.log.emit("Training AI Brain... this may take a moment.")
+            self.log.emit("Preparing dataset...")
             df = pd.read_csv(dataset_csv)
             
-            # Features to use
             features = ['h', 'v', 'h_d', 'v_d', 'speed', 'h_var', 'v_var']
-            X = df[features]
-            y = df['label']
+            X = df[features].values
+            y = df['label'].values
             
-            # Train Random Forest
-            self.model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
-            self.model.fit(X, y)
+            # If model is new or we want to overwrite, init MLP
+            if self.model is None or not isinstance(self.model, MLPClassifier):
+                self.log.emit("Initializing new Multi-Layer Perceptron...")
+                self.model = MLPClassifier(hidden_layer_sizes=(64, 32), learning_rate_init=lr, random_state=42, max_iter=1)
+                
+            classes = np.array([0, 1])
             
-            # Save
-            os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
-            joblib.dump(self.model, self.model_path)
+            # Reset history for this session
+            self.metadata["history"] = {"loss": [], "acc": []}
+            # Update tracked projects (union)
+            self.metadata["projects"] = list(set(self.metadata.get("projects", []) + project_paths))
+            self.metadata["name"] = model_name
+
+            self.log.emit(f"Training AI Brain '{model_name}' for {epochs} epochs...")
             
-            self.log.emit("AI Brain update complete. Model saved.")
+            for epoch in range(1, epochs + 1):
+                self.model.partial_fit(X, y, classes=classes)
+                
+                # Calculate metrics
+                y_pred = self.model.predict(X)
+                y_prob = self.model.predict_proba(X)
+                
+                acc = accuracy_score(y, y_pred)
+                loss = log_loss(y, y_prob)
+                
+                self.metadata["history"]["loss"].append(float(loss))
+                self.metadata["history"]["acc"].append(float(acc))
+                
+                self.epoch_progress.emit(epoch, loss, acc)
+                
+            # Save Model with Versioning
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = model_name.replace(" ", "_").lower()
+            version_dir = os.path.join(self.base_models_dir, safe_name, f"build_{timestamp}")
+            os.makedirs(version_dir, exist_ok=True)
+            
+            save_path = os.path.join(version_dir, "model.pkl")
+            
+            joblib.dump({"model": self.model, "metadata": self.metadata}, save_path)
+            
+            # Also save metadata as a readable JSON
+            with open(os.path.join(version_dir, "metadata.json"), "w") as f:
+                json.dump(self.metadata, f, indent=4)
+            
+            self.log.emit(f"Training complete. Model saved to: {version_dir}")
             self.trained.emit(True)
             return True
         except Exception as e:
+            import traceback
             self.log.emit(f"Training failed: {e}")
+            traceback.print_exc()
             return False
 
     def predict_intervals(self, timestamps, h, v):

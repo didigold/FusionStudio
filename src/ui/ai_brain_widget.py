@@ -10,29 +10,76 @@ import pyqtgraph as pg
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QTreeWidget, QTreeWidgetItem, QProgressBar, 
                              QTextEdit, QFrame, QSplitter, QGroupBox, QDoubleSpinBox, QSpinBox, QGridLayout, QFileDialog, QLineEdit)
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QTimer, Property, QEasingCurve, QPropertyAnimation
+from PySide6.QtCore import Qt, QSize, Signal, Slot, QTimer, Property, QEasingCurve, QPropertyAnimation, QThread
 from PySide6.QtGui import QIcon, QFont, QColor, QPainter, QLinearGradient, QImage, QFontMetrics
 from src.core.dataset_builder import DatasetBuilder
 from src.core.ml_engine import MLEngine
 from src.core.utils import resource_path
 from src.ui.styles import IDIADA_ORANGE, LOGIC_INPUT_STYLE
 from src.ui.widgets import AnimatedExpandButton
+import time
+
+class ClickableLineEdit(QLineEdit):
+    clicked = Signal()
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.clicked.emit()
+
+class TrainingWorker(QThread):
+    finished_ok = Signal()
+    failed = Signal(str)
+
+    def __init__(self, builder, engine, root_folders, csv_path, model_name, epochs, lr, parent=None):
+        super().__init__(parent)
+        self.builder = builder
+        self.engine = engine
+        self.root_folders = root_folders
+        self.csv_path = csv_path
+        self.model_name = model_name
+        self.epochs = epochs
+        self.lr = lr
+
+    def run(self):
+        try:
+            built_ok = self.builder.build_from_folders(self.root_folders, self.csv_path)
+            if not built_ok:
+                self.failed.emit("Failed to generate training dataset. Check if mf4 tracking files exist.")
+                return
+                
+            success = self.engine.train(self.csv_path, self.model_name, self.epochs, self.lr, self.root_folders)
+            if success:
+                self.finished_ok.emit()
+            else:
+                self.failed.emit("Model training failed.")
+        except Exception as e:
+            self.failed.emit(str(e))
 
 class MarqueeLabel(QWidget):
     def __init__(self, text, parent=None):
         super().__init__(parent)
         self.text = text
         self.offset = 0
+        self.is_running = False
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.scroll_text)
         self.font_obj = QFont("Switzer", 10, QFont.Normal)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        
+        self.hover_timer = QTimer(self)
+        self.hover_timer.setSingleShot(True)
+        self.hover_timer.timeout.connect(self.start)
 
-    def showEvent(self, event):
+    def start(self):
         fm = QFontMetrics(self.font_obj)
         if fm.horizontalAdvance(self.text) > self.width():
+            self.is_running = True
             self.timer.start(30)
-        super().showEvent(event)
+
+    def stop(self):
+        self.is_running = False
+        self.timer.stop()
+        self.offset = 0
+        self.update()
 
     def scroll_text(self):
         self.offset -= 1
@@ -61,24 +108,57 @@ class MarqueeLabel(QWidget):
         img_painter.setPen(QColor(255, 255, 255))
         
         y = (self.height() + fm.ascent() - fm.descent()) // 2
-        img_painter.drawText(self.offset, y, self.text)
+        
+        if self.is_running:
+            img_painter.drawText(self.offset, y, self.text)
+        else:
+            img_painter.drawText(0, y, self.text)
         
         img_painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
         gradient = QLinearGradient(0, 0, self.width(), 0)
-        gradient.setColorAt(0, QColor(0, 0, 0, 0))
-        gradient.setColorAt(0.1, QColor(0, 0, 0, 255))
-        gradient.setColorAt(0.9, QColor(0, 0, 0, 255))
-        gradient.setColorAt(1, QColor(0, 0, 0, 0))
+        
+        if self.is_running:
+            gradient.setColorAt(0, QColor(0, 0, 0, 0))
+            gradient.setColorAt(0.1, QColor(0, 0, 0, 255))
+            gradient.setColorAt(0.9, QColor(0, 0, 0, 255))
+            gradient.setColorAt(1, QColor(0, 0, 0, 0))
+        else:
+            # Fade only right when static
+            gradient.setColorAt(0, QColor(0, 0, 0, 255))
+            gradient.setColorAt(0.85, QColor(0, 0, 0, 255))
+            gradient.setColorAt(1, QColor(0, 0, 0, 0))
+            
         img_painter.fillRect(self.rect(), gradient)
         img_painter.end()
 
         painter.drawImage(0, 0, img)
+
+class RotatingIconLabel(QLabel):
+    def __init__(self, pixmap, parent=None):
+        super().__init__(parent)
+        self.orig_pixmap = pixmap
+        self.rotation = 0
+        self.setFixedSize(16, 16)
+
+    def set_rotation(self, angle):
+        self.rotation = angle
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        
+        painter.translate(self.width()/2, self.height()/2)
+        painter.rotate(self.rotation)
+        painter.drawPixmap(-self.orig_pixmap.width()/2, -self.orig_pixmap.height()/2, self.orig_pixmap)
 
 class ProjectExpandButton(QPushButton):
     _icon_rotation = Property(int, lambda self: self.__icon_rotation, lambda self, val: self.set_icon_rotation(val))
 
     def __init__(self, text, parent=None):
         super().__init__(parent)
+        self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(45)
         self.setStyleSheet("""
@@ -86,6 +166,7 @@ class ProjectExpandButton(QPushButton):
                 background-color: transparent; border: none; border-radius: 6px;
             }
             QPushButton:hover { background-color: #333; }
+            QPushButton:checked { background-color: #3a3a3a; }
         """)
         
         layout = QHBoxLayout(self)
@@ -98,26 +179,39 @@ class ProjectExpandButton(QPushButton):
         self.marquee = MarqueeLabel(text)
         layout.addWidget(self.marquee, 1)
         
-        self.lbl_arrow = QLabel()
         self.arrow_pixmap = QIcon(resource_path("assets/icons/keyboard_arrow_up_16dp_FFFFFF_FILL0_wght400_GRAD0_opsz20.png")).pixmap(16, 16)
-        self.lbl_arrow.setPixmap(self.arrow_pixmap)
+        self.lbl_arrow = RotatingIconLabel(self.arrow_pixmap)
         layout.addWidget(self.lbl_arrow)
         
         self.__icon_rotation = 180
-        self.set_icon_rotation(180)
+        self.lbl_arrow.set_rotation(180)
         self.is_expanded = True
         
         self.anim = QPropertyAnimation(self, b"_icon_rotation")
         self.anim.setDuration(300)
         self.anim.setEasingCurve(QEasingCurve.InOutQuad)
+        
+        self.clicked.connect(self.handle_click)
+
+    def enterEvent(self, event):
+        self.marquee.hover_timer.start(1000)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.marquee.hover_timer.stop()
+        self.marquee.stop()
+        super().leaveEvent(event)
+
+    def handle_click(self):
+        # We don't necessarily need the checkable logic for marquee anymore 
+        # since it's hover-based now. But we can keep it for the bg color.
+        pass
 
     def set_icon_rotation(self, val):
         self.__icon_rotation = val
-        from PySide6.QtGui import QTransform
-        transform = QTransform().rotate(val)
-        self.lbl_arrow.setPixmap(self.arrow_pixmap.transformed(transform, Qt.SmoothTransformation))
+        self.lbl_arrow.set_rotation(val)
 
-    def toggle(self):
+    def toggle_expand(self):
         self.anim.stop()
         if self.is_expanded:
             self.anim.setStartValue(self.__icon_rotation)
@@ -133,9 +227,17 @@ class AIBrainWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.dataset_builder = DatasetBuilder()
-        self.ml_engine = MLEngine()
+        self.ml_engine = MLEngine(resource_path("models"))
+        self.added_projects = []
+        self.training_thread = None
+        self.loss_data = []
+        self.acc_data = []
+        self.loss_curve = None
+        self.acc_curve = None
+        
         self.init_ui()
         self.setup_connections()
+        self.refresh_model_ui()
 
     def init_ui(self):
         # Main container with dark background
@@ -159,6 +261,8 @@ class AIBrainWidget(QWidget):
         lbl_col1.setFont(QFont("Switzer", 10, QFont.DemiBold))
         lbl_col1.setStyleSheet("color: white; margin-bottom: 5px;")
         l_col1.addWidget(lbl_col1)
+        
+        l_col1.addSpacing(10)
         
         self.btn_add_project = QPushButton("  Add Project")
         self.btn_add_project.setIcon(QIcon(resource_path("assets/icons/add_16dp_FFFFFF_FILL0_wght400_GRAD0_opsz20.png")))
@@ -270,10 +374,14 @@ class AIBrainWidget(QWidget):
             QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0px; }
         """
         
-        lbl_m = QLabel("Model Name:")
+        lbl_m = QLabel("Model:")
         lbl_m.setStyleSheet("color: #ccc;")
-        self.txt_model = QLineEdit("Distraction Detector")
+        self.txt_model = ClickableLineEdit("Distraction Detector")
+        self.txt_model.setReadOnly(True)
+        self.txt_model.setCursor(Qt.PointingHandCursor)
         self.txt_model.setStyleSheet(MODERN_INPUT)
+        self.txt_model.setFixedHeight(35)
+        self.txt_model.setToolTip("Click to load an existing model version")
         cfg_grid.addWidget(lbl_m, 0, 0)
         cfg_grid.addWidget(self.txt_model, 0, 1)
         
@@ -283,6 +391,7 @@ class AIBrainWidget(QWidget):
         self.spin_epochs.setRange(1, 1000)
         self.spin_epochs.setValue(100)
         self.spin_epochs.setStyleSheet(MODERN_INPUT)
+        self.spin_epochs.setFixedHeight(35)
         cfg_grid.addWidget(lbl_e, 1, 0)
         cfg_grid.addWidget(self.spin_epochs, 1, 1)
         
@@ -294,6 +403,7 @@ class AIBrainWidget(QWidget):
         self.spin_lr.setDecimals(4)
         self.spin_lr.setValue(0.0001)
         self.spin_lr.setStyleSheet(MODERN_INPUT)
+        self.spin_lr.setFixedHeight(35)
         cfg_grid.addWidget(lbl_lr, 2, 0)
         cfg_grid.addWidget(self.spin_lr, 2, 1)
         
@@ -323,6 +433,7 @@ class AIBrainWidget(QWidget):
             self.plot_loss.getViewBox().setDefaultPadding(0.2)
         except Exception:
             pass
+        self.loss_curve = self.plot_loss.plot(pen=pg.mkPen('#e74c3c', width=2))
         
         self.plot_acc = pg.PlotWidget()
         self.plot_acc.setMinimumHeight(180)
@@ -336,6 +447,7 @@ class AIBrainWidget(QWidget):
             self.plot_acc.getViewBox().setDefaultPadding(0.2)
         except Exception:
             pass
+        self.acc_curve = self.plot_acc.plot(pen=pg.mkPen('#3498db', width=2))
         
         h_mini_plots.addWidget(self.plot_loss)
         h_mini_plots.addWidget(self.plot_acc)
@@ -345,7 +457,7 @@ class AIBrainWidget(QWidget):
         
         # Precision comparison
         comp_frame = QFrame()
-        comp_frame.setStyleSheet("background-color: #1e1e1e; border-radius: 6px; border: 1px solid #444;")
+        comp_frame.setStyleSheet("background-color: #1e1e1e; border-radius: 6px; border: none;")
         h_comp = QHBoxLayout(comp_frame)
         h_comp.setContentsMargins(15, 15, 15, 15)
         
@@ -442,6 +554,33 @@ class AIBrainWidget(QWidget):
         self.dataset_builder.log.connect(self.log_status)
         self.dataset_builder.progress.connect(self.update_progress)
         self.dataset_builder.finished.connect(self.on_dataset_ready)
+        self.ml_engine.epoch_progress.connect(self.on_epoch_progress)
+        self.txt_model.clicked.connect(self.select_model_version)
+
+    def select_model_version(self):
+        d = QFileDialog.getOpenFileName(self, "Select Model Version", self.ml_engine.base_models_dir, "Model Files (*.pkl)")
+        if d and d[0]:
+            if self.ml_engine.load_model(d[0]):
+                self.refresh_model_ui()
+
+    def refresh_model_ui(self):
+        # Update text box
+        self.txt_model.setText(self.ml_engine.metadata.get("name", "Distraction Detector"))
+        
+        # Load history
+        hist = self.ml_engine.metadata.get("history", {})
+        self.loss_data = hist.get("loss", [])
+        self.acc_data = hist.get("acc", [])
+        
+        if self.loss_data and self.acc_data:
+            self.loss_curve.setData(self.loss_data)
+            self.acc_curve.setData(self.acc_data)
+            
+            self.lbl_old_prec.setText(f"{self.acc_data[-1]*100:.1f} %")
+        else:
+            self.loss_curve.setData([])
+            self.acc_curve.setData([])
+            self.lbl_old_prec.setText("-- %")
 
     def add_project(self):
         d = QFileDialog.getExistingDirectory(self, "Select Project Folder")
@@ -452,6 +591,10 @@ class AIBrainWidget(QWidget):
         parts = os.path.normpath(path).split(os.sep)
         project_name = os.sep.join(parts[-5:]) if len(parts) >= 5 else path
         
+        trained_projects = self.ml_engine.metadata.get("projects", [])
+        norm_path = os.path.normpath(path)
+        is_trained = norm_path in [os.path.normpath(p) for p in trained_projects]
+        
         # Project Container
         proj_container = QWidget()
         proj_layout = QVBoxLayout(proj_container)
@@ -460,7 +603,16 @@ class AIBrainWidget(QWidget):
         
         # Expand Button
         btn_expand = ProjectExpandButton(project_name)
+        
+        # Update Icon
+        if is_trained:
+            btn_expand.lbl_icon.setPixmap(QIcon(resource_path("assets/icons/folder_check_16dp_CCCCCC_FILL1_wght400_GRAD0_opsz20.png")).pixmap(16, 16))
+        else:
+            btn_expand.lbl_icon.setPixmap(QIcon(resource_path("assets/icons/folder_open_16dp_FFFF55_FILL1_wght400_GRAD0_opsz20.png")).pixmap(16, 16))
+            
         proj_layout.addWidget(btn_expand)
+        
+        self.added_projects.append(path)
         
         # Content Area
         content_widget = QWidget()
@@ -497,6 +649,7 @@ class AIBrainWidget(QWidget):
         
         def toggle_content():
             anim_height.stop()
+            btn_expand.toggle_expand()
             if btn_expand.is_expanded:
                 content_widget.setVisible(True)
                 anim_height.setStartValue(0)
@@ -515,7 +668,6 @@ class AIBrainWidget(QWidget):
                 
         anim_height.finished.connect(on_anim_finished)
 
-        btn_expand.clicked.connect(btn_expand.toggle)
         btn_expand.clicked.connect(toggle_content)
 
         
@@ -563,10 +715,49 @@ class AIBrainWidget(QWidget):
     def update_progress(self, val):
         self.progress_bar.setValue(int(val * 100))
 
+    def on_epoch_progress(self, epoch, loss, acc):
+        self.loss_data.append(loss)
+        self.acc_data.append(acc)
+        self.loss_curve.setData(self.loss_data)
+        self.acc_curve.setData(self.acc_data)
+        
+        self.lbl_new_prec.setText(f"{acc*100:.1f} %")
+        self.lbl_task_info.setText(f"Training Epoch {epoch}/{self.spin_epochs.value()} - Loss: {loss:.4f} Acc: {acc:.4f}")
+
     def start_training(self):
-        # Implementation for training...
-        pass
+        if not self.added_projects:
+            self.log_status("Error: No projects added to train on.")
+            return
+            
+        model_name = self.txt_model.text()
+        epochs = self.spin_epochs.value()
+        lr = self.spin_lr.value()
+        
+        self.btn_train.setEnabled(False)
+        self.lbl_task_info.setText("Building dataset...")
+        self.progress_bar.setValue(0)
+        
+        # Clear plots for new training session
+        self.loss_data.clear()
+        self.acc_data.clear()
+        self.loss_curve.setData([])
+        self.acc_curve.setData([])
+        
+        csv_path = os.path.join(os.path.dirname(self.ml_engine.base_models_dir), "training_data.csv")
+        
+        self.training_thread = TrainingWorker(self.dataset_builder, self.ml_engine, self.added_projects, csv_path, model_name, epochs, lr, self)
+        self.training_thread.finished_ok.connect(self.on_training_finished)
+        self.training_thread.failed.connect(self.on_training_failed)
+        self.training_thread.start()
+
+    def on_training_finished(self):
+        self.btn_train.setEnabled(True)
+        self.log_status("Training completed successfully.")
+        self.refresh_model_ui()
+        
+    def on_training_failed(self, err):
+        self.btn_train.setEnabled(True)
+        self.log_status(f"Training failed: {err}")
 
     def on_dataset_ready(self, csv_path):
-        # Implementation for model training...
         pass
