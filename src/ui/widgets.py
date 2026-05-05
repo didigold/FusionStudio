@@ -353,6 +353,16 @@ class ExpandableSidebar(QFrame):
         self.add_tab_btn(2, "Classification", "archive_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.png")
         self.add_tab_btn(4, "Occupancy", "tatami_seat_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.png")
         self.add_tab_btn(3, "Reporting", "document_scanner_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.png")
+        
+        self.layout.addSpacing(10)
+        
+        # Block: Miscellaneous
+        sep_misc = SidebarSeparator("MISCELLANEOUS")
+        self.layout.addWidget(sep_misc)
+        self.separators.append(sep_misc)
+        
+        self.add_tab_btn(6, "AImark", "science_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.png")
+
         self.layout.addStretch()
         self.anim = QPropertyAnimation(self, b"_sidebar_width")
         self.anim.setDuration(250)

@@ -19,6 +19,7 @@ from src.ui.classification_widget import ClassificationWidget
 from src.ui.analysis_widget import AnalysisWidget
 from src.ui.om_analysis_widget import OMAnalysisWidget
 from src.ui.reporting_widget import ReportingWidget
+from src.ui.ai_brain_widget import AIBrainWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -54,6 +55,11 @@ class MainWindow(QMainWindow):
         self.init_tab_classification()
         self.init_tab_reporting()
         self.init_tab_om_analysis()
+        
+        # Placeholder for Signal Mining (Index 5)
+        self.stack.addWidget(QWidget()) 
+        
+        self.init_tab_ai_mark() # Index 6
         
         h_layout.addWidget(self.stack)
         self.layout_main.addLayout(h_layout)
@@ -489,6 +495,10 @@ class MainWindow(QMainWindow):
         self.om_analysis_tab = OMAnalysisWidget(self)
         self.om_analysis_tab.busy_changed.connect(self.on_analysis_busy_changed)
         self.stack.addWidget(self.om_analysis_tab)
+
+    def init_tab_ai_mark(self):
+        self.ai_mark_tab = AIBrainWidget(self)
+        self.stack.addWidget(self.ai_mark_tab)
 
     def sync_path_to_classification(self, text):
         """Si cambia el path en Fusion, se actualiza en Classification si existe."""

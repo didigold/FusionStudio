@@ -19,7 +19,6 @@ from PySide6.QtCore import (Qt, QSize, QThread, Signal, QPoint, QRect, QProperty
 from PySide6.QtGui import QIcon, QColor, QFont, QImage, QPixmap, QDragEnterEvent, QDropEvent, QPainter, QAction, QPen, QTransform, QCursor
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QVideoFrame
 from src.core.ai_analyzer import AIWorker
-from src.ui.ai_brain_widget import AIBrainWidget
 from PySide6.QtMultimediaWidgets import QVideoWidget
 # Scientific and processing libraries are imported locally where needed
 # to ensure application startup robustness.
@@ -5267,12 +5266,7 @@ class AnalysisWidget(QWidget):
         except Exception:
             pass
         
-        # === 5. AI Brain Training ===
-        icon_brain = QIcon(resource_path("assets/icons/brand_awareness_16dp_FFFFFF_FILL0_wght400_GRAD0_opsz20.png"))
-        self.tab_brain = AIBrainWidget()
-        self.tabs_right.addTab(self.tab_brain, icon_brain, "AI Brain")
-
-        # === 6. Log ===
+        # === 5. Log ===
         self.tab_log = QWidget()
         self.l_log = QVBoxLayout(self.tab_log)
         self.l_log.setContentsMargins(0,0,0,0)
