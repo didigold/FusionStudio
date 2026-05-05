@@ -16,8 +16,9 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
 from PySide6.QtWidgets import QMenu
 from PySide6.QtCore import (Qt, QSize, QThread, Signal, QPoint, QRect, QPropertyAnimation, QVariantAnimation,
                              QEasingCurve, QParallelAnimationGroup, QSequentialAnimationGroup, QTimer)
-from PySide6.QtGui import QIcon, QColor, QFont, QImage, QPixmap, QDragEnterEvent, QDropEvent, QPainter, QAction, QPen, QTransform
+from PySide6.QtGui import QIcon, QColor, QFont, QImage, QPixmap, QDragEnterEvent, QDropEvent, QPainter, QAction, QPen, QTransform, QCursor
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QVideoFrame
+from src.core.ai_analyzer import AIWorker
 from PySide6.QtMultimediaWidgets import QVideoWidget
 # Scientific and processing libraries are imported locally where needed
 # to ensure application startup robustness.
@@ -3579,6 +3580,19 @@ class TimeSelectorWidget(QWidget):
         self.btn_reset_view.clicked.connect(self.reset_graph_view)
         ctrl.addWidget(self.btn_reset_view)
         
+        # AI Smart Marker Button
+        self.btn_ai_mark = QPushButton()
+        self.btn_ai_mark.setToolTip("AI Smart Marker (Auto-detect Gaze Fixation)")
+        self.btn_ai_mark.setFixedSize(24, 24)
+        self.btn_ai_mark.setCursor(Qt.PointingHandCursor)
+        icon_ai = QIcon(resource_path("assets/icons/star_shine_16dp_FFFFFF_FILL0_wght400_GRAD0_opsz20.png"))
+        if not icon_ai.isNull():
+            self.btn_ai_mark.setIcon(icon_ai)
+        else:
+            self.btn_ai_mark.setText("AI")
+        self.btn_ai_mark.clicked.connect(self._run_ai_analysis)
+        ctrl.addWidget(self.btn_ai_mark)
+        
         ctrl.addStretch()
 
         # Buttons (Icons)
@@ -4009,6 +4023,79 @@ class TimeSelectorWidget(QWidget):
         self.markers = []
         self.drag_mode = True # Always True now
         self.delete_mode = False
+
+    def _run_ai_analysis(self):
+        """Triggers the AI detection logic."""
+        if not self.current_tracking_path:
+            self._notify_parent("Please load a case first.", "error")
+            return
+            
+        # USER REQUEST: Ensure video is enabled and camera selected
+        if not self.chk_video.isChecked():
+            self._notify_parent("Please enable 'Camera' toggle first.", "warning")
+            return
+            
+        if self.cb_camera_id.currentIndex() < 0:
+            self._notify_parent("Please select a Camera ID (cam1, cam2...) first.", "warning")
+            return
+
+        # Find video path
+        mf4_dir = os.path.dirname(self.current_tracking_path)
+        base_name = os.path.splitext(os.path.basename(self.current_tracking_path))[0].replace("_tracking", "")
+        selected_cam = self.cb_camera_id.currentText()
+        video_path = os.path.join(mf4_dir, f"{base_name}_{selected_cam}.avi")
+        if not os.path.exists(video_path):
+             video_path = os.path.join(os.path.dirname(mf4_dir), f"{base_name}_{selected_cam}.avi")
+
+        if not os.path.exists(video_path):
+            self._notify_parent(f"Video file not found: {os.path.basename(video_path)}", "error")
+            return
+
+        self.btn_ai_mark.setEnabled(False)
+        self._notify_parent("AI Analysis started... analyzing signals and video frames.", "info")
+        
+        self.ai_worker = AIWorker(self.current_tracking_path, video_path)
+        # Add a small delay to progress updates to make it readable
+        self.ai_worker.signals.progress.connect(lambda p: self._notify_parent(f"AI Analysis: {int(p*100)}%", "info"))
+        self.ai_worker.signals.log.connect(lambda m: self.log_message.emit(m))
+        self.ai_worker.signals.finished.connect(self._on_ai_finished)
+        self.ai_worker.signals.error.connect(self._on_ai_error)
+        self.ai_worker.start()
+
+    def _on_ai_finished(self, timestamps):
+        self.btn_ai_mark.setEnabled(True)
+        if not timestamps:
+            self._notify_parent("AI finished: No clear event detected.", "warning")
+            return
+            
+        # Add markers
+        # Sort and deduplicate
+        timestamps = sorted(list(set(timestamps)))
+        
+        for t in timestamps:
+            self._add_marker(t)
+            
+        self._notify_parent(f"AI Success: {len(timestamps)} marker(s) added.", "success")
+        self._update_marks_file()
+
+    def _on_ai_error(self, message):
+        self.btn_ai_mark.setEnabled(True)
+        self._notify_parent(f"AI Error: {message}", "error")
+
+    def _notify_parent(self, message, type_="info"):
+        parent = self._get_parent_analysis_widget()
+        if parent:
+            parent._notify(message, type_)
+        else:
+            self.log_message.emit(f"[{type_.upper()}] {message}")
+
+    def _get_parent_analysis_widget(self):
+        curr = self.parent()
+        while curr:
+            if hasattr(curr, '_notify'):
+                return curr
+            curr = curr.parent()
+        return None
 
     def _on_line_clicked(self, line, ev):
         """Handle context menu for markers."""
@@ -4770,66 +4857,63 @@ class TimeSelectorWidget(QWidget):
             pass
 
     def _on_mouse_clicked(self, evt):
-        # evt is a MouseEvent with button()
+        """Add new marker on left click."""
         try:
             ev = evt
-            # Left Click for markers (User Request)
-            # PG's sigMouseClicked should handle click vs drag differentiation
             if ev.button() == Qt.LeftButton:
                 pos = ev.scenePos()
                 vb = self.plot_top.getPlotItem().vb
                 x = vb.mapSceneToView(pos).x()
-                         # Create new marker line in both plots
-                pen = pg.mkPen('#ff9800', width=2)
-                hover_pen = pg.mkPen('#ffb74d', width=3)
-                line1 = pg.InfiniteLine(pos=x, angle=90, movable=True, pen=pen, hoverPen=hover_pen)
-                line2 = pg.InfiniteLine(pos=x, angle=90, movable=True, pen=pen, hoverPen=hover_pen)
-                
-                # Ensure cursor changes correctly over lines
-                line1.setCursor(Qt.SizeHorCursor)
-                line2.setCursor(Qt.SizeHorCursor)
-                
-                # Add context menu for deletion
-                line1.sigClicked.connect(self._on_line_clicked)
-                line2.sigClicked.connect(self._on_line_clicked)
-                
-                self.plot_top.addItem(line1, ignoreBounds=True)
-                self.plot_bottom.addItem(line2, ignoreBounds=True)
-                self.markers.append((line1, line2, x))
-                line1.sigPositionChanged.connect(lambda *args, l=line1: self._on_marker_moved(l))
-                line2.sigPositionChanged.connect(lambda *args, l=line2: self._on_marker_moved(l))
-                
-                self.log_message.emit(f"Mark added at T={x:.4f}s")
-                
-                # If this is an even-numbered marker (2nd, 4th, 6th...), add shaded region
-                num_markers = len(self.markers)
-                if num_markers >= 2 and num_markers % 2 == 0:
-                    prev_x = self.markers[-2][2]
-                    curr_x = x
-                    x1, x2 = sorted((prev_x, curr_x))
-                    from pyqtgraph import LinearRegionItem
-                    region_top = LinearRegionItem(
-                        values=[x1, x2],
-                        movable=False,
-                        brush=pg.mkBrush(255, 152, 0, 50)
-                    )
-                    region_bottom = LinearRegionItem(
-                        values=[x1, x2],
-                        movable=False,
-                        brush=pg.mkBrush(255, 152, 0, 50)
-                    )
-                    self.plot_top.addItem(region_top)
-                    self.plot_bottom.addItem(region_bottom)
-                    self.shaded_regions.append((region_top, region_bottom))
-                    self.log_message.emit(f"Interval created: {x1:.4f}s to {x2:.4f}s (Duration: {x2-x1:.4f}s)")
-                
-                self._update_marks_file()
-                self.undo_stack.append({'type': 'add_marker'})
-                self.btn_undo.setEnabled(True)
-        except Exception as e:
-            print(f"Error in _on_mouse_clicked: {e}")
-            import traceback
-            traceback.print_exc()
+                self._add_marker(x)
+        except Exception:
+            pass
+
+    def _add_marker(self, x):
+        """Create new marker line in both plots at position x."""
+        import pyqtgraph as pg
+        pen = pg.mkPen('#ff9800', width=2)
+        hover_pen = pg.mkPen('#ffb74d', width=3)
+        line1 = pg.InfiniteLine(pos=x, angle=90, movable=True, pen=pen, hoverPen=hover_pen)
+        line2 = pg.InfiniteLine(pos=x, angle=90, movable=True, pen=pen, hoverPen=hover_pen)
+        
+        line1.setCursor(Qt.SizeHorCursor)
+        line2.setCursor(Qt.SizeHorCursor)
+        
+        line1.sigClicked.connect(self._on_line_clicked)
+        line2.sigClicked.connect(self._on_line_clicked)
+        
+        self.plot_top.addItem(line1, ignoreBounds=True)
+        self.plot_bottom.addItem(line2, ignoreBounds=True)
+        self.markers.append((line1, line2, x))
+        line1.sigPositionChanged.connect(lambda *args, l=line1: self._on_marker_moved(l))
+        line2.sigPositionChanged.connect(lambda *args, l=line2: self._on_marker_moved(l))
+        
+        self.log_message.emit(f"Mark added at T={x:.4f}s")
+        
+        num_markers = len(self.markers)
+        if num_markers >= 2 and num_markers % 2 == 0:
+            prev_x = self.markers[-2][2]
+            curr_x = x
+            x1, x2 = sorted((prev_x, curr_x))
+            from pyqtgraph import LinearRegionItem
+            region_top = LinearRegionItem(
+                values=[x1, x2],
+                movable=False,
+                brush=pg.mkBrush(255, 152, 0, 50)
+            )
+            region_bottom = LinearRegionItem(
+                values=[x1, x2],
+                movable=False,
+                brush=pg.mkBrush(255, 152, 0, 50)
+            )
+            self.plot_top.addItem(region_top)
+            self.plot_bottom.addItem(region_bottom)
+            self.shaded_regions.append((region_top, region_bottom))
+            self.log_message.emit(f"Interval created: {x1:.4f}s to {x2:.4f}s (Duration: {x2-x1:.4f}s)")
+        
+        self._update_marks_file()
+        self.undo_stack.append({'type': 'add_marker'})
+        self.btn_undo.setEnabled(True)
 
 
     def _find_marker_index_at_x(self, x, tolerance=None):

@@ -1595,7 +1595,7 @@ class OMTimeSelectorWidget(QWidget):
         layout.setSpacing(8)
 
         top = QHBoxLayout()
-        top.addWidget(QLabel("Subject:"))
+        top.addWidget(QLabel("Driver:"))
         self.combo_subject = QComboBox()
         self.combo_subject.setFixedWidth(120)
         self.combo_subject.currentIndexChanged.connect(self._on_subject_changed)
