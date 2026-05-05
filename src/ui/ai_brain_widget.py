@@ -10,8 +10,8 @@ import pyqtgraph as pg
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QTreeWidget, QTreeWidgetItem, QProgressBar, 
                              QTextEdit, QFrame, QSplitter, QGroupBox, QDoubleSpinBox, QSpinBox, QGridLayout, QFileDialog, QLineEdit)
-from PySide6.QtCore import Qt, QSize, Signal, Slot, QTimer, Property, QEasingCurve, QPropertyAnimation, QThread
-from PySide6.QtGui import QIcon, QFont, QColor, QPainter, QLinearGradient, QImage, QFontMetrics
+from PySide6.QtCore import Qt, QSize, Signal, Slot, QTimer, Property, QEasingCurve, QPropertyAnimation, QThread, QMimeData
+from PySide6.QtGui import QIcon, QFont, QColor, QPainter, QLinearGradient, QImage, QFontMetrics, QDrag
 from src.core.dataset_builder import DatasetBuilder
 from src.core.ml_engine import MLEngine
 from src.core.utils import resource_path
@@ -156,8 +156,9 @@ class RotatingIconLabel(QLabel):
 class ProjectExpandButton(QPushButton):
     _icon_rotation = Property(int, lambda self: self.__icon_rotation, lambda self, val: self.set_icon_rotation(val))
 
-    def __init__(self, text, parent=None):
+    def __init__(self, text, full_path, parent=None):
         super().__init__(parent)
+        self.full_path = full_path
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(45)
@@ -202,6 +203,15 @@ class ProjectExpandButton(QPushButton):
         self.marquee.stop()
         super().leaveEvent(event)
 
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton:
+            drag = QDrag(self)
+            mime = QMimeData()
+            mime.setText(self.full_path)
+            drag.setMimeData(mime)
+            drag.exec(Qt.CopyAction)
+        super().mouseMoveEvent(event)
+
     def handle_click(self):
         # We don't necessarily need the checkable logic for marquee anymore 
         # since it's hover-based now. But we can keep it for the bg color.
@@ -235,9 +245,27 @@ class AIBrainWidget(QWidget):
         self.loss_curve = None
         self.acc_curve = None
         
+        self.braille_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self.braille_idx = 0
+        self.braille_timer = QTimer(self)
+        self.braille_timer.timeout.connect(self.update_braille)
+        self.training_start_time = 0
+        
+        self.setAcceptDrops(True)
+        
         self.init_ui()
         self.setup_connections()
+        
+        # Load latest model by default
+        latest = self.ml_engine.find_latest_model()
+        if latest:
+            self.ml_engine.load_model(latest)
+            
         self.refresh_model_ui()
+
+    def update_braille(self):
+        self.braille_idx = (self.braille_idx + 1) % len(self.braille_frames)
+        self.lbl_braille.setText(self.braille_frames[self.braille_idx])
 
     def init_ui(self):
         # Main container with dark background
@@ -527,23 +555,35 @@ class AIBrainWidget(QWidget):
         footer_status = QFrame()
         footer_status.setFixedHeight(30)
         h_footer = QHBoxLayout(footer_status)
-        h_footer.setContentsMargins(5,0,5,0)
+        h_footer.setContentsMargins(15, 0, 15, 0)
         
-        self.lbl_footer_status = QLabel("● AI Ready")
-        self.lbl_footer_status.setStyleSheet("color: #4caf50; font-weight: bold;")
+        self.lbl_braille = QLabel("⠋")
+        self.lbl_braille.setStyleSheet(f"color: {IDIADA_ORANGE}; font-weight: bold; font-size: 14pt;")
+        self.lbl_braille.hide()
+        h_footer.addWidget(self.lbl_braille)
+        
+        self.lbl_footer_status = QLabel("AI Ready")
+        self.lbl_footer_status.setStyleSheet("color: #4caf50; font-weight: bold; font-family: 'Switzer'; font-size: 10pt;")
         h_footer.addWidget(self.lbl_footer_status)
+        
+        h_footer.addStretch()
         
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedWidth(300)
         self.progress_bar.setFixedHeight(8)
         self.progress_bar.setTextVisible(False)
-        self.progress_bar.setStyleSheet(f"QProgressBar::chunk {{ background-color: {IDIADA_ORANGE}; }}")
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{ border: none; border-radius: 4px; background-color: #333; }}
+            QProgressBar::chunk {{ background-color: {IDIADA_ORANGE}; border-radius: 4px; }}
+        """)
+        self.progress_bar.hide()
         h_footer.addWidget(self.progress_bar)
         
-        self.lbl_task_info = QLabel("IDLE")
-        self.lbl_task_info.setStyleSheet("color: #888;")
-        h_footer.addWidget(self.lbl_task_info)
         h_footer.addStretch()
+        
+        self.lbl_task_info = QLabel("IDLE")
+        self.lbl_task_info.setStyleSheet("color: #aaa; font-family: 'Switzer'; font-size: 10pt;")
+        h_footer.addWidget(self.lbl_task_info, alignment=Qt.AlignRight)
         
         main_layout.addWidget(footer_status)
 
@@ -564,8 +604,14 @@ class AIBrainWidget(QWidget):
                 self.refresh_model_ui()
 
     def refresh_model_ui(self):
-        # Update text box
-        self.txt_model.setText(self.ml_engine.metadata.get("name", "Distraction Detector"))
+        # Update text box to show build_timestamp\model.pkl
+        if hasattr(self.ml_engine, "model_path") and self.ml_engine.model_path:
+            # Get build folder name and model filename
+            build_dir = os.path.basename(os.path.dirname(self.ml_engine.model_path))
+            fname = os.path.basename(self.ml_engine.model_path)
+            self.txt_model.setText(f"{build_dir}\\{fname}")
+        else:
+            self.txt_model.setText(self.ml_engine.metadata.get("name", "Distraction Detector"))
         
         # Load history
         hist = self.ml_engine.metadata.get("history", {})
@@ -575,12 +621,22 @@ class AIBrainWidget(QWidget):
         if self.loss_data and self.acc_data:
             self.loss_curve.setData(self.loss_data)
             self.acc_curve.setData(self.acc_data)
-            
             self.lbl_old_prec.setText(f"{self.acc_data[-1]*100:.1f} %")
         else:
             self.loss_curve.setData([])
             self.acc_curve.setData([])
             self.lbl_old_prec.setText("-- %")
+
+        # Auto-populate projects from metadata
+        # Clear current list in UI
+        for i in reversed(range(self.layout_projects.count())):
+            self.layout_projects.itemAt(i).widget().setParent(None)
+        self.added_projects.clear()
+        
+        meta_projects = self.ml_engine.metadata.get("projects", [])
+        for p in meta_projects:
+            if os.path.exists(p):
+                self._add_project_to_tree(p)
 
     def add_project(self):
         d = QFileDialog.getExistingDirectory(self, "Select Project Folder")
@@ -602,7 +658,7 @@ class AIBrainWidget(QWidget):
         proj_layout.setSpacing(0)
         
         # Expand Button
-        btn_expand = ProjectExpandButton(project_name)
+        btn_expand = ProjectExpandButton(project_name, path)
         
         # Update Icon
         if is_trained:
@@ -633,7 +689,7 @@ class AIBrainWidget(QWidget):
                 QPushButton:hover { color: orange; background-color: #333; }
             """)
             btn_file.setCursor(Qt.PointingHandCursor)
-            btn_file.clicked.connect(lambda: self.preview_marks(marks_file))
+            btn_file.clicked.connect(lambda p=marks_file: self.load_preview_project(p))
             content_layout.addWidget(btn_file)
             
         proj_layout.addWidget(content_widget)
@@ -673,41 +729,76 @@ class AIBrainWidget(QWidget):
         
         self.layout_projects.addWidget(proj_container)
 
-    def preview_marks(self, marks_path):
-        """Loads first available case from marks.json into the central plot."""
+    def load_preview_project(self, marks_path):
         try:
             with open(marks_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if not data: return
-            
-            first_case = list(data.keys())[0]
-            timestamps = data[first_case]
-            
-            # Find matching MF4
-            root = os.path.dirname(marks_path)
-            mf4_path = self.dataset_builder._resolve_mf4_path(root, first_case)
-            
-            if mf4_path and os.path.exists(mf4_path):
-                self.lbl_task_info.setText(f"Visualizing: {first_case}")
-                self._plot_mf4_with_markers(mf4_path, timestamps)
+                self.preview_data = json.load(f)
+            self.preview_cases = list(self.preview_data.keys())
+            self.preview_root = os.path.dirname(marks_path)
+            self.preview_idx = 0
+            if self.preview_cases:
+                self.show_preview_case()
         except Exception as e:
-            self.log_status(f"Preview error: {e}")
+            self.log_status(f"Error loading project: {e}")
 
-    def _plot_mf4_with_markers(self, mf4_path, markers):
+    def show_preview_case(self):
+        case = self.preview_cases[self.preview_idx]
+        timestamps = self.preview_data[case]
+        mf4_path = self.dataset_builder._resolve_mf4_path(self.preview_root, case)
+        if mf4_path and os.path.exists(mf4_path):
+            self.lbl_preview_title.setText(f"Case {self.preview_idx+1}/{len(self.preview_cases)}: {case}")
+            self._plot_mf4_with_markers(mf4_path, timestamps)
+            
+    def preview_next(self):
+        if hasattr(self, 'preview_cases') and self.preview_idx < len(self.preview_cases) - 1:
+            self.preview_idx += 1
+            self.show_preview_case()
+
+    def preview_prev(self):
+        if hasattr(self, 'preview_cases') and self.preview_idx > 0:
+            self.preview_idx -= 1
+            self.show_preview_case()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        path = event.mimeData().text()
+        if os.path.isdir(path):
+            marks_path = os.path.join(path, "marks.json")
+            if os.path.exists(marks_path):
+                self.load_preview_project(marks_path)
+
+    def _plot_mf4_with_markers(self, mf4_path, ground_truth):
         from asammdf import MDF
         mdf = MDF(mf4_path)
         engine = "OWL" if "Head_H_Angle" in mdf else "LIZ"
         sig_name = "Head_H_Angle" if engine == "OWL" else "H_Ratio"
-        sig = mdf.get(sig_name)
+        
+        if engine == "OWL":
+            h = mdf.get("Head_H_Angle")
+            v = mdf.get("Head_V_Angle")
+        else:
+            h = mdf.get("H_Ratio")
+            v = mdf.get("V_Ratio")
         
         self.preview_plot.clear()
-        self.preview_plot.plot(sig.timestamps, sig.samples, pen=pg.mkPen(IDIADA_ORANGE, width=1))
+        self.preview_plot.plot(h.timestamps, h.samples, pen=pg.mkPen('#555', width=1))
         
-        # Add shaded regions
-        for i in range(0, len(markers), 2):
-            if i+1 < len(markers):
-                lr = pg.LinearRegionItem([markers[i], markers[i+1]], movable=False, brush=pg.mkBrush(255, 152, 0, 80))
+        # Ground truth (yellow background)
+        for i in range(0, len(ground_truth), 2):
+            if i+1 < len(ground_truth):
+                lr = pg.LinearRegionItem([ground_truth[i], ground_truth[i+1]], movable=False, brush=pg.mkBrush(255, 255, 0, 50))
                 self.preview_plot.addItem(lr)
+                
+        # Model predictions (green background)
+        if getattr(self.ml_engine, 'model', None) is not None:
+            preds = self.ml_engine.predict_intervals(h.timestamps, h.samples, v.samples)
+            for i in range(0, len(preds), 2):
+                if i+1 < len(preds):
+                    lr = pg.LinearRegionItem([preds[i], preds[i+1]], movable=False, brush=pg.mkBrush(0, 255, 0, 80))
+                    self.preview_plot.addItem(lr)
 
     def log_status(self, msg):
         self.lbl_task_info.setText(msg)
@@ -722,7 +813,13 @@ class AIBrainWidget(QWidget):
         self.acc_curve.setData(self.acc_data)
         
         self.lbl_new_prec.setText(f"{acc*100:.1f} %")
-        self.lbl_task_info.setText(f"Training Epoch {epoch}/{self.spin_epochs.value()} - Loss: {loss:.4f} Acc: {acc:.4f}")
+        
+        # Calculate remaining time
+        elapsed = time.time() - self.training_start_time
+        epochs_total = self.spin_epochs.value()
+        time_per_epoch = elapsed / epoch if epoch > 0 else 0
+        rem = (epochs_total - epoch) * time_per_epoch
+        self.lbl_footer_status.setText(f"Epoch {epoch}/{epochs_total} | {int(rem)}s remaining")
 
     def start_training(self):
         if not self.added_projects:
@@ -734,7 +831,12 @@ class AIBrainWidget(QWidget):
         lr = self.spin_lr.value()
         
         self.btn_train.setEnabled(False)
-        self.lbl_task_info.setText("Building dataset...")
+        self.lbl_braille.show()
+        self.progress_bar.show()
+        self.lbl_footer_status.setStyleSheet(f"color: {IDIADA_ORANGE}; font-weight: bold; font-family: 'Switzer'; font-size: 10pt;")
+        self.lbl_footer_status.setText("Building dataset...")
+        self.braille_timer.start(100)
+        self.training_start_time = time.time()
         self.progress_bar.setValue(0)
         
         # Clear plots for new training session
@@ -752,11 +854,21 @@ class AIBrainWidget(QWidget):
 
     def on_training_finished(self):
         self.btn_train.setEnabled(True)
-        self.log_status("Training completed successfully.")
+        self.braille_timer.stop()
+        self.lbl_braille.hide()
+        self.progress_bar.hide()
+        self.lbl_footer_status.setText("AI Ready")
+        self.lbl_footer_status.setStyleSheet("color: #4caf50; font-weight: bold; font-family: 'Switzer'; font-size: 10pt;")
+        self.lbl_task_info.setText("Training completed successfully")
         self.refresh_model_ui()
         
     def on_training_failed(self, err):
         self.btn_train.setEnabled(True)
+        self.braille_timer.stop()
+        self.lbl_braille.hide()
+        self.progress_bar.hide()
+        self.lbl_footer_status.setText("AI Error")
+        self.lbl_footer_status.setStyleSheet("color: #f44336; font-weight: bold; font-family: 'Switzer'; font-size: 10pt;")
         self.log_status(f"Training failed: {err}")
 
     def on_dataset_ready(self, csv_path):
