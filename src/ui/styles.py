@@ -49,3 +49,30 @@ STYLESHEET = f"""
     QMessageBox QPushButton {{ background-color: #444; color: white; border: 1px solid #555; }}
     QMessageBox QPushButton:hover {{ background-color: #555; }}
 """
+
+LOGIC_INPUT_STYLE = """
+    QSpinBox, QDoubleSpinBox {
+        background-color: #3a3a3a;
+        color: #ddd;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding-right: 4px;
+        font-size: 9pt;
+    }
+    QSpinBox::up-button, QDoubleSpinBox::up-button {
+        subcontrol-origin: border;
+        subcontrol-position: top right;
+        width: 16px;
+        background-color: #444;
+        border-left: 1px solid #555;
+        border-bottom: 0.5px solid #555;
+    }
+    QSpinBox::down-button, QDoubleSpinBox::down-button {
+        subcontrol-origin: border;
+        subcontrol-position: bottom right;
+        width: 16px;
+        background-color: #444;
+        border-left: 1px solid #555;
+        border-top: 0.5px solid #555;
+    }
+"""

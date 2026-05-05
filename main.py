@@ -16,7 +16,7 @@ if os.name == 'nt':
 def bootstrap():
     """Stage 1: Ensure minimal dependencies for the GUI are installed."""
     # List of critical libraries needed JUST to show the splash screen
-    critical_deps = ["PySide6", "packaging"]
+    critical_deps = ["PySide6", "packaging", "pandas", "scikit-learn", "joblib"]
     
     missing = []
     for dep in critical_deps:

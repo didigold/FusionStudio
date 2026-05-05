@@ -17,6 +17,7 @@ scipy>=1.10.0
 # Computer Vision & Tracking
 opencv-python
 mediapipe
+scikit-learn
 
 # Data Analysis
 pandas

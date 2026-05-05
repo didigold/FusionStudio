@@ -1,12 +1,13 @@
 """
 AI Analyzer for FusionStudio - Automated Event Detection.
-v3.0: High-fidelity signal tracking, precise pulse segmentation, and low-latency fixation detection.
+v4.0: Integrated Machine Learning (RandomForest) with Heuristic Fallback.
 """
 import os
 import numpy as np
 import cv2
 from asammdf import MDF
 from PySide6.QtCore import QThread, Signal, QObject
+from src.core.ml_engine import MLEngine
 
 class AIAnalyzerSignals(QObject):
     log = Signal(str)
@@ -17,10 +18,11 @@ class AIAnalyzerSignals(QObject):
 class AIAnalyzer:
     def __init__(self, signals_handler):
         self.signals = signals_handler
+        self.ml_engine = MLEngine() # Automatically loads models/gaze_model.pkl if exists
 
     def analyze(self, tracking_mf4, video_path):
         try:
-            self.signals.log.emit("Starting High-Fidelity Signal Analysis...")
+            self.signals.log.emit("Starting AI Analysis pipeline...")
             
             if not os.path.exists(tracking_mf4):
                 raise Exception("Tracking file missing.")
@@ -35,24 +37,33 @@ class AIAnalyzer:
 
             t, h, v = h_sig.timestamps, h_sig.samples, v_sig.samples
 
-            # 1. Precise Segmentation
+            # 1. Check if we have an ML model trained
+            if self.ml_engine.model is not None:
+                self.signals.log.emit("AI Brain (ML) is active. Using neural inference...")
+                self.signals.progress.emit(0.3)
+                ml_markers = self.ml_engine.predict_intervals(t, h, v)
+                
+                if ml_markers:
+                    self.signals.log.emit(f"ML Brain detected {len(ml_markers)//2} distraction intervals.")
+                    self.signals.progress.emit(1.0)
+                    return ml_markers
+                else:
+                    self.signals.log.emit("ML Brain found no events. Falling back to heuristic v3.0...")
+
+            # 2. Fallback to Heuristic Logic (v3.0)
             self.signals.progress.emit(0.2)
             event_windows = self._find_event_windows(t, h, v)
             
             if not event_windows:
-                self.signals.log.emit("No clear events found.")
+                self.signals.log.emit("No clear events found via heuristics.")
                 return []
 
-            self.signals.log.emit(f"Detected {len(event_windows)} discrete distraction pulses.")
+            self.signals.log.emit(f"Heuristics detected {len(event_windows)} discrete pulses.")
             
             final_markers = []
             for i, (s_idx, e_idx) in enumerate(event_windows):
-                # A. Start Fixation: Where the 'climb' ends
                 m_start = self._find_fixation_point(t, h, v, s_idx, direction="forward")
-                
-                # B. End Departure: Where the 'drop' begins
                 m_end = self._find_fixation_point(t, h, v, e_idx, direction="backward")
-                
                 final_markers.extend([m_start, m_end])
                 self.signals.progress.emit(0.2 + (0.8 * (i + 1) / len(event_windows)))
 
@@ -63,90 +74,54 @@ class AIAnalyzer:
             return []
 
     def _find_event_windows(self, t, h, v):
-        """
-        Segment pulses without merging them.
-        """
-        # Establish baseline from first 1s
         fs = 1.0 / (t[1] - t[0])
         base_n = int(1.0 * fs)
         h_base, v_base = np.mean(h[:base_n]), np.mean(v[:base_n])
         h_std, v_std = np.std(h[:base_n]) + 0.2, np.std(v[:base_n]) + 0.2
-        
-        # Combined Z-score
         z = np.sqrt(((h - h_base)/h_std)**2 + ((v - v_base)/v_std)**2)
-        
-        # Pulse detection: Threshold is lower but more selective
         is_active = z > 3.5
-        
-        # Minimal morphological cleaning to preserve gaps
         from scipy.ndimage import binary_closing, binary_opening
         is_active = binary_opening(is_active, structure=np.ones(3)) 
-        is_active = binary_closing(is_active, structure=np.ones(5)) # Tight closing
-        
+        is_active = binary_closing(is_active, structure=np.ones(5))
         diff = np.diff(is_active.astype(int))
         starts = np.where(diff == 1)[0]
         ends = np.where(diff == -1)[0]
-        
         if is_active[0]: starts = np.insert(starts, 0, 0)
         if is_active[-1]: ends = np.append(ends, len(is_active)-1)
-        
         events = []
         for s, e in zip(starts, ends):
-            if t[e] - t[s] > 0.2: # 200ms minimum pulse
+            if t[e] - t[s] > 0.2:
                 events.append((s, e))
         return events
 
     def _find_fixation_point(self, t, h, v, pivot, direction="forward"):
-        """
-        Finds the exact corner of the signal where the shift ends (forward) or return starts (backward).
-        """
         fs = 1.0 / (t[1] - t[0])
-        # Look 0.5s around the pivot
         w_size = int(0.5 * fs)
-        
         if direction == "forward":
-            # Finding start of fixation (after rising edge)
             search_indices = np.arange(pivot, min(len(t), pivot + w_size))
         else:
-            # Finding start of return (at beginning of falling edge)
             search_indices = np.arange(max(0, pivot - w_size), pivot)
-
         if len(search_indices) < 2: return t[pivot]
-        
-        # Calculate signal 'speed' (magnitude of derivative)
         h_d = np.abs(np.gradient(h[search_indices]))
         v_d = np.abs(np.gradient(v[search_indices]))
         speed = h_d + v_d
-        
         if direction == "forward":
-            # The 'fixation' is where the speed drops after the peak
-            # We find the peak speed in this window, then find where it drops to 10% of peak
             peak_idx = np.argmax(speed)
             peak_val = speed[peak_idx]
-            
             tail = speed[peak_idx:]
-            # First index where speed < 15% of peak (the bend)
             bend = np.where(tail < (peak_val * 0.15))[0]
-            if len(bend) > 0:
-                final_idx = search_indices[peak_idx + bend[0]]
-            else:
-                final_idx = search_indices[peak_idx]
+            final_idx = search_indices[peak_idx + bend[0]] if len(bend) > 0 else search_indices[peak_idx]
         else:
-            # The 'departure' is where the speed starts increasing before the drop
-            # We reverse the search to find the onset of movement
             rev_speed = speed[::-1]
             peak_idx = np.argmax(rev_speed)
             peak_val = rev_speed[peak_idx]
-            
             tail = rev_speed[peak_idx:]
             bend = np.where(tail < (peak_val * 0.15))[0]
             if len(bend) > 0:
-                # relative from end
                 rel_idx = len(speed) - 1 - (peak_idx + bend[0])
                 final_idx = search_indices[rel_idx]
             else:
                 final_idx = search_indices[-1]
-
         return t[final_idx]
 
 class AIWorker(QThread):
