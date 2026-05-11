@@ -1,6 +1,6 @@
 """
 AI Analyzer for FusionStudio - Automated Event Detection.
-v4.0: Integrated Machine Learning (RandomForest) with Heuristic Fallback.
+v5.0: Multimodal (CNN+LSTM) + Legacy MLP + Heuristic Fallback.
 """
 import os
 import numpy as np
@@ -9,27 +9,29 @@ from asammdf import MDF
 from PySide6.QtCore import QThread, Signal, QObject
 from src.core.ml_engine import MLEngine
 
+
 class AIAnalyzerSignals(QObject):
     log = Signal(str)
     progress = Signal(float)
     finished = Signal(list)
     error = Signal(str)
 
+
 class AIAnalyzer:
     def __init__(self, signals_handler):
         self.signals = signals_handler
-        self.ml_engine = MLEngine() # Automatically loads models/gaze_model.pkl if exists
+        self.ml_engine = MLEngine()
 
     def analyze(self, tracking_mf4, video_path):
         try:
             self.signals.log.emit("Starting AI Analysis pipeline...")
-            
+
             if not os.path.exists(tracking_mf4):
                 raise Exception("Tracking file missing.")
-            
+
             mdf = MDF(tracking_mf4)
             engine = "OWL" if "Head_H_Angle" in mdf else "LIZ"
-            
+
             if engine == "OWL":
                 h_sig, v_sig = mdf.get("Head_H_Angle"), mdf.get("Head_V_Angle")
             else:
@@ -37,12 +39,17 @@ class AIAnalyzer:
 
             t, h, v = h_sig.timestamps, h_sig.samples, v_sig.samples
 
-            # 1. Check if we have an ML model trained
+            # 1. Check if we have a multimodal model
+            multimodal_result = self._try_multimodal(t, h, v, tracking_mf4, video_path)
+            if multimodal_result is not None:
+                return multimodal_result
+
+            # 2. Check if we have a legacy ML model
             if self.ml_engine.model is not None:
                 self.signals.log.emit("AI Brain (ML) is active. Using neural inference...")
                 self.signals.progress.emit(0.3)
                 ml_markers = self.ml_engine.predict_intervals(t, h, v)
-                
+
                 if ml_markers:
                     self.signals.log.emit(f"ML Brain detected {len(ml_markers)//2} distraction intervals.")
                     self.signals.progress.emit(1.0)
@@ -50,16 +57,16 @@ class AIAnalyzer:
                 else:
                     self.signals.log.emit("ML Brain found no events. Falling back to heuristic v3.0...")
 
-            # 2. Fallback to Heuristic Logic (v3.0)
+            # 3. Fallback to Heuristic Logic (v3.0)
             self.signals.progress.emit(0.2)
             event_windows = self._find_event_windows(t, h, v)
-            
+
             if not event_windows:
                 self.signals.log.emit("No clear events found via heuristics.")
                 return []
 
             self.signals.log.emit(f"Heuristics detected {len(event_windows)} discrete pulses.")
-            
+
             final_markers = []
             for i, (s_idx, e_idx) in enumerate(event_windows):
                 m_start = self._find_fixation_point(t, h, v, s_idx, direction="forward")
@@ -72,6 +79,70 @@ class AIAnalyzer:
         except Exception as e:
             self.signals.error.emit(str(e))
             return []
+
+    def _try_multimodal(self, timestamps, h_vals, v_vals, mf4_path, video_path):
+        try:
+            from src.core.multimodal_engine import MultimodalTrainer
+            from src.core.video_feature_extractor import VideoFeatureExtractor
+
+            trainer = MultimodalTrainer()
+            model_path = trainer.find_latest_model()
+            if model_path is None:
+                return None
+
+            if not model_path.endswith(".pt"):
+                return None
+
+            if not trainer.load_model(model_path):
+                return None
+
+            if not trainer.metadata.get("architecture") == "multimodal":
+                return None
+
+            if not video_path or not os.path.exists(video_path):
+                self.signals.log.emit("Multimodal model requires video. Falling back...")
+                return None
+
+            self.signals.log.emit("Multimodal Brain active. Running joint inference...")
+            self.signals.progress.emit(0.1)
+
+            extractor = VideoFeatureExtractor()
+            import pandas as pd
+            df = pd.DataFrame({
+                'h': h_vals, 'v': v_vals,
+                'h_d': np.gradient(h_vals), 'v_d': np.gradient(v_vals),
+                'speed': np.sqrt(np.gradient(h_vals)**2 + np.gradient(v_vals)**2),
+            })
+            fs = 1.0 / (timestamps[1] - timestamps[0]) if len(timestamps) > 1 else 30.0
+            win = int(0.5 * fs)
+            df['h_var'] = df['h'].rolling(window=win).var().fillna(0)
+            df['v_var'] = df['v'].rolling(window=win).var().fillna(0)
+            signal_seq = df[['h', 'v', 'h_d', 'v_d', 'speed', 'h_var', 'v_var']].values.astype(np.float32)
+
+            case_key = os.path.splitext(os.path.basename(mf4_path))[0]
+            total_duration = timestamps[-1] - timestamps[0] if len(timestamps) > 1 else 10.0
+            video_embeddings = extractor.get_embeddings_for_interval(
+                video_path, timestamps[0], timestamps[-1], case_key
+            )
+            if video_embeddings is None:
+                self.signals.log.emit("Could not extract video features. Falling back...")
+                return None
+
+            self.signals.progress.emit(0.5)
+
+            results = trainer.predict_intervals(signal_seq, video_embeddings)
+
+            if results:
+                self.signals.log.emit(f"Multimodal Brain detected {len(results)//2} intervals.")
+                self.signals.progress.emit(1.0)
+                return results
+            else:
+                self.signals.log.emit("Multimodal Brain found no events. Falling back...")
+                return None
+
+        except Exception as e:
+            self.signals.log.emit(f"Multimodal inference error: {e}")
+            return None
 
     def _find_event_windows(self, t, h, v):
         fs = 1.0 / (t[1] - t[0])

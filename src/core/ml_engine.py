@@ -1,5 +1,8 @@
 """
-ML Engine for FusionStudio - Model training and inference.
+ML Engine for FusionStudio - Legacy MLPClassifier model training and inference.
+NOTE: This module is superseded by multimodal_engine.py for new training.
+Kept for backward compatibility with existing .pkl models.
+For new models, use MultimodalTrainer (CNN+LSTM with video + signal fusion).
 """
 import os
 import joblib
@@ -18,7 +21,7 @@ class MLEngine(QObject):
 
     def __init__(self, base_models_dir="models"):
         super().__init__()
-        self.base_models_dir = base_models_dir
+        self.base_models_dir = os.path.join(base_models_dir, "distraction_detector", "mlp")
         self.model = None
         self.metadata = {"projects": [], "history": {"loss": [], "acc": []}, "name": "Distraction Detector"}
 
@@ -36,23 +39,22 @@ class MLEngine(QObject):
         return False
 
     def find_latest_model(self, model_name="distraction_detector"):
-        """
-        Scans the models folder for the most recent build of a specific model.
-        """
-        model_root = os.path.join(self.base_models_dir, model_name)
-        if not os.path.exists(model_root):
+        candidates = []
+        if not os.path.exists(self.base_models_dir):
             return None
-            
-        builds = [d for d in os.listdir(model_root) if os.path.isdir(os.path.join(model_root, d)) and d.startswith("build_")]
-        if not builds:
+        for root, dirs, files in os.walk(self.base_models_dir):
+            for f in files:
+                if f == "model.pkl":
+                    build_dir = os.path.basename(root)
+                    if build_dir.startswith("build_"):
+                        candidates.append((root, build_dir))
+        if not candidates:
             return None
-            
-        # Sort by timestamp (build_YYYYMMDD_HHMMSS)
-        latest_build = sorted(builds)[-1]
-        latest_path = os.path.join(model_root, latest_build, "model.pkl")
-        
-        if os.path.exists(latest_path):
-            return latest_path
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        for root, _ in candidates:
+            pkl_path = os.path.join(root, "model.pkl")
+            if os.path.exists(pkl_path):
+                return pkl_path
         return None
 
     def train(self, dataset_csv, model_name, epochs, lr, project_paths):

@@ -9,6 +9,7 @@ from PySide6.QtGui import QPixmap, QFont, QPainter, QColor, QLinearGradient, QPe
 from src.core.utils import resource_path
 from src.ui.styles import IDIADA_ORANGE
 from src.core.dependency_manager import DependencyManager
+from src.ui.widgets import PulsingProgressBar
 
 
 APP_VERSION = "1.0.0"
@@ -42,75 +43,6 @@ class DependencyWorker(QThread):
 
     def _on_progress(self, percent, message):
         self.progress.emit(percent, message)
-
-
-class PulsingProgressBar(QWidget):
-    """Custom progress bar with a shimmering pulse effect using paintEvent."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._progress = 0.0
-        
-        # Timer only to trigger refreshes, logic is now time-based
-        self._timer = QTimer(self)
-        self._timer.setInterval(30) # ~33 FPS is enough for shimmer
-        self._timer.timeout.connect(self.update)
-        self._timer.start()
-        
-    def get_progress(self):
-        return self._progress * 100
-        
-    def set_progress(self, value):
-        self._progress = value / 100.0
-        self.update()
-        
-    progressValue = Property(float, get_progress, set_progress)
-        
-    def paintEvent(self, event):
-        from PySide6.QtCore import QTime
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Background
-        painter.setBrush(QColor("#333"))
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), 1, 1)
-        
-        if self._progress <= 0:
-            return
-            
-        # Filled portion
-        bar_width = int(self.width() * self._progress)
-        if bar_width < 4: bar_width = 4
-        
-        # Time-based pulse offset (independent of frame rate)
-        # 1.5 seconds per loop
-        ms = QTime.currentTime().msecsSinceStartOfDay()
-        p = (ms % 1500) / 1500.0
-        
-        rect = self.rect()
-        rect.setWidth(bar_width)
-        
-        # Pulse Gradient mapped to the filled portion
-        grad = QLinearGradient(0, 0, bar_width, 0)
-        grad.setColorAt(0, QColor(IDIADA_ORANGE))
-        
-        # Shimmer peak logic with wrap-around support
-        # We use a slightly wider range to allow the shimmer to fully enter/exit
-        peak = p * 1.4 - 0.2 
-        
-        s_start = max(0.0, peak - 0.15)
-        s_peak = max(0.0, min(1.0, peak))
-        s_end = min(1.0, peak + 0.15)
-        
-        if s_peak > 0 and s_peak < 1:
-            grad.setColorAt(s_start, QColor(IDIADA_ORANGE))
-            grad.setColorAt(s_peak, QColor("#ffffff")) # Max brightness for visibility
-            grad.setColorAt(s_end, QColor(IDIADA_ORANGE))
-            
-        grad.setColorAt(1, QColor(IDIADA_ORANGE))
-        
-        painter.setBrush(grad)
-        painter.drawRoundedRect(rect, 1, 1)
 
 
 class SplashScreen(QWidget):

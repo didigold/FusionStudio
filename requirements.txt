@@ -24,6 +24,17 @@ pandas
 openpyxl
 xlwings
 
+# Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+
+# System Monitoring
+psutil>=5.9.0
+pynvml>=11.5.0
+
+# Model Export (optional)
+onnx>=1.14.0
+
 # Utilities
 Pillow
 packaging
