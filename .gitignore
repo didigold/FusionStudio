@@ -220,3 +220,32 @@ report_preview.png
 
 # GSR Local Assets
 assets/gsr/local/
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large data files
+*.csv
+*.xlsx
+*.h5
+*.pkl
+*.parquet
+*.jsonl
+!marks.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!components.json
+
+# Local / Temporary files
+scratch/
+tmp/
+temp/
+*.log
+

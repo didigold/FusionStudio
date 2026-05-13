@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #111110;
+  --color-foreground: #F0EDE9;
+  --color-card: #201E1C;
+  --color-card-foreground: #F0EDE9;
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #141413;
+  --color-primary: #F0EDE9;
+  --color-primary-foreground: #111110;
+  --color-secondary: transparent;
+  --color-secondary-foreground: #F0EDE9;
+  --color-muted: #1A1917;
+  --color-muted-foreground: #A09C96;
+  --color-accent: #2A2825;
+  --color-accent-foreground: #F0EDE9;
+  --color-destructive: #CF4500;
+  --color-destructive-foreground: #FFFFFF;
+  --color-border: rgba(240, 237, 233, 0.10);
+  --color-input: rgba(240, 237, 233, 0.10);
+  --color-ring: rgba(240, 237, 233, 0.60);
+  --radius: 999px;
+  --color-success: #2da44e;
+  --color-warning: #CF4500;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: 'Sofia Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 450;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+::-webkit-scrollbar-corner {
+  background: #1a1a1a;
+}
+
+input:focus, button:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}

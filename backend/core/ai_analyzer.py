@@ -5,33 +5,28 @@ Bug-hardened: guards for short signals, correct model paths.
 """
 import os
 import numpy as np
-import cv2
-from asammdf import MDF
-from scipy.ndimage import binary_closing, binary_opening
-from PySide6.QtCore import QThread, Signal, QObject
-from src.core.ml_engine import MLEngine
-from src.core.utils import resource_path
 
-
-class AIAnalyzerSignals(QObject):
-    log = Signal(str)
-    progress = Signal(float)
-    finished = Signal(list)
-    error = Signal(str)
+from backend.core.ml_engine import MLEngine
+from backend.core.utils import resource_path
 
 
 class AIAnalyzer:
-    def __init__(self, signals_handler):
-        self.signals = signals_handler
+    def __init__(self, on_log=None, on_progress=None, on_finished=None, on_error=None):
+        self.on_log = on_log
+        self.on_progress = on_progress
+        self.on_finished = on_finished
+        self.on_error = on_error
         self.ml_engine = MLEngine(resource_path("models"))
 
     def analyze(self, tracking_mf4, video_path):
         try:
-            self.signals.log.emit("Starting AI Analysis pipeline...")
+            if self.on_log:
+                self.on_log("Starting AI Analysis pipeline...")
 
             if not os.path.exists(tracking_mf4):
                 raise Exception("Tracking file missing.")
 
+            from asammdf import MDF
             mdf = MDF(tracking_mf4)
             engine = "OWL" if "Head_H_Angle" in mdf else "LIZ"
 
@@ -43,54 +38,62 @@ class AIAnalyzer:
             t, h, v = h_sig.timestamps, h_sig.samples, v_sig.samples
 
             if len(t) < 2:
-                self.signals.log.emit("Signal too short for analysis (< 2 samples).")
+                if self.on_log:
+                    self.on_log("Signal too short for analysis (< 2 samples).")
                 return []
 
-            # 1. Check if we have a multimodal model
             multimodal_result = self._try_multimodal(t, h, v, tracking_mf4, video_path)
             if multimodal_result is not None:
                 return multimodal_result
 
-            # 2. Check if we have a legacy ML model
             if self.ml_engine.model is not None:
-                self.signals.log.emit("AI Brain (ML) is active. Using neural inference...")
-                self.signals.progress.emit(0.3)
+                if self.on_log:
+                    self.on_log("AI Brain (ML) is active. Using neural inference...")
+                if self.on_progress:
+                    self.on_progress(0.3)
                 ml_markers = self.ml_engine.predict_intervals(t, h, v)
 
                 if ml_markers:
-                    self.signals.log.emit(f"ML Brain detected {len(ml_markers)//2} distraction intervals.")
-                    self.signals.progress.emit(1.0)
+                    if self.on_log:
+                        self.on_log(f"ML Brain detected {len(ml_markers) // 2} distraction intervals.")
+                    if self.on_progress:
+                        self.on_progress(1.0)
                     return ml_markers
                 else:
-                    self.signals.log.emit("ML Brain found no events. Falling back to heuristic v3.0...")
+                    if self.on_log:
+                        self.on_log("ML Brain found no events. Falling back to heuristic v3.0...")
 
-            # 3. Fallback to Heuristic Logic (v3.0)
-            self.signals.progress.emit(0.2)
+            if self.on_progress:
+                self.on_progress(0.2)
             event_windows = self._find_event_windows(t, h, v)
 
             if not event_windows:
-                self.signals.log.emit("No clear events found via heuristics.")
+                if self.on_log:
+                    self.on_log("No clear events found via heuristics.")
                 return []
 
-            self.signals.log.emit(f"Heuristics detected {len(event_windows)} discrete pulses.")
+            if self.on_log:
+                self.on_log(f"Heuristics detected {len(event_windows)} discrete pulses.")
 
             final_markers = []
             for i, (s_idx, e_idx) in enumerate(event_windows):
                 m_start = self._find_fixation_point(t, h, v, s_idx, direction="forward")
                 m_end = self._find_fixation_point(t, h, v, e_idx, direction="backward")
                 final_markers.extend([m_start, m_end])
-                self.signals.progress.emit(0.2 + (0.8 * (i + 1) / len(event_windows)))
+                if self.on_progress:
+                    self.on_progress(0.2 + (0.8 * (i + 1) / len(event_windows)))
 
             return sorted(list(set(final_markers)))
 
         except Exception as e:
-            self.signals.error.emit(str(e))
+            if self.on_error:
+                self.on_error(str(e))
             return []
 
     def _try_multimodal(self, timestamps, h_vals, v_vals, mf4_path, video_path):
         try:
-            from src.core.multimodal_engine import MultimodalTrainer
-            from src.core.video_feature_extractor import VideoFeatureExtractor
+            from backend.core.multimodal_engine import MultimodalTrainer
+            from backend.core.video_feature_extractor import VideoFeatureExtractor
 
             trainer = MultimodalTrainer(resource_path("models"))
             model_path = trainer.find_latest_model()
@@ -107,18 +110,21 @@ class AIAnalyzer:
                 return None
 
             if not video_path or not os.path.exists(video_path):
-                self.signals.log.emit("Multimodal model requires video. Falling back...")
+                if self.on_log:
+                    self.on_log("Multimodal model requires video. Falling back...")
                 return None
 
-            self.signals.log.emit("Multimodal Brain active. Running joint inference...")
-            self.signals.progress.emit(0.1)
+            if self.on_log:
+                self.on_log("Multimodal Brain active. Running joint inference...")
+            if self.on_progress:
+                self.on_progress(0.1)
 
             extractor = VideoFeatureExtractor()
             import pandas as pd
             df = pd.DataFrame({
                 'h': h_vals, 'v': v_vals,
                 'h_d': np.gradient(h_vals), 'v_d': np.gradient(v_vals),
-                'speed': np.sqrt(np.gradient(h_vals)**2 + np.gradient(v_vals)**2),
+                'speed': np.sqrt(np.gradient(h_vals) ** 2 + np.gradient(v_vals) ** 2),
             })
             dt = timestamps[1] - timestamps[0] if len(timestamps) > 1 else 1.0 / 30.0
             fs = 1.0 / dt if dt > 0 else 30.0
@@ -133,23 +139,29 @@ class AIAnalyzer:
                 video_path, timestamps[0], timestamps[-1], case_key
             )
             if video_embeddings is None:
-                self.signals.log.emit("Could not extract video features. Falling back...")
+                if self.on_log:
+                    self.on_log("Could not extract video features. Falling back...")
                 return None
 
-            self.signals.progress.emit(0.5)
+            if self.on_progress:
+                self.on_progress(0.5)
 
             results = trainer.predict_intervals(signal_seq, video_embeddings)
 
             if results:
-                self.signals.log.emit(f"Multimodal Brain detected {len(results)//2} intervals.")
-                self.signals.progress.emit(1.0)
+                if self.on_log:
+                    self.on_log(f"Multimodal Brain detected {len(results) // 2} intervals.")
+                if self.on_progress:
+                    self.on_progress(1.0)
                 return results
             else:
-                self.signals.log.emit("Multimodal Brain found no events. Falling back...")
+                if self.on_log:
+                    self.on_log("Multimodal Brain found no events. Falling back...")
                 return None
 
         except Exception as e:
-            self.signals.log.emit(f"Multimodal inference error: {e}")
+            if self.on_log:
+                self.on_log(f"Multimodal inference error: {e}")
             return None
 
     def _find_event_windows(self, t, h, v):
@@ -162,15 +174,18 @@ class AIAnalyzer:
         base_n = max(int(1.0 * fs), 1)
         h_base, v_base = np.mean(h[:base_n]), np.mean(v[:base_n])
         h_std, v_std = np.std(h[:base_n]) + 0.2, np.std(v[:base_n]) + 0.2
-        z = np.sqrt(((h - h_base)/h_std)**2 + ((v - v_base)/v_std)**2)
+        z = np.sqrt(((h - h_base) / h_std) ** 2 + ((v - v_base) / v_std) ** 2)
         is_active = z > 3.5
-        is_active = binary_opening(is_active, structure=np.ones(3)) 
+        from scipy.ndimage import binary_opening, binary_closing
+        is_active = binary_opening(is_active, structure=np.ones(3))
         is_active = binary_closing(is_active, structure=np.ones(5))
         diff = np.diff(is_active.astype(int))
         starts = np.where(diff == 1)[0]
         ends = np.where(diff == -1)[0]
-        if is_active[0]: starts = np.insert(starts, 0, 0)
-        if is_active[-1]: ends = np.append(ends, len(is_active)-1)
+        if is_active[0]:
+            starts = np.insert(starts, 0, 0)
+        if is_active[-1]:
+            ends = np.append(ends, len(is_active) - 1)
         events = []
         for s, e in zip(starts, ends):
             if t[e] - t[s] > 0.2:
@@ -187,7 +202,8 @@ class AIAnalyzer:
             search_indices = np.arange(pivot, min(len(t), pivot + w_size))
         else:
             search_indices = np.arange(max(0, pivot - w_size), pivot)
-        if len(search_indices) < 2: return t[pivot]
+        if len(search_indices) < 2:
+            return t[pivot]
         h_d = np.abs(np.gradient(h[search_indices]))
         v_d = np.abs(np.gradient(v[search_indices]))
         speed = h_d + v_d
@@ -209,20 +225,3 @@ class AIAnalyzer:
             else:
                 final_idx = search_indices[-1]
         return t[final_idx]
-
-class AIWorker(QThread):
-    def __init__(self, tracking_mf4, video_path):
-        super().__init__()
-        self.tracking_mf4 = tracking_mf4
-        self.video_path = video_path
-        self.signals = AIAnalyzerSignals()
-        self.analyzer = AIAnalyzer(self.signals)
-
-    def run(self):
-        try:
-            results = self.analyzer.analyze(self.tracking_mf4, self.video_path)
-            self.signals.finished.emit(results)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.signals.error.emit(str(e))

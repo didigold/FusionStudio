@@ -1,0 +1,351 @@
+import asyncio
+import glob
+import json
+import logging
+import os
+from threading import Thread
+
+from fastapi import APIRouter, WebSocket
+from pydantic import BaseModel
+
+from backend.ws.manager import manager_brain, manager_system
+from backend.core.utils import resource_path
+
+logger = logging.getLogger("fusionstudio.brain")
+
+router = APIRouter()
+
+
+class TrainLegacyRequest(BaseModel):
+    root_folders: list[str]
+    model_name: str = "distraction_detector"
+    epochs: int = 100
+    lr: float = 0.001
+
+
+class TrainMultimodalRequest(BaseModel):
+    root_folders: list[str]
+    model_name: str = "multimodal_v1"
+    epochs: int = 100
+    lr: float = 0.001
+    patience: int = 15
+    camera_config: dict[str, str] = {}
+
+
+class AnalyzeRequest(BaseModel):
+    tracking_mf4: str
+    video_path: str = ""
+
+
+_active_training = None
+_training_thread: Thread | None = None
+
+
+@router.get("/projects")
+async def list_projects(root: str = ""):
+    if not root or not os.path.isdir(root):
+        return {"projects": []}
+    projects = []
+    for folder in os.listdir(root):
+        fpath = os.path.join(root, folder)
+        if not os.path.isdir(fpath):
+            continue
+        avis = len(glob.glob(os.path.join(fpath, "**", "*.avi"), recursive=True))
+        mf4s = len(glob.glob(os.path.join(fpath, "**", "*.mf4"), recursive=True))
+        if avis > 0 or mf4s > 0:
+            projects.append({"name": folder, "path": fpath, "avis": avis, "mf4s": mf4s})
+    return {"projects": projects}
+
+
+@router.get("/models")
+async def list_models():
+    models_dir = resource_path("models")
+    if not os.path.exists(models_dir):
+        return {"models": []}
+
+    result = []
+    for root, dirs, files in os.walk(models_dir):
+        for f in files:
+            if f == "model.pkl" or f == "model.pt":
+                rel = os.path.relpath(root, models_dir)
+                parts = rel.replace("\\", "/").split("/")
+                architecture = parts[0] if len(parts) > 0 else "unknown"
+                variant = parts[1] if len(parts) > 1 else ""
+                size = os.path.getsize(os.path.join(root, f))
+                result.append({
+                    "path": os.path.join(root, f),
+                    "architecture": architecture,
+                    "variant": variant,
+                    "size_mb": round(size / (1024 * 1024), 2),
+                })
+    return {"models": result}
+
+
+@router.get("/history")
+async def get_history():
+    models_dir = resource_path("models")
+    result = {"mlp": None, "multimodal": None}
+
+    # MLP history
+    for root, dirs, files in os.walk(os.path.join(models_dir, "distraction_detector", "mlp") if os.path.exists(os.path.join(models_dir, "distraction_detector")) else models_dir):
+        for f in files:
+            if f == "model.pkl":
+                try:
+                    import joblib
+                    data = joblib.load(os.path.join(root, f))
+                    meta = data.get("metadata", {})
+                    result["mlp"] = {
+                        "name": meta.get("name", "MLP"),
+                        "projects": meta.get("projects", []),
+                        "history": meta.get("history", {}),
+                    }
+                except Exception:
+                    pass
+
+    # Multimodal history  
+    for root, dirs, files in os.walk(os.path.join(models_dir, "distraction_detector", "multimodal") if os.path.exists(os.path.join(models_dir, "distraction_detector")) else models_dir):
+        if "training_history.json" in files:
+            try:
+                with open(os.path.join(root, "training_history.json")) as hf:
+                    result["multimodal"] = json.load(hf)
+            except Exception:
+                pass
+
+    return result
+
+
+@router.post("/train/legacy")
+async def train_legacy(req: TrainLegacyRequest):
+    global _active_training, _training_thread
+
+    if _active_training is not None:
+        return {"status": "already_running"}
+
+    loop = asyncio.get_event_loop()
+
+    def emit(evt: dict):
+        asyncio.run_coroutine_threadsafe(
+            manager_brain.broadcast(evt), loop
+        )
+
+    class _LegacyTrainer:
+        def __init__(self):
+            self.is_running = True
+
+        def stop(self):
+            self.is_running = False
+
+        def run(self):
+            try:
+                from backend.core.dataset_builder import DatasetBuilder
+                from backend.core.ml_engine import MLEngine
+
+                builder = DatasetBuilder(
+                    on_log=lambda m: emit({"type": "log", "message": m}),
+                    on_progress=lambda v: emit({"type": "progress", "value": v}),
+                )
+                engine = MLEngine(
+                    resource_path("models"),
+                    on_log=lambda m: emit({"type": "log", "message": m}),
+                    on_epoch_progress=lambda ep, loss, acc: emit({
+                        "type": "epoch",
+                        "epoch": ep,
+                        "loss": loss,
+                        "acc": acc,
+                    }),
+                )
+
+                emit({"type": "status", "phase": "building"})
+                built = builder.build_from_folders(req.root_folders, "")
+
+                if not built:
+                    emit({"type": "error", "message": "Dataset build failed"})
+                    return
+
+                csv_path = os.path.join(
+                    resource_path("models"), "distraction_detector", "mlp",
+                    f"train_{req.model_name}.csv"
+                )
+                os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+                built = builder.build_from_folders(req.root_folders, csv_path)
+
+                emit({"type": "status", "phase": "training"})
+                success = engine.train(
+                    csv_path, req.model_name, req.epochs, req.lr, req.root_folders
+                )
+
+                if success:
+                    emit({"type": "finished"})
+                else:
+                    emit({"type": "error", "message": "Training failed"})
+
+            except Exception as e:
+                emit({"type": "error", "message": str(e)})
+
+    worker = _LegacyTrainer()
+    _active_training = worker
+
+    def _run():
+        worker.run()
+
+    _training_thread = Thread(target=_run, daemon=True)
+    _training_thread.start()
+
+    return {"status": "started"}
+
+
+@router.post("/train/multimodal")
+async def train_multimodal(req: TrainMultimodalRequest):
+    global _active_training, _training_thread
+
+    if _active_training is not None:
+        return {"status": "already_running"}
+
+    loop = asyncio.get_event_loop()
+
+    def emit(evt: dict):
+        asyncio.run_coroutine_threadsafe(
+            manager_brain.broadcast(evt), loop
+        )
+
+    class _MultiTrainer:
+        def __init__(self):
+            self.is_running = True
+
+        def stop(self):
+            self.is_running = False
+
+        def run(self):
+            try:
+                from backend.core.dataset_builder import DatasetBuilder
+                from backend.core.multimodal_engine import MultimodalTrainer
+                from backend.core.video_feature_extractor import VideoFeatureExtractor
+
+                output_dir = os.path.join(
+                    resource_path("models"), "distraction_detector", "multimodal",
+                    f"run_{req.model_name}"
+                )
+                os.makedirs(output_dir, exist_ok=True)
+
+                extractor = VideoFeatureExtractor(
+                    cam_config=req.camera_config,
+                    on_start_extraction=lambda v: emit({"type": "log", "message": f"Extracting: {v}"}),
+                    on_progress=lambda v: emit({"type": "status", "phase": "extracting", "progress": v}),
+                )
+
+                builder = DatasetBuilder(
+                    on_log=lambda m: emit({"type": "log", "message": m}),
+                    on_progress=lambda v: emit({"type": "status", "phase": "building", "progress": v}),
+                )
+
+                trainer = MultimodalTrainer(
+                    on_phase_change=lambda p: emit({"type": "status", "phase": p}),
+                    on_epoch=lambda ep, loss, acc, val_loss, val_acc: emit({
+                        "type": "epoch",
+                        "epoch": ep,
+                        "loss": loss,
+                        "acc": acc,
+                        "val_loss": val_loss,
+                        "val_acc": val_acc,
+                    }),
+                    on_log=lambda m: emit({"type": "log", "message": m}),
+                )
+
+                emit({"type": "status", "phase": "extracting"})
+                emit({"type": "log", "message": "Starting video feature extraction..."})
+
+                result = builder.build_multimodal_from_folders(
+                    req.root_folders, output_dir,
+                    video_extractor=extractor,
+                    project_camera_config=req.camera_config,
+                )
+
+                if result is None:
+                    emit({"type": "error", "message": "Dataset building failed"})
+                    return
+
+                emit({"type": "status", "phase": "training"})
+                emit({"type": "log", "message": "Starting multimodal training..."})
+
+                success = trainer.train(
+                    result["signal_windows"],
+                    result["video_windows"],
+                    result["labels"],
+                    result["project_ids"],
+                    req.model_name, req.epochs, req.lr,
+                    req.root_folders, req.patience,
+                )
+
+                if success:
+                    emit({"type": "finished"})
+                else:
+                    emit({"type": "error", "message": "Training failed"})
+
+            except Exception as e:
+                emit({"type": "error", "message": str(e)})
+
+    worker = _MultiTrainer()
+    _active_training = worker
+
+    def _run():
+        worker.run()
+
+    _training_thread = Thread(target=_run, daemon=True)
+    _training_thread.start()
+
+    return {"status": "started"}
+
+
+@router.post("/stop")
+async def stop_training():
+    global _active_training
+    if _active_training is not None:
+        _active_training.stop()
+        return {"status": "stopping"}
+    return {"status": "no_worker"}
+
+
+@router.post("/analyze")
+async def analyze_file(req: AnalyzeRequest):
+    loop = asyncio.get_event_loop()
+    loop_ref = asyncio.get_event_loop()
+
+    def emit(evt: dict):
+        asyncio.run_coroutine_threadsafe(
+            manager_brain.broadcast(evt), loop_ref
+        )
+
+    def _run():
+        from backend.core.ai_analyzer import AIAnalyzer
+        analyzer = AIAnalyzer(
+            on_log=lambda m: emit({"type": "log", "message": m}),
+            on_progress=lambda v: emit({"type": "progress", "value": v}),
+        )
+        try:
+            result = analyzer.analyze(req.tracking_mf4, req.video_path)
+            emit({"type": "analysis_done", "markers": result})
+        except Exception as e:
+            emit({"type": "error", "message": str(e)})
+
+    Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
+
+
+@router.websocket("/ws/train")
+async def ws_brain_train(ws: WebSocket):
+    await manager_brain.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except Exception:
+        await manager_brain.disconnect(ws)
+
+
+@router.websocket("/ws/system")
+async def ws_brain_system(ws: WebSocket):
+    await manager_system.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except Exception:
+        await manager_system.disconnect(ws)
