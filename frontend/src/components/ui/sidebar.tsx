@@ -136,7 +136,7 @@ SidebarFooter.displayName = "SidebarFooter"
 
 const SidebarContent = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex-1 overflow-auto px-4 py-2", className)} {...props} />
+    <div ref={ref} className={cn("flex-1 overflow-auto px-4 py-2 [overflow-anchor:none]", className)} {...props} />
   )
 )
 SidebarContent.displayName = "SidebarContent"
@@ -170,12 +170,12 @@ const SidebarMenuItem = React.forwardRef<HTMLDivElement, React.ComponentProps<"d
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 hover:bg-surface-2/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0",
+  "inline-flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium w-full transition-all duration-200 hover:bg-surface-2/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0 select-none",
   {
     variants: {
       variant: {
-        default: "text-muted-foreground",
-        active: "bg-surface-2 text-foreground shadow-sm",
+        default: "text-muted-foreground [&:active]:outline-none [&:active]:ring-0",
+        active: "bg-surface-2 text-foreground shadow-sm [&:active]:outline-none [&:active]:ring-0",
       },
       size: {
         default: "h-9",
@@ -192,9 +192,13 @@ interface SidebarMenuButtonProps extends React.ComponentProps<"button">, Variant
 }
 
 const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
-  ({ asChild = false, variant, size, className, ...props }, ref) => {
+  ({ asChild = false, variant, size, className, onClick, ...props }, ref) => {
     const Comp = asChild ? React.Fragment : "button"
-    return <Comp ref={ref} className={cn(sidebarMenuButtonVariants({ variant, size }), className)} {...props} />
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+      onClick?.(e)
+      ;(e.currentTarget as HTMLElement)?.blur()
+    }
+    return <Comp ref={ref} className={cn(sidebarMenuButtonVariants({ variant, size }), className)} {...props} onClick={handleClick} onPointerDown={(e) => { e.preventDefault(); props.onPointerDown?.(e) }} />
   }
 )
 SidebarMenuButton.displayName = "SidebarMenuButton"

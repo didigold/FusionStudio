@@ -19,12 +19,12 @@ import { Label } from "@/components/ui/label"
 import { SidebarProvider } from "@/components/ui/sidebar"
 
 import { AudioTab } from '@/components/analysis/AudioTab'
-import { ReportTab } from '@/components/analysis/ReportTab'
 import { TrackingTab } from '@/components/analysis/TrackingTab'
 import { TimeSelectorTab } from '@/components/analysis/TimeSelectorTab'
 import { LogicTab } from '@/components/analysis/LogicTab'
 import { LogTab } from '@/components/analysis/LogTab'
 import { AnalysisSidebar } from '@/components/analysis/AnalysisSidebar'
+import { PlaceholderTab } from '@/components/analysis/PlaceholderTab'
 import { FolderBrowser } from '@/components/analysis/FolderBrowser'
 
 // --- TREE NODE COMPONENT ---
@@ -110,7 +110,7 @@ function RecordingNode({
           <span className="text-sm font-bold text-foreground/90 truncate">{node.name}</span>
         </div>
         {!isExpanded && node.tracking_stats && (
-           <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[9px] font-bold bg-surface-3 text-muted-foreground border-border/50">
+           <Badge variant="secondary" className="px-1.5 py-0 h-4 text-xs font-bold bg-surface-3 text-muted-foreground border-border/50">
              {node.tracking_stats[1]}
            </Badge>
         )}
@@ -169,6 +169,7 @@ export default function AnalysisTab() {
       const data = await res.json()
       setAnalysisResults(data.results || [])
       setAnalysisAvailableCameras(data.available_cameras || [])
+      if (selectionType === 'all') setAllAnalysisFiles(true)
       addLog(`Analysis scan found ${data.results?.length || 0} participants.`)
     } catch (err) { addLog(`Error scanning analysis dir: ${err}`) }
     finally { setScanning(false) }
@@ -317,10 +318,14 @@ export default function AnalysisTab() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1 bg-[#121211]">
               {activeTab === 'audio' && <AudioTab selectedFile={analysisSelectedFile} />}
-              {activeTab === 'report' && <ReportTab />}
+              {activeTab === 'metadata' && <PlaceholderTab label="Metadata" />}
               {activeTab === 'tracking' && <TrackingTab />}
               {activeTab === 'time-selector' && <TimeSelectorTab />}
               {activeTab === 'logic' && <LogicTab />}
+              {activeTab === 'occupant-time' && <PlaceholderTab label="Misuse Time" />}
+              {activeTab === 'misuse-logic' && <PlaceholderTab label="Misuse Logic" />}
+              {activeTab === 'classification' && <PlaceholderTab label="Classification" />}
+              {activeTab === 'reporting' && <PlaceholderTab label="Reporting" />}
               {activeTab === 'log' && <LogTab />}
             </ScrollArea>
           </div>

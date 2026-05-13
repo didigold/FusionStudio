@@ -12,8 +12,6 @@ interface LogMessage {
 }
 
 export function LogTab() {
-  const logEndRef = useRef<HTMLDivElement>(null);
-  
   const logs: LogMessage[] = [
     { timestamp: '18:41:02', level: 'info', message: 'Analysis module initialized.' },
     { timestamp: '18:41:05', level: 'info', message: 'Scanning source directory: C:/Users/didac/Desktop/FusionStudio/Data' },
@@ -22,8 +20,11 @@ export function LogTab() {
     { timestamp: '18:41:15', level: 'debug', message: 'Vite HMR connection established.' },
   ];
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = scrollContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [logs]);
 
   return (
@@ -55,7 +56,7 @@ export function LogTab() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed bg-[#0a0a0a] selection:bg-primary/20">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed bg-[#0a0a0a] selection:bg-primary/20">
         <div className="space-y-1">
           {logs.map((log, i) => (
             <div key={i} className="flex gap-4 group hover:bg-white/5 rounded px-2 py-0.5 transition-colors">
@@ -71,7 +72,7 @@ export function LogTab() {
               <span className="text-white/80 group-hover:text-white transition-colors">{log.message}</span>
             </div>
           ))}
-          <div ref={logEndRef} />
+          <div />
         </div>
       </div>
 

@@ -1,10 +1,57 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Minus, Plus, Activity, Mic, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore } from '@/store/useAppStore';
+
+// Custom hook for hold-to-repeat behavior with acceleration
+function useHoldRepeat(callback: () => void, delay = 400) {
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasRolled = useRef(false);
+  const countRef = useRef(0);
+
+  const clear = useCallback(() => {
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    hasRolled.current = false;
+    countRef.current = 0;
+  }, []);
+
+  const tick = useCallback(() => {
+    callbackRef.current();
+    countRef.current += 1;
+    // Accelerate: start at 250ms, reduce by 15ms each tick, floor at 30ms
+    const nextDelay = Math.max(30, 250 - countRef.current * 15);
+    timeoutRef.current = setTimeout(tick, nextDelay);
+  }, []);
+
+  const onMouseDown = useCallback(() => {
+    hasRolled.current = false;
+    countRef.current = 0;
+    timeoutRef.current = setTimeout(() => {
+      hasRolled.current = true;
+      callbackRef.current();
+      countRef.current = 1;
+      timeoutRef.current = setTimeout(tick, 235); // 250 - 15
+    }, delay);
+  }, [delay, tick]);
+
+  const onMouseUp = useCallback(() => {
+    if (!hasRolled.current && timeoutRef.current) {
+      callbackRef.current(); // Single click behavior
+    }
+    clear();
+  }, [clear]);
+
+  const onMouseLeave = useCallback(() => {
+    clear();
+  }, [clear]);
+
+  return { onMouseDown, onMouseUp, onMouseLeave };
+}
 
 interface AudioTabProps {
   selectedFile: string | null;
@@ -19,6 +66,18 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
   const [peakFreq, setPeakFreq] = useState<number | null>(null);
 
   const fileToUse = selectedFile || analysisCheckedFiles[0] || null;
+
+  // Refs to avoid stale closures in hold-repeat callbacks
+  const minFreqRef = useRef(minFreq);
+  const maxFreqRef = useRef(maxFreq);
+  minFreqRef.current = minFreq;
+  maxFreqRef.current = maxFreq;
+
+  // Hooks must be called at top level, before any early return
+  const minMinusHandlers = useHoldRepeat(() => setMinFreq(f => Math.max(1, f - 1)));
+  const minPlusHandlers = useHoldRepeat(() => setMinFreq(f => Math.min(maxFreqRef.current - 1, f + 1)));
+  const maxMinusHandlers = useHoldRepeat(() => setMaxFreq(f => Math.max(minFreqRef.current + 1, f - 1)));
+  const maxPlusHandlers = useHoldRepeat(() => setMaxFreq(f => Math.min(24000, f + 1)));
 
   const handleAutodetect = async () => {
     if (!fileToUse) {
@@ -43,14 +102,10 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
       if (data.success) {
         const freq = data.peak_frequency;
         setPeakFreq(freq);
-        const newMin = Math.max(0, Math.round(freq - 15));
-        const newMax = Math.round(freq + 15);
-        setMinFreq(newMin);
-        setMaxFreq(newMax);
         toast("Peak frequency detected", {
-          description: `${freq.toFixed(1)} Hz · auto-set range to ${newMin}–${newMax} Hz`,
+          description: `${freq.toFixed(1)} Hz`,
         });
-        addLog(`Audio autodetect: ${freq.toFixed(1)} Hz (range ${newMin}-${newMax} Hz)`);
+        addLog(`Audio autodetect: ${freq.toFixed(1)} Hz`);
       } else {
         toast("Detection failed", {
           description: data.error || "Unknown error",
@@ -65,6 +120,18 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
     }
   };
 
+  if (!fileToUse) {
+    return (
+      <div className="flex items-center justify-center h-full p-8">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Mic className="w-10 h-10 opacity-40" />
+          <p className="text-sm font-medium">No recording selected</p>
+          <p className="text-xs opacity-60">Check a recording in the Recordings panel to enable audio analysis</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-center h-full p-8">
       <div className="w-full max-w-sm space-y-8">
@@ -78,11 +145,9 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <p className="text-sm text-muted-foreground tracking-tight">Frequency & Peak Detection</p>
             </div>
           </div>
-          {fileToUse && (
-            <Badge variant="outline" className="text-sm tracking-tight bg-surface-3 ml-4 truncate max-w-[180px]">
-              {fileToUse.split(/[\\/]/).pop()}
-            </Badge>
-          )}
+          <Badge variant="outline" className="text-sm tracking-tight bg-surface-3 ml-4 truncate max-w-[180px]">
+            {fileToUse.split(/[\\/]/).pop()}
+          </Badge>
         </div>
 
         <div className="flex flex-col gap-6 rounded-xl bg-surface-2 border border-white/5 p-4">
@@ -93,8 +158,8 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 rounded-full shrink-0"
-                onClick={() => setMinFreq(Math.max(1, minFreq - 10))}
                 disabled={minFreq <= 1}
+                {...minMinusHandlers}
               >
                 <Minus className="w-4 h-4" />
               </Button>
@@ -103,8 +168,8 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 rounded-full shrink-0"
-                onClick={() => setMinFreq(Math.min(maxFreq - 1, minFreq + 10))}
                 disabled={minFreq >= maxFreq - 1}
+                {...minPlusHandlers}
               >
                 <Plus className="w-4 h-4" />
               </Button>
@@ -118,8 +183,8 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 rounded-full shrink-0"
-                onClick={() => setMaxFreq(Math.max(minFreq + 1, maxFreq - 10))}
                 disabled={maxFreq <= minFreq + 1}
+                {...maxMinusHandlers}
               >
                 <Minus className="w-4 h-4" />
               </Button>
@@ -128,8 +193,8 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 rounded-full shrink-0"
-                onClick={() => setMaxFreq(Math.min(24000, maxFreq + 10))}
                 disabled={maxFreq >= 24000}
+                {...maxPlusHandlers}
               >
                 <Plus className="w-4 h-4" />
               </Button>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
 import FuseTab from './pages/FuseTab'
@@ -13,6 +14,15 @@ import { Toaster } from './components/ui/sonner'
 
 export default function App() {
   useSystemWebSocket()
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 
   return (
     <BrowserRouter>

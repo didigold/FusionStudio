@@ -1,22 +1,92 @@
-import { Mic, FileText, Video, Focus, GitBranch, Terminal, ChevronRight } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { 
+  Mic, FileText, Video, Clock, GitBranch, Package,
+  AlertTriangle, BrainCircuit, Tags, FileSpreadsheet,
+  Terminal, Eye, UserCheck, ChevronRight, Construction
+} from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
-const navItems = [
-  { value: "audio", label: "Audio", icon: Mic },
-  { value: "report", label: "Report", icon: FileText },
-  { value: "tracking", label: "Tracking", icon: Video },
-  { value: "time-selector", label: "Time Selector", icon: Focus },
-  { value: "logic", label: "Logic", icon: GitBranch },
-  { value: "log", label: "Log", icon: Terminal },
-]
+interface SubItem {
+  value: string
+  label: string
+  icon: any
+}
+
+interface ExpandableGroupProps {
+  label: string
+  icon: any
+  activeTab: string
+  onTabChange: (tab: string) => void
+  children: SubItem[]
+  emptyMessage?: string
+}
+
+function ExpandableGroup({ label, icon: GroupIcon, activeTab, onTabChange, children, emptyMessage }: ExpandableGroupProps) {
+  const isActive = children.some(c => c.value === activeTab)
+  const [isExpanded, setIsExpanded] = useState(isActive)
+
+  useEffect(() => {
+    if (isActive) setIsExpanded(true)
+  }, [isActive])
+
+  const toggle = useCallback(() => setIsExpanded(e => !e), [])
+
+  const handleItemClick = useCallback((value: string) => {
+    onTabChange(value)
+  }, [onTabChange])
+
+  return (
+    <div className="flex flex-col">
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          size="sm"
+          onClick={toggle}
+          className={cn(
+            isActive && "bg-surface-2 text-foreground shadow-sm"
+          )}
+        >
+          <GroupIcon className="w-4 h-4" />
+          <span className="flex-1 text-left">{label}</span>
+          <ChevronRight className={cn(
+            "w-3.5 h-3.5 shrink-0 transition-transform duration-200",
+            isExpanded && "rotate-90"
+          )} />
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      {isExpanded && (
+        <div className="flex flex-col">
+          {children.length > 0 ? children.map((item) => (
+            <SidebarMenuItem key={item.value}>
+              <SidebarMenuButton
+                variant={activeTab === item.value ? "active" : "default"}
+                size="sm"
+                onClick={() => handleItemClick(item.value)}
+                className="pl-10"
+              >
+                <item.icon className="w-4 h-4" />
+                <span>{item.label}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )) : (
+            <div className="flex items-center gap-2 pl-10 pr-3 py-2 text-xs text-muted-foreground/50 italic">
+              <Construction className="w-3 h-3" />
+              <span>{emptyMessage || "Coming soon"}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface AnalysisSidebarProps {
   activeTab: string
@@ -27,24 +97,110 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
   return (
     <Sidebar collapsible="none" className="border-r border-border/50 bg-surface-2/50">
       <SidebarContent>
+        {/* First Steps */}
         <SidebarGroup>
+          <SidebarGroupLabel>First Steps</SidebarGroupLabel>
           <SidebarMenu>
-            {navItems.map((item) => (
-              <SidebarMenuItem key={item.value} className="group">
-                <SidebarMenuButton
-                  variant={activeTab === item.value ? "active" : "default"}
-                  size="sm"
-                  onClick={() => onTabChange(item.value)}
-                >
-                  <item.icon className="w-4 h-4" />
-                  <span className="font-medium">{item.label}</span>
-                  <ChevronRight className={cn(
-                    "ml-auto w-3.5 h-3.5 transition-transform duration-200",
-                    activeTab === item.value ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-1 group-hover:opacity-50 group-hover:translate-x-0"
-                  )} />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                variant={activeTab === "audio" ? "active" : "default"}
+                size="sm"
+                onClick={() => onTabChange("audio")}
+              >
+                <Mic className="w-4 h-4" />
+                <span>Audio</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                variant={activeTab === "metadata" ? "active" : "default"}
+                size="sm"
+                onClick={() => onTabChange("metadata")}
+              >
+                <FileText className="w-4 h-4" />
+                <span>Metadata</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* Scenario */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Scenario</SidebarGroupLabel>
+          <SidebarMenu>
+            <ExpandableGroup
+              label="Gaze Analysis"
+              icon={Eye}
+              activeTab={activeTab}
+              onTabChange={onTabChange}
+              children={[
+                { value: "tracking", label: "Tracking", icon: Video },
+                { value: "time-selector", label: "Gaze Time", icon: Clock },
+                { value: "logic", label: "Gaze Logic", icon: GitBranch },
+              ]}
+            />
+            <ExpandableGroup
+              label="Models"
+              icon={Package}
+              activeTab={activeTab}
+              onTabChange={onTabChange}
+              children={[]}
+              emptyMessage="No models available"
+            />
+            <ExpandableGroup
+              label="Occupant Monitoring"
+              icon={UserCheck}
+              activeTab={activeTab}
+              onTabChange={onTabChange}
+              children={[
+                { value: "occupant-time", label: "Misuse Time", icon: AlertTriangle },
+                { value: "misuse-logic", label: "Misuse Logic", icon: BrainCircuit },
+              ]}
+            />
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* Documents */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Documents</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                variant={activeTab === "classification" ? "active" : "default"}
+                size="sm"
+                onClick={() => onTabChange("classification")}
+              >
+                <Tags className="w-4 h-4" />
+                <span>Classification</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                variant={activeTab === "reporting" ? "active" : "default"}
+                size="sm"
+                onClick={() => onTabChange("reporting")}
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Reporting</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* Others */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Others</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                variant={activeTab === "log" ? "active" : "default"}
+                size="sm"
+                onClick={() => onTabChange("log")}
+              >
+                <Terminal className="w-4 h-4" />
+                <span>Log</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

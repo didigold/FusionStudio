@@ -7,8 +7,15 @@ import {
   FileText,
   Eye,
   BrainCircuit,
-  Search
 } from 'lucide-react'
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const NAV_ITEMS = [
   { to: '/fuse', icon: FlaskConical, label: 'Fuse' },
@@ -19,6 +26,10 @@ const NAV_ITEMS = [
   { to: '/brain', icon: BrainCircuit, label: 'AI Brain' },
 ]
 
+declare const __USERNAME__: string | undefined
+
+const userName = typeof __USERNAME__ !== 'undefined' ? __USERNAME__ : 'User'
+
 export function TopNav() {
   return (
     <div className="w-full flex justify-center px-6 mt-6 absolute top-0 z-50 pointer-events-none">
@@ -27,7 +38,7 @@ export function TopNav() {
         {/* Brand / Logo */}
         <div className="flex items-center gap-2 shrink-0 w-64">
           <span className="text-[16px] font-bold text-foreground">FusionStudio</span>
-          <span className="text-[16px] font-bold text-warning">Applus+ </span>
+          <span className="text-[16px] font-bold text-warning">Applus+ IDIADA</span>
         </div>
 
         {/* Primary Links */}
@@ -56,12 +67,26 @@ export function TopNav() {
           ))}
         </div>
 
-        {/* Right side: Search/Badge */}
+        {/* Right side: Avatar Dropdown / Badge */}
         <div className="flex items-center gap-4 shrink-0 w-64 justify-end">
           <SystemBadge />
-          <button className="w-10 h-10 rounded-full flex items-center justify-center bg-transparent border border-transparent hover:border-border transition-colors text-foreground">
-            <Search size={18} />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <Avatar>
+                  <AvatarFallback>{userName.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-40">
+              <div className="px-2 py-2 text-sm font-medium text-foreground border-b border-border/50">
+                {userName}
+              </div>
+              <DropdownMenuItem className="cursor-default text-muted-foreground text-xs">
+                Accredited user
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
       </nav>
