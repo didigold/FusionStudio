@@ -249,3 +249,5 @@ tmp/
 temp/
 *.log
 
+# VS Code specific
+tempCodeRunnerFile.py
