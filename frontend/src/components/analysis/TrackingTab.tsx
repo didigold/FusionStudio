@@ -6,7 +6,7 @@ import {
   ButtonGroup,
   ButtonGroupSeparator,
 } from "@/components/ui/button-group";
-import { Play, Square, Video, Activity, StopCircle, CircleGauge } from "lucide-react";
+import { Play, Square, Video, Activity, StopCircle, CircleGauge, MoveHorizontal, MoveVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
 import { analysisApi } from "@/api/analysisApi";
@@ -212,11 +212,22 @@ export function TrackingTab() {
       <div className="mx-auto w-full max-w-[1000px] h-[600px] rounded-3xl bg-black border border-white/5 overflow-hidden relative group shadow-2xl shadow-black/50">
         {analysisChronosRunning ? (
           analysisChronosFrame ? (
-            <img
-              src={`data:image/jpeg;base64,${analysisChronosFrame}`}
-              className="w-full h-full object-contain"
-              alt="Tracking preview"
-            />
+            <>
+              {/* Ambilight Effect - Blurred background glow */}
+              <div 
+                className="absolute inset-0 pointer-events-none opacity-40 blur-[100px] scale-125 transition-opacity duration-1000"
+                style={{
+                  backgroundImage: `url(data:image/jpeg;base64,${analysisChronosFrame})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              />
+              <img
+                src={`data:image/jpeg;base64,${analysisChronosFrame}`}
+                className="w-full h-full object-contain relative z-10"
+                alt="Tracking preview"
+              />
+            </>
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-12 animate-pulse">
               <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
@@ -244,15 +255,15 @@ export function TrackingTab() {
         )}
 
         {/* HUD Overlay - Bottom Centered Group */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-20">
           <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            <MoveHorizontal className="w-3 h-3 text-orange-500" />
             <span className="text-xs font-bold text-orange-500 tracking-tighter">
               h: {stats.h_val?.toFixed(2)}
             </span>
           </div>
           <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <MoveVertical className="w-3 h-3 text-blue-500" />
             <span className="text-xs font-bold text-blue-500 tracking-tighter">
               v: {stats.v_val?.toFixed(2)}
             </span>
