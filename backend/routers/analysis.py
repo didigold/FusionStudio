@@ -458,45 +458,38 @@ async def detect_logic(req: LogicRequest):
     return result
 
 
-def _resolve_tracking_tasks(mf4_paths: list[str], camera_id: int, source_dir: str) -> list[dict]:
+def _resolve_tracking_tasks(mf4_paths: list[str], camera_id: int, source_dir: str = "") -> list[dict]:
     tasks = []
+    logger.info(f"Resolving tasks for {len(mf4_paths)} files with camera_id={camera_id}")
+    
     for mf4_path in mf4_paths:
         if not mf4_path.lower().endswith(".mf4"):
             continue
 
         fname = os.path.basename(mf4_path)
+        # Ensure we always look for the base logic even if a tracking file was selected
         fname_clean = fname.replace("_tracking.mf4", ".mf4")
         logic = ChronosManager.get_logic_for_file(fname_clean)
 
         if not logic:
-            logger.info(f"No tracking logic for: {fname_clean}")
+            logger.warning(f"No logic found for {fname_clean}")
             continue
 
         base_name = os.path.splitext(fname_clean)[0]
+        # Matching original app: video is expected in the same directory as the MF4
         video_name = f"{base_name}_cam{camera_id}.avi"
         mf4_dir = os.path.dirname(mf4_path)
-
-        # Search in same directory as MF4
         video_path = os.path.join(mf4_dir, video_name)
 
-        # Try parent directory
-        if not os.path.exists(video_path):
-            parent_dir = os.path.dirname(mf4_dir)
-            video_path = os.path.join(parent_dir, video_name)
-
-        # Try source_dir/Pxx structure
-        if not os.path.exists(video_path) and source_dir:
-            path_parts = mf4_path.replace("\\", "/").split("/")
-            for part in path_parts:
-                if re.match(r'^[A-Z]\d{2}$', part):
-                    video_path = os.path.join(source_dir, part, video_name)
-                    break
-
         if os.path.exists(video_path):
-            logger.info(f"Found: {video_name} -> {logic}")
-            tasks.append({"file_path": video_path, "logic": logic})
+            logger.info(f"Task resolved: {video_name} -> {logic}")
+            tasks.append({
+                "file_path": video_path,
+                "mf4_path": mf4_path,
+                "logic": logic
+            })
         else:
-            logger.warning(f"Video not found: {video_name}")
+            logger.warning(f"Video not found: {video_path}")
 
     return tasks
 
@@ -515,6 +508,7 @@ async def run_chronos(req: ChronosRequest):
     loop = asyncio.get_event_loop()
 
     def on_log(msg):
+        print(f"WS LOG: {msg}")
         asyncio.run_coroutine_threadsafe(
             manager_analysis.broadcast({"type": "log", "message": msg}), loop
         )
@@ -530,6 +524,7 @@ async def run_chronos(req: ChronosRequest):
         )
 
     def on_all_finished():
+        print("WS FINISHED")
         global _active_worker
         asyncio.run_coroutine_threadsafe(
             manager_analysis.broadcast({"type": "finished"}), loop
@@ -587,9 +582,12 @@ async def stop_chronos():
 
 @router.websocket("/ws")
 async def ws_analysis(ws: WebSocket):
+    print("WS CONNECTING...")
     await manager_analysis.connect(ws)
+    print(f"WS CONNECTED. Active connections: {len(manager_analysis.active)}")
     try:
         while True:
             await ws.receive_text()
-    except Exception:
-        await manager_analysis.disconnect(ws)
+    except WebSocketDisconnect:
+        manager_analysis.disconnect(ws)
+        print("WS DISCONNECTED")

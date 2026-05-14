@@ -46,6 +46,8 @@ class ChronosWorker:
         self.task_queue = task_queue
         self.camera_id = camera_id
         self.is_running = True
+        self.total_tasks = len(task_queue)
+        self.current_task_idx = 0
         self.model_path = resource_path("assets/face_landmarker.task")
 
         self.on_new_frame = on_new_frame
@@ -72,12 +74,14 @@ class ChronosWorker:
             return
 
         for i, task in enumerate(self.task_queue):
+            self.current_task_idx = i
             if not self.is_running:
                 if self.on_log:
                     self.on_log("ChronosWorker stopped.")
                 break
 
             fpath = task['file_path']
+            mf4_path = task['mf4_path']
             logic = task['logic']
 
             if self.on_log:
@@ -85,9 +89,9 @@ class ChronosWorker:
 
             try:
                 if logic == 'OWL':
-                    completed = self._process_owl(fpath)
+                    completed = self._process_owl(fpath, mf4_path)
                 elif logic in ('LIZ', 'EYE'):
-                    completed = self._process_liz_eye(fpath, logic)
+                    completed = self._process_liz_eye(fpath, logic, mf4_path)
                 else:
                     if self.on_log:
                         self.on_log(f"Unknown logic: {logic}")
@@ -110,7 +114,7 @@ class ChronosWorker:
         if self.on_all_finished:
             self.on_all_finished()
 
-    def _process_owl(self, file_path):
+    def _process_owl(self, file_path, mf4_path):
         import cv2 as cv
         import numpy as np
         if not hasattr(np, 'bool'):
@@ -126,7 +130,7 @@ class ChronosWorker:
         cap = cv.VideoCapture(file_path)
         if not cap.isOpened():
             raise Exception(f"Cannot open: {file_path}")
-
+        
         total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv.CAP_PROP_FPS) or 30.0
 
@@ -199,13 +203,15 @@ class ChronosWorker:
                     proc_fps = frame_idx / elapsed if elapsed > 0 else 0
                     if self.on_stats:
                         self.on_stats({
-                            'engine': 'OWL',
+                            'engine': 'Head Pose',
                             'file': os.path.basename(file_path),
                             'frame': frame_idx,
                             'total_frames': total_frames,
                             'h_val': last_y,
                             'v_val': last_x,
-                            'fps': proc_fps
+                            'fps': proc_fps,
+                            'task_idx': self.current_task_idx,
+                            'total_tasks': self.total_tasks
                         })
 
         cap.release()
@@ -216,10 +222,10 @@ class ChronosWorker:
         elapsed = time.time() - proc_start
         if self.on_log:
             self.on_log(f"  Processed in {elapsed:.1f}s ({frame_idx / elapsed:.1f} fps)")
-        self._save_mf4_owl(file_path, H_angles, V_angles, timestamps)
+        self._save_mf4_owl(mf4_path, H_angles, V_angles, timestamps)
         return True
 
-    def _process_liz_eye(self, file_path, logic):
+    def _process_liz_eye(self, file_path, logic, mf4_path):
         import cv2 as cv
         import numpy as np
         if not hasattr(np, 'bool'):
@@ -235,7 +241,7 @@ class ChronosWorker:
         cap = cv.VideoCapture(file_path)
         if not cap.isOpened():
             raise Exception(f"Cannot open: {file_path}")
-
+        
         total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv.CAP_PROP_FPS) or 30.0
 
@@ -304,13 +310,15 @@ class ChronosWorker:
                     proc_fps = frame_idx / elapsed if elapsed > 0 else 0
                     if self.on_stats:
                         self.on_stats({
-                            'engine': engine_name,
+                            'engine': 'Eye Ratio',
                             'file': os.path.basename(file_path),
                             'frame': frame_idx,
                             'total_frames': total_frames,
                             'h_val': last_H,
                             'v_val': last_V,
-                            'fps': proc_fps
+                            'fps': proc_fps,
+                            'task_idx': self.current_task_idx,
+                            'total_tasks': self.total_tasks
                         })
 
         cap.release()
@@ -321,7 +329,7 @@ class ChronosWorker:
         elapsed = time.time() - proc_start
         if self.on_log:
             self.on_log(f"  Processed in {elapsed:.1f}s ({frame_idx / elapsed:.1f} fps)")
-        self._save_mf4_liz(file_path, H_ratios, V_ratios, timestamps_arr)
+        self._save_mf4_liz(mf4_path, H_ratios, V_ratios, timestamps_arr)
         return True
 
     def _draw_landmarks(self, frame, landmarks, img_w, img_h):
@@ -372,17 +380,12 @@ class ChronosWorker:
                 if self.on_log:
                     self.on_log(f"  ⚠ Could not copy creation time: {e}")
 
-            try:
-                os.remove(orig_path)
-            except Exception as e:
-                if self.on_log:
-                    self.on_log(f"  ⚠ Could not delete original file ({os.path.basename(orig_path)}): {e}")
-
+            pass
         except Exception as e:
             if self.on_log:
                 self.on_log(f"  ⚠ Metadata transfer error: {e}")
 
-    def _save_mf4_owl(self, src_path, h_ang, v_ang, times):
+    def _save_mf4_owl(self, mf4_path, h_ang, v_ang, times):
         from asammdf import MDF, Signal
         import numpy as np
         if not hasattr(np, 'bool'):
@@ -391,7 +394,6 @@ class ChronosWorker:
             np.float = float
         if not hasattr(np, 'int'):
             np.int = int
-        mf4_path = self._get_mf4_path(src_path)
         if not os.path.exists(mf4_path):
             if self.on_log:
                 self.on_log(f"  ⚠ MF4 not found: {os.path.basename(mf4_path)}")
@@ -412,7 +414,7 @@ class ChronosWorker:
             if self.on_error:
                 self.on_error(f"Save error: {e}")
 
-    def _save_mf4_liz(self, src_path, h_rat, v_rat, times):
+    def _save_mf4_liz(self, mf4_path, h_rat, v_rat, times):
         from asammdf import MDF, Signal
         import numpy as np
         if not hasattr(np, 'bool'):
@@ -421,7 +423,6 @@ class ChronosWorker:
             np.float = float
         if not hasattr(np, 'int'):
             np.int = int
-        mf4_path = self._get_mf4_path(src_path)
         if not os.path.exists(mf4_path):
             if self.on_log:
                 self.on_log(f"  ⚠ MF4 not found: {os.path.basename(mf4_path)}")

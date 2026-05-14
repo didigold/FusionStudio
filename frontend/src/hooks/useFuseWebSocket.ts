@@ -21,9 +21,8 @@ export function useFuseWebSocket() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname
-    const port = import.meta.env.DEV ? '8000' : window.location.port
-    const url = `${protocol}//${host}:${port}/api/fuse/ws`
+    const host = window.location.host // includes port
+    const url = `${protocol}//${host}/api/fuse/ws`
 
     const ws = new WebSocket(url)
     wsRef.current = ws

@@ -61,9 +61,8 @@ export function useSystemWebSocket() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname
-    const port = import.meta.env.DEV ? '8001' : window.location.port
-    const url = `${protocol}//${host}:${port}/api/brain/ws/system`
+    const host = window.location.host // includes port
+    const url = `${protocol}//${host}/api/brain/ws/system`
 
     const ws = new WebSocket(url)
     wsRef.current = ws

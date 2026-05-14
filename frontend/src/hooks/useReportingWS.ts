@@ -12,9 +12,8 @@ export function useReportingWS() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname
-    const port = import.meta.env.DEV ? '8000' : window.location.port
-    const url = `${protocol}//${host}:${port}/api/reporting/ws`
+    const host = window.location.host // includes port
+    const url = `${protocol}//${host}/api/reporting/ws`
 
     const ws = new WebSocket(url)
     wsRef.current = ws

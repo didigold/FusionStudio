@@ -111,6 +111,8 @@ interface AppState {
   setAnalysisChronosProgress: (v: number) => void
   analysisChronosStats: any
   setAnalysisChronosStats: (s: any) => void
+  analysisChronosFrame: string | null
+  setAnalysisChronosFrame: (frame: string | null) => void
 
   // Classification state
   classifySourcePath: string
@@ -335,6 +337,8 @@ export const useAppStore = create<AppState>((set) => ({
   setAnalysisChronosProgress: (v: number) => set({ analysisChronosProgress: v }),
   analysisChronosStats: null as any,
   setAnalysisChronosStats: (s: any) => set({ analysisChronosStats: s }),
+  analysisChronosFrame: null as string | null,
+  setAnalysisChronosFrame: (frame) => set({ analysisChronosFrame: frame }),
 
   // Classification state
   classifySourcePath: '',

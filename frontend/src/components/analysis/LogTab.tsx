@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useAppStore } from '../../store/useAppStore';
 
 interface LogMessage {
   timestamp: string;
@@ -12,13 +13,14 @@ interface LogMessage {
 }
 
 export function LogTab() {
-  const logs: LogMessage[] = [
-    { timestamp: '18:41:02', level: 'info', message: 'Analysis module initialized.' },
-    { timestamp: '18:41:05', level: 'info', message: 'Scanning source directory: C:/Users/didac/Desktop/FusionStudio/Data' },
-    { timestamp: '18:41:08', level: 'info', message: 'Found 12 participants and 48 MF4 files.' },
-    { timestamp: '18:41:10', level: 'warn', message: 'Missing marks.json in participant D02. Skipping status sync.' },
-    { timestamp: '18:41:15', level: 'debug', message: 'Vite HMR connection established.' },
-  ];
+  const { logs: rawLogs } = useAppStore();
+
+  const logs: LogMessage[] = rawLogs.map(l => ({
+    timestamp: new Date(l.ts).toLocaleTimeString(),
+    level: l.message.toLowerCase().includes('error') ? 'error' : 
+           l.message.toLowerCase().includes('warn') ? 'warn' : 'info',
+    message: l.message
+  }));
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 

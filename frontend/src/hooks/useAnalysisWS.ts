@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
+import { toast } from 'sonner'
 
 export function useAnalysisWS() {
-  const { addLog, setAnalysisEventResult, setAnalysisChronosRunning, setAnalysisChronosProgress, setAnalysisChronosStats } = useAppStore()
+  const { addLog, setAnalysisEventResult, setAnalysisChronosRunning, setAnalysisChronosProgress, setAnalysisChronosStats, setAnalysisChronosFrame } = useAppStore()
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
@@ -12,9 +13,8 @@ export function useAnalysisWS() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname
-    const port = import.meta.env.DEV ? '8000' : window.location.port
-    const url = `${protocol}//${host}:${port}/api/analysis/ws`
+    const host = window.location.host // includes port
+    const url = `${protocol}//${host}/api/analysis/ws`
 
     const ws = new WebSocket(url)
     wsRef.current = ws
@@ -27,14 +27,31 @@ export function useAnalysisWS() {
           case 'progress': setAnalysisChronosProgress(data.value); break
           case 'task_done': addLog(`Task done: ${data.path}`); break
           case 'stats': setAnalysisChronosStats(data); break
-          case 'finished': setAnalysisChronosRunning(false); addLog('Chronos processing finished'); break
-          case 'error': setAnalysisChronosRunning(false); addLog(`Chronos error: ${data.message}`); break
+          case 'frame': setAnalysisChronosFrame(data.data); break
+          case 'finished': 
+            if (useAppStore.getState().analysisChronosRunning) {
+              setAnalysisChronosRunning(false); 
+              addLog('Chronos processing finished');
+              toast.success("Chronos finished", {
+                description: "Tracking data has been successfully generated."
+              });
+            }
+            break
+          case 'error': 
+            if (useAppStore.getState().analysisChronosRunning) {
+              setAnalysisChronosRunning(false); 
+              addLog(`Chronos error: ${data.message}`);
+              toast.error("Chronos error", {
+                description: data.message
+              });
+            }
+            break
         }
       } catch { /* ignore */ }
     }
     ws.onclose = () => { wsRef.current = null; if (mountedRef.current) reconnectRef.current = setTimeout(connect, 3000) }
     ws.onerror = () => ws.close()
-  }, [addLog, setAnalysisChronosProgress, setAnalysisChronosRunning, setAnalysisChronosStats, setAnalysisEventResult])
+  }, [addLog, setAnalysisChronosProgress, setAnalysisChronosRunning, setAnalysisChronosStats, setAnalysisChronosFrame, setAnalysisEventResult])
 
   useEffect(() => {
     mountedRef.current = true; connect()

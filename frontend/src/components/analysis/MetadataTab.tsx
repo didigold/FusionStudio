@@ -3,16 +3,7 @@ import { FileText, User, MapPin, Wrench, Users, ShieldCheck } from "lucide-react
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { SearchableSelect } from "@/components/analysis/SearchableSelect"
 
 const oems = [
   "Acura", "Aisin", "Aito", "Alfa Romeo", "AMG", "APPLUS+IDIADA", "Aptiv",
@@ -103,22 +94,14 @@ export function MetadataTab() {
         <div className="flex flex-col gap-5 rounded-xl bg-surface-2 border border-white/5 p-5">
           <div className="flex flex-col gap-2">
             <Label htmlFor="oem" className="text-sm font-medium text-foreground flex items-center gap-2">
-              {oem ? (
-                <img src={`/assets/logos/${oem}${oem === 'Novelic' ? '.jpeg' : '.png'}`} alt={oem} className="w-4 h-4 object-contain" />
-              ) : (
-                <Wrench className="w-3.5 h-3.5 text-muted-foreground" />
-              )} OEM
+              <Wrench className="w-3.5 h-3.5 text-muted-foreground" /> OEM
             </Label>
-            <Select value={oem} onValueChange={setOem}>
-              <SelectTrigger id="oem" className="h-9">
-                <SelectValue placeholder="Select OEM" />
-              </SelectTrigger>
-              <SelectContent>
-                {oems.map((name) => (
-                  <SelectItem key={name} value={name}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={oem}
+              onChange={setOem}
+              placeholder="Select OEM"
+              items={oems}
+            />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -138,26 +121,15 @@ export function MetadataTab() {
             <Label htmlFor="track" className="text-sm font-medium text-foreground flex items-center gap-2">
               <MapPin className="w-3.5 h-3.5 text-muted-foreground" /> Track
             </Label>
-            <Select value={track} onValueChange={setTrack}>
-              <SelectTrigger id="track" className="h-9">
-                <SelectValue placeholder="Select track" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>HQ</SelectLabel>
-                  {hqTracks.map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectGroup>
-                <SelectSeparator />
-                <SelectGroup>
-                  <SelectLabel>ICPG</SelectLabel>
-                  {icpgTracks.map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={track}
+              onChange={setTrack}
+              placeholder="Select track"
+              groups={[
+                { label: "HQ", items: hqTracks },
+                { label: "ICPG", items: icpgTracks },
+              ]}
+            />
           </div>
 
           <div className="flex flex-col gap-2">

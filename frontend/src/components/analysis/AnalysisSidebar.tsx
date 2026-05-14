@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react"
 import { 
   Mic, FileText, Video, Clock, GitBranch, Package,
   AlertTriangle, BrainCircuit, Tags, FileSpreadsheet,
-  Terminal, Eye, UserCheck, ChevronRight, Construction
+  Terminal, Eye, UserCheck, ChevronRight, Construction, ScanFace
 } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
+import { useAppStore } from "@/store/useAppStore"
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +21,7 @@ interface SubItem {
   value: string
   label: string
   icon: any
+  showSpinner?: boolean
 }
 
 interface ExpandableGroupProps {
@@ -74,6 +77,7 @@ function ExpandableGroup({ label, icon: GroupIcon, activeTab, onTabChange, child
               >
                 <item.icon className="w-4 h-4" />
                 <span>{item.label}</span>
+                {item.showSpinner && <Spinner className="size-3 text-primary/60 ml-auto" />}
               </SidebarMenuButton>
             </SidebarMenuItem>
           )) : (
@@ -94,6 +98,8 @@ interface AnalysisSidebarProps {
 }
 
 export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps) {
+  const { analysisChronosRunning } = useAppStore()
+
   return (
     <Sidebar collapsible="none" className="border-r border-border/50 bg-surface-2/50">
       <SidebarContent>
@@ -134,7 +140,7 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
               activeTab={activeTab}
               onTabChange={onTabChange}
               children={[
-                { value: "tracking", label: "Tracking", icon: Video },
+                { value: "tracking", label: "Tracking", icon: ScanFace, showSpinner: analysisChronosRunning },
                 { value: "time-selector", label: "Gaze Time", icon: Clock },
                 { value: "logic", label: "Gaze Logic", icon: GitBranch },
               ]}
