@@ -5,7 +5,8 @@ import os
 import re
 from threading import Thread
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, HTTPException, WebSocketDisconnect
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.ws.manager import manager_analysis
@@ -59,6 +60,11 @@ class ChronosRequest(BaseModel):
 
 class BrowseRequest(BaseModel):
     path: str = ""
+
+
+class MarksRequest(BaseModel):
+    file_path: str
+    marks: dict | list
 
 
 _active_worker: ChronosWorker | None = None
@@ -571,6 +577,44 @@ async def run_chronos(req: ChronosRequest):
     return {"status": "started", "task_count": len(tasks)}
 
 
+@router.post("/marks/save")
+async def save_marks(req: MarksRequest):
+    """Save marks for a specific MF4/tracking file."""
+    try:
+        # Determine marks path
+        mf4_dir = os.path.dirname(req.file_path)
+        base_name = os.path.splitext(os.path.basename(req.file_path))[0]
+        # Remove _tracking if present to unify marks
+        base_name_clean = base_name.replace("_tracking", "")
+        marks_file = os.path.join(mf4_dir, f"{base_name_clean}_marks.json")
+        
+        with open(marks_file, "w", encoding="utf-8") as f:
+            json.dump(req.marks, f, indent=4)
+        
+        return {"status": "success", "path": marks_file}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/marks/load")
+async def load_marks(req: SignalPreviewRequest):
+    """Load marks for a specific MF4/tracking file."""
+    try:
+        mf4_dir = os.path.dirname(req.file_path)
+        base_name = os.path.splitext(os.path.basename(req.file_path))[0]
+        base_name_clean = base_name.replace("_tracking", "")
+        marks_file = os.path.join(mf4_dir, f"{base_name_clean}_marks.json")
+        
+        if os.path.exists(marks_file):
+            with open(marks_file, "r", encoding="utf-8") as f:
+                return {"status": "success", "marks": json.load(f)}
+        
+        # Try finding in parent dir or root marks.json
+        return {"status": "success", "marks": []}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/stop/chronos")
 async def stop_chronos():
     global _active_worker
@@ -591,3 +635,10 @@ async def ws_analysis(ws: WebSocket):
     except WebSocketDisconnect:
         manager_analysis.disconnect(ws)
         print("WS DISCONNECTED")
+
+
+@router.get("/media")
+async def get_media(path: str):
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)

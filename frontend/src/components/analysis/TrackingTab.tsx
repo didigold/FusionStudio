@@ -86,49 +86,20 @@ export function TrackingTab() {
 
   return (
     <div className="flex flex-col gap-4 p-4 animate-in fade-in duration-500 h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between relative min-h-[48px]">
-        <div className="flex items-center gap-3">
-          <Badge
-            className={cn(
-              "px-3 py-1 text-sm font-bold tracking-wider border-0 transition-colors duration-500",
-              analysisChronosRunning
-                ? "bg-[#2da44e] text-white shadow-[0_0_15px_rgba(45,164,78,0.3)]"
-                : "bg-surface-3 text-muted-foreground",
-            )}
-          >
-            {analysisChronosRunning
-              ? stats.engine || "engine active"
-              : "engine idle"}
-          </Badge>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
-              {stats.file ||
-                analysisCheckedFiles[0]?.split(/[\\/]/).pop() ||
-                "No file selected"}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {stats.frame || 0} / {stats.total_frames || 0} frames
-            </span>
-          </div>
-        </div>
-
-        {/* Progress Center - FIXED POSITION */}
-        {analysisChronosRunning && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none">
-            <Badge
-              variant="outline"
-              className="bg-primary/5 text-primary border-primary/20 font-bold px-3 py-1 gap-2 animate-in zoom-in duration-300 pointer-events-auto shadow-lg shadow-primary/5"
-            >
-              <Spinner className="w-3 h-3" />
-              <span className="text-xs uppercase tracking-tighter whitespace-nowrap">
-                {Math.round(analysisChronosProgress)}% (
-                {(stats.task_idx ?? 0) + 1}/
-                {stats.total_tasks || analysisCheckedFiles.length})
+        {/* Header - Aligned with Video Viewport */}
+        <div className="mx-auto w-full max-w-[1000px] flex items-center justify-between relative min-h-[48px]">
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-foreground truncate max-w-[250px]">
+                {stats.file ||
+                  analysisCheckedFiles[0]?.split(/[\\/]/).pop() ||
+                  "No file selected"}
               </span>
-            </Badge>
+              <span className="text-xs text-muted-foreground">
+                {stats.frame || 0} / {stats.total_frames || 0} frames
+              </span>
+            </div>
           </div>
-        )}
 
         <div className="flex items-center gap-3">
           <ButtonGroup>
@@ -254,8 +225,27 @@ export function TrackingTab() {
           </div>
         )}
 
-        {/* HUD Overlay - Bottom Centered Group */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-20">
+        {/* HUD Overlay - Status & Progress (Upper Center) */}
+        {analysisChronosRunning && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 animate-in zoom-in duration-300">
+            <Badge
+              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-white/10 bg-black/60 backdrop-blur-md text-foreground transition-all duration-500 whitespace-nowrap flex items-center gap-2 shadow-xl shadow-black/40"
+            >
+              <Spinner className="w-3 h-3 border-foreground/30 border-t-foreground" />
+              <span>
+                {stats.engine || "ENGINE ACTIVE"} - {Math.round(analysisChronosProgress)}%
+              </span>
+              <span className="opacity-60 text-[10px] ml-1">
+                ({(stats.task_idx ?? 0) + 1}/
+                {stats.total_tasks || analysisCheckedFiles.length})
+              </span>
+            </Badge>
+          </div>
+        )}
+
+        {/* HUD Overlay - Bottom Centered Group (H, V, FPS) */}
+        {analysisChronosRunning && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-20 animate-in zoom-in duration-300">
           <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
             <MoveHorizontal className="w-3 h-3 text-orange-500" />
             <span className="text-xs font-bold text-orange-500 tracking-tighter">
@@ -268,13 +258,14 @@ export function TrackingTab() {
               v: {stats.v_val?.toFixed(2)}
             </span>
           </div>
-          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-4 py-1.5 flex items-center gap-3">
-            <CircleGauge className="w-4 h-4 text-[#2da44e]" />
-            <span className="text-xs font-bold text-white tracking-widest">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
+            <CircleGauge className="w-3.5 h-3.5 text-[#2da44e]" />
+            <span className="text-xs font-bold text-[#2da44e] tracking-tighter">
               {Math.round(stats.fps)} FPS
             </span>
           </div>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

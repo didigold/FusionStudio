@@ -28,4 +28,10 @@ export const analysisApi = {
     api.post('/run/chronos', { mf4_paths, camera_id, source_dir }),
 
   stopChronos: () => api.post('/stop/chronos'),
+
+  saveMarks: (file_path: string, marks: any) =>
+    api.post('/marks/save', { file_path, marks }),
+
+  loadMarks: (file_path: string) =>
+    api.post('/marks/load', { file_path }),
 }
