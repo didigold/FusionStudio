@@ -25,6 +25,7 @@ import { LogicTab } from '@/components/analysis/LogicTab'
 import { LogTab } from '@/components/analysis/LogTab'
 import { AnalysisSidebar } from '@/components/analysis/AnalysisSidebar'
 import { PlaceholderTab } from '@/components/analysis/PlaceholderTab'
+import { MetadataTab } from '@/components/analysis/MetadataTab'
 import { FolderBrowser } from '@/components/analysis/FolderBrowser'
 
 // --- TREE NODE COMPONENT ---
@@ -318,7 +319,7 @@ export default function AnalysisTab() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1 bg-[#121211]">
               {activeTab === 'audio' && <AudioTab selectedFile={analysisSelectedFile} />}
-              {activeTab === 'metadata' && <PlaceholderTab label="Metadata" />}
+              {activeTab === 'metadata' && <MetadataTab />}
               {activeTab === 'tracking' && <TrackingTab />}
               {activeTab === 'time-selector' && <TimeSelectorTab />}
               {activeTab === 'logic' && <LogicTab />}
