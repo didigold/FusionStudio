@@ -344,15 +344,16 @@ async def get_signal_data(req: SignalDataRequest):
             from asammdf import MDF
             import numpy as np
             with MDF(req.file_path) as mdf:
-                if req.channel_name not in mdf:
-                    for ch in mdf.iter_channels():
-                        if ch.name == req.channel_name:
-                            sig = ch
-                            break
+                sig = None
+                for ch in mdf.iter_channels():
+                    if ch.name == req.channel_name:
+                        sig = ch
+                        break
+                if sig is None:
+                    if req.channel_name in mdf:
+                        sig = mdf.get(req.channel_name)
                     else:
                         return {"error": f"Channel '{req.channel_name}' not found"}
-                else:
-                    sig = mdf.get(req.channel_name)
 
                 timestamps = np.asarray(sig.timestamps, dtype=float)
                 samples = np.asarray(sig.samples, dtype=float)
@@ -407,15 +408,16 @@ async def detect_events(req: SignalDataRequest):
             from asammdf import MDF
             import numpy as np
             with MDF(req.file_path) as mdf:
-                if req.channel_name not in mdf:
-                    for ch in mdf.iter_channels():
-                        if ch.name == req.channel_name:
-                            sig = ch
-                            break
+                sig = None
+                for ch in mdf.iter_channels():
+                    if ch.name == req.channel_name:
+                        sig = ch
+                        break
+                if sig is None:
+                    if req.channel_name in mdf:
+                        sig = mdf.get(req.channel_name)
                     else:
                         return {"error": f"Channel '{req.channel_name}' not found"}
-                else:
-                    sig = mdf.get(req.channel_name)
 
                 samples = np.asarray(sig.samples, dtype=float)
                 timestamps = np.asarray(sig.timestamps, dtype=float)
@@ -638,7 +640,41 @@ async def ws_analysis(ws: WebSocket):
 
 
 @router.get("/media")
-async def get_media(path: str):
+def get_media(path: str):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
+    
+    if path.lower().endswith(".avi"):
+        mp4_path = path[:-4] + ".mp4"
+        if not os.path.exists(mp4_path):
+            try:
+                import subprocess
+                logger.info(f"Transcoding AVI to MP4 for browser playback: {path} -> {mp4_path}")
+                
+                # Configure subprocess to run quietly and without window on Windows
+                creationflags = 0
+                if os.name == 'nt':
+                    creationflags = 0x08000000  # CREATE_NO_WINDOW
+                
+                cmd = [
+                    "ffmpeg", "-y", "-i", path,
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-movflags", "faststart",
+                    mp4_path
+                ]
+                subprocess.run(
+                    cmd, 
+                    stdout=subprocess.DEVNULL, 
+                    stderr=subprocess.DEVNULL, 
+                    check=True,
+                    creationflags=creationflags
+                )
+                logger.info(f"Successfully transcoded: {mp4_path}")
+            except Exception as e:
+                logger.error(f"Failed to transcode {path} to browser-compatible format: {e}")
+                # Fallback to original AVI file
+                return FileResponse(path)
+        
+        return FileResponse(mp4_path)
+        
     return FileResponse(path)

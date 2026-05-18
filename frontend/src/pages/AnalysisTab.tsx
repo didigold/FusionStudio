@@ -313,22 +313,27 @@ export default function AnalysisTab() {
       </div>
 
       {/* Main Analysis Panel (Sidebar + Content) */}
-      <div className="flex-1 bg-card/50 border border-border/50 rounded-xl flex overflow-hidden shadow-sm relative">
-        <SidebarProvider defaultOpen>
+      <div className="flex-1 bg-card/50 border border-border/50 rounded-xl flex overflow-hidden shadow-sm relative min-h-0">
+        <SidebarProvider defaultOpen className="h-full w-full flex overflow-hidden min-h-0">
           <AnalysisSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <ScrollArea className="flex-1 bg-[#121211]">
-              {activeTab === 'audio' && <AudioTab selectedFile={analysisSelectedFile} />}
-              {activeTab === 'metadata' && <MetadataTab />}
-              {activeTab === 'tracking' && <TrackingTab />}
-              {activeTab === 'time-selector' && <TimeSelectorTab />}
-              {activeTab === 'logic' && <LogicTab />}
-              {activeTab === 'occupant-time' && <PlaceholderTab label="Misuse Time" />}
-              {activeTab === 'misuse-logic' && <PlaceholderTab label="Misuse Logic" />}
-              {activeTab === 'classification' && <PlaceholderTab label="Classification" />}
-              {activeTab === 'reporting' && <PlaceholderTab label="Reporting" />}
-              {activeTab === 'log' && <LogTab />}
-            </ScrollArea>
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#121211]">
+            {['time-selector', 'tracking'].includes(activeTab) ? (
+              <>
+                {activeTab === 'tracking' && <TrackingTab />}
+                {activeTab === 'time-selector' && <TimeSelectorTab />}
+              </>
+            ) : (
+              <ScrollArea className="flex-1">
+                {activeTab === 'audio' && <AudioTab selectedFile={analysisSelectedFile} />}
+                {activeTab === 'metadata' && <MetadataTab />}
+                {activeTab === 'logic' && <LogicTab />}
+                {activeTab === 'occupant-time' && <PlaceholderTab label="Misuse Time" />}
+                {activeTab === 'misuse-logic' && <PlaceholderTab label="Misuse Logic" />}
+                {activeTab === 'classification' && <PlaceholderTab label="Classification" />}
+                {activeTab === 'reporting' && <PlaceholderTab label="Reporting" />}
+                {activeTab === 'log' && <LogTab />}
+              </ScrollArea>
+            )}
           </div>
         </SidebarProvider>
       </div>
