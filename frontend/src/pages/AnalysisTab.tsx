@@ -2,16 +2,18 @@ import { useState, useEffect, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useAnalysisWS } from '../hooks/useAnalysisWS'
 import { 
-  FileSearch,
-  Loader2,
   ChevronRight, ChevronDown, Folder, File,
-  RefreshCw, LayoutGrid, FolderOpen,
-  ChevronUp, CheckSquare
+  LayoutGrid,
+  ListChevronsUpDown, ListChevronsDownUp,
+  Smile, Frown,
+  Locate, LocateOff,
+  FileChartColumnIncreasing,
+  FileSearch,
+  CheckSquare
 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -26,7 +28,45 @@ import { LogTab } from '@/components/analysis/LogTab'
 import { AnalysisSidebar } from '@/components/analysis/AnalysisSidebar'
 import { PlaceholderTab } from '@/components/analysis/PlaceholderTab'
 import { MetadataTab } from '@/components/analysis/MetadataTab'
-import { FolderBrowser } from '@/components/analysis/FolderBrowser'
+
+// --- PROGRESS RING COMPONENT ---
+const ProgressRing = ({ value, max, title }: { value: number; max: number; title: string }) => {
+  const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
+  const radius = 4.5
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (percent / 100) * circumference
+
+  let strokeColor = "stroke-amber-500"
+  if (percent === 100) {
+    strokeColor = "stroke-emerald-500"
+  } else if (percent === 0) {
+    strokeColor = "stroke-red-500/20"
+  }
+
+  return (
+    <div className="relative flex items-center justify-center w-3.5 h-3.5" title={`${title}: ${value}/${max}`}>
+      <svg className="w-3.5 h-3.5 transform -rotate-90">
+        <circle
+          cx="7"
+          cy="7"
+          r={radius}
+          className="stroke-white/5 fill-transparent"
+          strokeWidth="1.5"
+        />
+        <circle
+          cx="7"
+          cy="7"
+          r={radius}
+          className={cn("fill-transparent transition-all duration-500", strokeColor)}
+          strokeWidth="1.5"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+        />
+      </svg>
+    </div>
+  )
+}
 
 // --- TREE NODE COMPONENT ---
 function RecordingNode({ 
@@ -81,16 +121,25 @@ function RecordingNode({
         <div className="flex gap-1 shrink-0 ml-2">
           <Badge 
             variant={node.has_tracking ? "success" : "destructive"} 
-            className="px-1 py-0 h-3.5 text-[8px] font-bold border-0 min-w-[14px] flex justify-center"
-          >T</Badge>
+            className="p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md"
+            title={node.has_tracking ? "Tracking Completed" : "Tracking Pending"}
+          >
+            {node.has_tracking ? <Smile className="w-3.5 h-3.5" /> : <Frown className="w-3.5 h-3.5" />}
+          </Badge>
           <Badge 
             variant={node.has_marks ? "success" : "destructive"} 
-            className="px-1 py-0 h-3.5 text-[8px] font-bold border-0 min-w-[14px] flex justify-center"
-          >M</Badge>
+            className="p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md"
+            title={node.has_marks ? "Marks Completed" : "Marks Pending"}
+          >
+            {node.has_marks ? <Locate className="w-3.5 h-3.5" /> : <LocateOff className="w-3.5 h-3.5" />}
+          </Badge>
           <Badge 
             variant={node.has_report ? "success" : "destructive"} 
-            className="px-1 py-0 h-3.5 text-[8px] font-bold border-0 min-w-[14px] flex justify-center"
-          >R</Badge>
+            className="p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md"
+            title={node.has_report ? "Report Completed" : "Report Pending"}
+          >
+            {node.has_report ? <FileChartColumnIncreasing className="w-3.5 h-3.5" /> : <File className="w-3.5 h-3.5" />}
+          </Badge>
         </div>
       </div>
     )
@@ -111,25 +160,39 @@ function RecordingNode({
           <span className="text-sm font-bold text-foreground/90 truncate">{node.name}</span>
         </div>
         {!isExpanded && node.tracking_stats && (
-           <Badge variant="secondary" className="px-1.5 py-0 h-4 text-xs font-bold bg-surface-3 text-muted-foreground border-border/50">
-             {node.tracking_stats[1]}
-           </Badge>
+           <div className="flex items-center gap-1.5 shrink-0 select-none">
+             <div className="flex gap-1 items-center bg-surface-3/30 border border-white/5 px-1.5 py-0.5 rounded-md">
+               <ProgressRing value={node.tracking_stats[0]} max={node.tracking_stats[1]} title="Tracking" />
+               <ProgressRing value={node.marks_stats?.[0] || 0} max={node.marks_stats?.[1] || 0} title="Marks" />
+               <ProgressRing value={node.analysis_stats?.[0] || 0} max={node.analysis_stats?.[1] || 0} title="Reports" />
+             </div>
+             <span className="text-xs font-bold text-muted-foreground/80 bg-surface-3/50 border border-white/5 rounded-md w-[32px] h-[20px] flex items-center justify-center shrink-0">
+               {node.tracking_stats[1]}
+             </span>
+           </div>
         )}
       </div>
-      {isExpanded && hasChildren && (
-        <div className="flex flex-col">
-          {node.children.map((child: any, idx: number) => (
-            <RecordingNode 
-              key={idx} 
-              node={child} 
-              level={level + 1} 
-              selectedPath={selectedPath} 
-              onSelect={onSelect}
-              checkedFiles={checkedFiles}
-              onToggleCheck={onToggleCheck}
-              expandedAll={expandedAll}
-            />
-          ))}
+      {hasChildren && (
+        <div 
+          className={cn(
+            "grid transition-all duration-200 ease-in-out",
+            isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          )}
+        >
+          <div className="overflow-hidden flex flex-col">
+            {node.children.map((child: any, idx: number) => (
+              <RecordingNode 
+                key={idx} 
+                node={child} 
+                level={level + 1} 
+                selectedPath={selectedPath} 
+                onSelect={onSelect}
+                checkedFiles={checkedFiles}
+                onToggleCheck={onToggleCheck}
+                expandedAll={expandedAll}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -149,32 +212,8 @@ export default function AnalysisTab() {
 
   useAnalysisWS()
 
-  const [scanning, setScanning] = useState(false)
   const [selectionType, setSelectionType] = useState('all')
   const [activeTab, setActiveTab] = useState('audio')
-  const [browseOpen, setBrowseOpen] = useState(false)
-
-  const handleFolderSelect = (path: string) => {
-    setAnalysisSourcePath(path)
-  }
-
-  const handleScan = async () => {
-    if (!analysisSourcePath) return
-    setScanning(true)
-    try {
-      const res = await fetch('/api/analysis/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_dir: analysisSourcePath }),
-      })
-      const data = await res.json()
-      setAnalysisResults(data.results || [])
-      setAnalysisAvailableCameras(data.available_cameras || [])
-      if (selectionType === 'all') setAllAnalysisFiles(true)
-      addLog(`Analysis scan found ${data.results?.length || 0} participants.`)
-    } catch (err) { addLog(`Error scanning analysis dir: ${err}`) }
-    finally { setScanning(false) }
-  }
 
   const selectFile = (filePath: string) => {
     setAnalysisSelectedFile(filePath)
@@ -200,41 +239,6 @@ export default function AnalysisTab() {
   return (
     <div className="flex h-full gap-6 p-1 overflow-hidden">
       <div className="w-80 flex flex-col gap-6 overflow-hidden">
-        {/* Data Source Panel */}
-        <div className="bg-card/50 border border-border/50 rounded-xl p-5 shadow-sm flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FileSearch className="text-primary w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-foreground tracking-tight">Data source</h2>
-              <p className="text-xs text-muted-foreground tracking-tight">Select project directory</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex w-full gap-0">
-              <Input
-                value={analysisSourcePath}
-                onChange={(e) => setAnalysisSourcePath(e.target.value)}
-                placeholder="C:\Path\To\Project..."
-                className="rounded-r-none border-r-0 h-9 text-sm focus-visible:ring-1 focus-visible:ring-primary/50"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setBrowseOpen(true)}
-                className="rounded-l-none border border-white/5 bg-surface-3 h-9 w-9 p-0 shrink-0 hover:bg-surface-2 transition-colors"
-              >
-                <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
-              </Button>
-            </div>
-            <Button onClick={handleScan} disabled={scanning} className="w-full bg-primary text-background rounded-lg font-bold text-sm tracking-tight hover:bg-primary/90 shadow-lg shadow-primary/10 h-9">
-              {scanning ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
-              {scanning ? 'Scanning...' : 'Scan directory'}
-            </Button>
-          </div>
-        </div>
-
         {/* Participant Status Panel */}
         <div className="bg-card/50 border border-border/50 rounded-xl flex-1 overflow-hidden flex flex-col shadow-sm">
           <div className="p-4 border-b border-white/5 bg-surface-2/30">
@@ -251,7 +255,7 @@ export default function AnalysisTab() {
                     onClick={toggleExpand}
                     title={isAllExpanded ? "Collapse All" : "Expand All"}
                   >
-                    {isAllExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    {isAllExpanded ? <ListChevronsDownUp className="w-3.5 h-3.5" /> : <ListChevronsUpDown className="w-3.5 h-3.5" />}
                   </Button>
                </div>
             </div>
@@ -276,8 +280,8 @@ export default function AnalysisTab() {
             </RadioGroup>
           </div>
 
-          <ScrollArea className="flex-1 p-2 bg-[#121211]/30">
-            <div className="flex flex-col gap-0.5">
+          <ScrollArea className="flex-1 bg-[#121211]/30 scroll-fade-mask">
+            <div className="flex flex-col gap-0.5 p-2">
               {analysisResults.map((res, i) => (
                 <RecordingNode 
                   key={i} 
@@ -337,7 +341,6 @@ export default function AnalysisTab() {
           </div>
         </SidebarProvider>
       </div>
-      <FolderBrowser open={browseOpen} onOpenChange={setBrowseOpen} onSelect={handleFolderSelect} />
     </div>
   )
 }

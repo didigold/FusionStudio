@@ -29,9 +29,9 @@ export const analysisApi = {
 
   stopChronos: () => api.post('/stop/chronos'),
 
-  saveMarks: (file_path: string, marks: any) =>
-    api.post('/marks/save', { file_path, marks }),
+  saveMarks: (file_path: string, marks: number[], source_dir = '') =>
+    api.post('/marks/save', { file_path, source_dir, marks }),
 
-  loadMarks: (file_path: string) =>
-    api.post('/marks/load', { file_path }),
+  loadMarks: (file_path: string, source_dir = '') =>
+    api.post('/marks/load', { file_path, source_dir }),
 }

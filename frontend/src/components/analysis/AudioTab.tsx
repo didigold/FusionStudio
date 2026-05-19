@@ -102,6 +102,12 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
       if (data.success) {
         const freq = data.peak_frequency;
         setPeakFreq(freq);
+        
+        // Update frequency ranges to be +/- 15 Hz around detected frequency
+        const roundedFreq = Math.round(freq);
+        setMinFreq(Math.max(1, roundedFreq - 15));
+        setMaxFreq(Math.min(24000, roundedFreq + 15));
+
         toast("Peak frequency detected", {
           description: `${freq.toFixed(1)} Hz`,
         });

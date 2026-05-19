@@ -86,6 +86,24 @@ export function TrackingTab() {
 
   return (
     <div className="flex flex-col gap-4 p-4 animate-in fade-in duration-500 h-full">
+      <style>{`
+        @keyframes pulseSmoothSync {
+          0%, 100% {
+            opacity: 0.25;
+            filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0));
+            color: rgba(255, 255, 255, 0.35);
+          }
+          50% {
+            opacity: 0.95;
+            filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 25px rgba(255, 255, 255, 0.25));
+            color: rgba(255, 255, 255, 0.95);
+          }
+        }
+        .animate-pulse-sync {
+          animation: pulseSmoothSync 3s ease-in-out infinite;
+        }
+      `}</style>
+
         {/* Header - Aligned with Video Viewport */}
         <div className="mx-auto w-full max-w-[1000px] flex items-center justify-between relative min-h-[48px]">
           <div className="flex items-center gap-3">
@@ -125,8 +143,8 @@ export function TrackingTab() {
                 </Fragment>
               ))
             ) : (
-              <span className="text-sm font-medium text-muted-foreground px-3 py-1">
-                no cams found
+              <span className="text-sm font-medium text-muted-foreground px-3 py-1 select-none">
+                No cameras found
               </span>
             )}
           </ButtonGroup>
@@ -210,15 +228,18 @@ export function TrackingTab() {
             </div>
           )
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-12 bg-[#050505]">
-            <div className="w-20 h-20 rounded-full bg-surface-2 border border-white/5 flex items-center justify-center opacity-50">
-              <Square className="w-8 h-8 text-muted-foreground/20 fill-current" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-12 bg-[#050505] select-none">
+            {/* Ambient glow circle */}
+            <div className="absolute w-[220px] h-[220px] rounded-full bg-white/[0.03] blur-[50px] pointer-events-none" />
+            
+            <div className="w-20 h-20 rounded-full border border-white/5 flex items-center justify-center animate-pulse-sync">
+              <Square className="w-8 h-8 fill-current stroke-[1.2]" />
             </div>
-            <div className="text-center space-y-1">
-              <p className="text-xs text-muted-foreground/40 tracking-widest font-bold uppercase">
+            <div className="text-center space-y-1.5 animate-pulse-sync">
+              <p className="text-sm tracking-[0.2em] font-extrabold uppercase">
                 System Halted
               </p>
-              <p className="text-[10px] text-muted-foreground/20 uppercase tracking-tighter">
+              <p className="text-xs uppercase tracking-wider opacity-60 font-mono">
                 Select cases and press play to start tracking
               </p>
             </div>

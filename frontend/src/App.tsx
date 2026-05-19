@@ -1,12 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
-import FuseTab from './pages/FuseTab'
 import AnalysisTab from './pages/AnalysisTab'
-import ClassificationTab from './pages/ClassificationTab'
-import ReportingTab from './pages/ReportingTab'
-import OmAnalysisTab from './pages/OmAnalysisTab'
-import BrainTab from './pages/BrainTab'
 
 import { TopNav } from './components/layout/TopNav'
 import { useSystemWebSocket } from './components/layout/SystemBadge'
@@ -34,13 +29,9 @@ export default function App() {
         <div className="flex flex-1 overflow-hidden pt-28 px-12 pb-12">
           <main className="flex-1 overflow-hidden rounded-[40px] shadow-sm relative">
             <Routes>
-              <Route path="/" element={<FuseTab />} />
-              <Route path="/fuse" element={<FuseTab />} />
+              <Route path="/" element={<AnalysisTab />} />
               <Route path="/analysis" element={<AnalysisTab />} />
-              <Route path="/classification" element={<ClassificationTab />} />
-              <Route path="/reporting" element={<ReportingTab />} />
-              <Route path="/om" element={<OmAnalysisTab />} />
-              <Route path="/brain" element={<BrainTab />} />
+              <Route path="*" element={<AnalysisTab />} />
             </Routes>
           </main>
         </div>

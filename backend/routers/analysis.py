@@ -28,6 +28,7 @@ class ScanRequest(BaseModel):
 
 class SignalPreviewRequest(BaseModel):
     file_path: str
+    source_dir: str = ""
 
 
 class SignalDataRequest(BaseModel):
@@ -64,7 +65,8 @@ class BrowseRequest(BaseModel):
 
 class MarksRequest(BaseModel):
     file_path: str
-    marks: dict | list
+    source_dir: str = ""
+    marks: list[float]
 
 
 _active_worker: ChronosWorker | None = None
@@ -579,40 +581,63 @@ async def run_chronos(req: ChronosRequest):
     return {"status": "started", "task_count": len(tasks)}
 
 
+def _get_marks_key(file_path: str) -> str:
+    """Compute marks key: last 3 path segments, stripping _tracking."""
+    p = os.path.normpath(file_path).replace("_tracking.mf4", ".mf4")
+    parts = p.split(os.sep)
+    if len(parts) < 3:
+        return os.path.basename(p)
+    return "/".join(parts[-3:])
+
+
+def _load_marks_dict(source_dir: str) -> dict:
+    """Read marks.json from source_dir, return {} on any failure."""
+    if not source_dir:
+        return {}
+    mp = os.path.join(source_dir, "marks.json")
+    if not os.path.exists(mp):
+        return {}
+    try:
+        with open(mp, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_marks_dict(source_dir: str, marks: dict):
+    """Write marks.json to source_dir."""
+    mp = os.path.join(source_dir, "marks.json")
+    with open(mp, "w", encoding="utf-8") as f:
+        json.dump(marks, f, indent=2)
+
+
 @router.post("/marks/save")
 async def save_marks(req: MarksRequest):
-    """Save marks for a specific MF4/tracking file."""
+    """Save marks to source_dir/marks.json (original app format)."""
     try:
-        # Determine marks path
-        mf4_dir = os.path.dirname(req.file_path)
-        base_name = os.path.splitext(os.path.basename(req.file_path))[0]
-        # Remove _tracking if present to unify marks
-        base_name_clean = base_name.replace("_tracking", "")
-        marks_file = os.path.join(mf4_dir, f"{base_name_clean}_marks.json")
-        
-        with open(marks_file, "w", encoding="utf-8") as f:
-            json.dump(req.marks, f, indent=4)
-        
-        return {"status": "success", "path": marks_file}
+        marks_dict = _load_marks_dict(req.source_dir)
+        key = _get_marks_key(req.file_path)
+        if req.marks:
+            marks_dict[key] = req.marks
+        elif key in marks_dict:
+            del marks_dict[key]
+        _save_marks_dict(req.source_dir, marks_dict)
+        return {"status": "success", "path": os.path.join(req.source_dir, "marks.json")}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
 @router.post("/marks/load")
 async def load_marks(req: SignalPreviewRequest):
-    """Load marks for a specific MF4/tracking file."""
+    """Load marks from source_dir/marks.json for the given file."""
     try:
-        mf4_dir = os.path.dirname(req.file_path)
-        base_name = os.path.splitext(os.path.basename(req.file_path))[0]
-        base_name_clean = base_name.replace("_tracking", "")
-        marks_file = os.path.join(mf4_dir, f"{base_name_clean}_marks.json")
-        
-        if os.path.exists(marks_file):
-            with open(marks_file, "r", encoding="utf-8") as f:
-                return {"status": "success", "marks": json.load(f)}
-        
-        # Try finding in parent dir or root marks.json
-        return {"status": "success", "marks": []}
+        marks_dict = _load_marks_dict(req.source_dir)
+        key = _get_marks_key(req.file_path)
+        # Try both _tracking and non-tracking variants
+        entry = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
+        if not isinstance(entry, list):
+            entry = []
+        return {"status": "success", "marks": entry}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

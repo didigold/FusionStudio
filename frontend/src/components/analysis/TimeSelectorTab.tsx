@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { 
   Play, 
@@ -21,28 +19,85 @@ import {
   ArrowLeft,
   ArrowRight,
   Trash2,
+  Menu,
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/useAppStore';
 import { analysisApi } from '@/api/analysisApi';
 import { UPlotChart } from './UPlotChart';
 import uPlot from 'uplot';
-import { toast } from 'sonner';
+import Waves from './Waves';
 
-const Kbd = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-  <kbd className={cn(
-    'pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-white/20 bg-white/10 px-1.5 font-mono text-[10px] font-medium text-white/60 opacity-100',
-    className
-  )}>
-    {children}
-  </kbd>
-);
+// --- CHART SKELETON COMPONENT ---
+const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: string }) => {
+  const strokeColor = colorClass.includes('#00AAFF') ? 'rgba(0, 170, 255, 0.3)' : 'rgba(0, 255, 136, 0.3)';
+  return (
+    <div className="flex-1 min-h-[90px] bg-surface-1/10 rounded-xl border border-white/5 relative overflow-hidden flex flex-col justify-between p-4 select-none">
+      <div className="absolute top-2 left-2 z-10">
+        <div className="h-5 px-2 bg-black/40 backdrop-blur-md rounded-md border border-white/5 flex items-center justify-center">
+          <span className={cn("text-[9px] font-bold uppercase tracking-wider", colorClass)}>{title}</span>
+        </div>
+      </div>
+      
+      {/* Wave container */}
+      <div className="flex-1 w-full relative mt-4 overflow-hidden rounded-lg">
+        <Waves
+          lineColor={strokeColor}
+          backgroundColor="transparent"
+          waveSpeedX={0.02}
+          waveSpeedY={0.01}
+          waveAmpX={30}
+          waveAmpY={15}
+          friction={0.9}
+          tension={0.01}
+          maxCursorMove={120}
+          xGap={12}
+          yGap={36}
+          className="opacity-70"
+        />
+        {/* Soft grid background overlay */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 400 100" preserveAspectRatio="none">
+          <line x1="0" y1="20" x2="400" y2="20" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4" />
+          <line x1="0" y1="50" x2="400" y2="50" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4" />
+          <line x1="0" y1="80" x2="400" y2="80" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4" />
+        </svg>
+      </div>
+
+      <div className="flex justify-between items-center w-full text-[9px] text-muted-foreground/30 font-mono mt-1 pt-1 border-t border-white/5">
+        <span>0.00s</span>
+        <span>25.00s</span>
+        <span>50.00s</span>
+        <span>75.00s</span>
+        <span className="text-sm font-sans relative -top-[1.2px]">∞</span>
+      </div>
+    </div>
+  );
+};
 
 export function TimeSelectorTab() {
   const {
@@ -52,6 +107,7 @@ export function TimeSelectorTab() {
     analysisSelectedCamera,
     setAnalysisSelectedCamera,
     analysisAvailableCameras,
+    analysisSourcePath,
   } = useAppStore();
 
   const [channels, setChannels] = useState<any[]>([]);
@@ -67,16 +123,12 @@ export function TimeSelectorTab() {
 
   // Tooltip tracking states
   const [hoveringChart, setHoveringChart] = useState<'top' | 'bottom' | null>(null);
-  const [tooltipData, setTooltipData] = useState<{
-    x: number; y: number; time: number; value: number; isLeft: boolean;
-  } | null>(null);
-
-  const setTooltipDataRef = useRef(setTooltipData);
+  const topTooltipRef = useRef<HTMLDivElement>(null);
+  const bottomTooltipRef = useRef<HTMLDivElement>(null);
   const hoveringChartRef = useRef(hoveringChart);
   useEffect(() => {
-    setTooltipDataRef.current = setTooltipData;
     hoveringChartRef.current = hoveringChart;
-  }, [setTooltipData, hoveringChart]);
+  }, [hoveringChart]);
 
   const [marks, setMarks] = useState<number[]>([]);
   const marksRef = useRef<number[]>([]);
@@ -100,18 +152,41 @@ export function TimeSelectorTab() {
 
   const [isSynced, setIsSynced] = useState(true);
   const isSyncedRef = useRef(true);
-  useEffect(() => { isSyncedRef.current = isSynced; }, [isSynced]);
+  const toggleSync = useCallback(() => {
+    setIsSynced(v => { const n = !v; isSyncedRef.current = n; return n; });
+  }, []);
 
   const [currentTime, setCurrentTime] = useState(0);
   const currentTimeRef = useRef(0);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
 
   const hoverTimeRef = useRef<number | null>(null);
-  const lastSeekTimeRef = useRef<number>(0);
 
   const [duration, setDuration] = useState(100);
   const durationRef = useRef(100);
   useEffect(() => { durationRef.current = duration; }, [duration]);
+
+  // rAF video seek loop (avoids jank from setCursor seeking on every pixel)
+  const seekRAF = useRef(0);
+  useEffect(() => {
+    let last = 0;
+    const loop = () => {
+      seekRAF.current = requestAnimationFrame(loop);
+      if (!isSyncedRef.current || isPlayingRef.current || panRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
+      const h = hoverTimeRef.current;
+      if (h == null) return;
+      const now = performance.now();
+      if (now - last < 33) return;
+      const cur = videoRef.current.currentTime;
+      if (Math.abs(cur - h) > 0.05) {
+        videoRef.current.currentTime = h;
+        if (blurVideoRef.current) blurVideoRef.current.currentTime = h;
+      }
+      last = now;
+    };
+    seekRAF.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(seekRAF.current);
+  }, []);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const blurVideoRef = useRef<HTMLVideoElement>(null);
@@ -206,30 +281,30 @@ export function TimeSelectorTab() {
         if (idx === -1) return prev;
         const next = [...prev];
         next.splice(idx, 1);
-        if (targetFile) analysisApi.saveMarks(targetFile, next).catch(() => {});
+        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
         return next;
       });
     } else if (action.type === 'remove') {
       const t = action.data.time;
       setMarks(prev => {
         const next = [...prev, t].sort((a, b) => a - b);
-        if (targetFile) analysisApi.saveMarks(targetFile, next).catch(() => {});
+        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
         return next;
       });
     } else if (action.type === 'move') {
-      const { index, oldTime } = action.data;
+      const { oldTime } = action.data;
       setMarks(prev => {
         const next = [...prev];
         const idx = next.indexOf(action.data.newTime);
         if (idx >= 0) {
           next[idx] = oldTime;
           next.sort((a, b) => a - b);
-          if (targetFile) analysisApi.saveMarks(targetFile, next).catch(() => {});
+          if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
         }
         return next;
       });
     }
-  }, [targetFile]);
+  }, [targetFile, analysisSourcePath]);
 
   // Pan state
   const panRef = useRef<{startClientX: number; startMin: number; startMax: number} | null>(null);
@@ -238,9 +313,12 @@ export function TimeSelectorTab() {
   const draggingRef = useRef<{index: number; startVal: number} | null>(null);
   // Live value during drag (avoids stale index after sort)
   const dragLiveValRef = useRef<number | null>(null);
+  // Marker index that passed the 1s hover threshold (enables marker drag on mousedown)
+  const markerDragReadyRef = useRef<number | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{x: number; y: number; markerIdx: number} | null>(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   // Dismiss context menu on any click
   useEffect(() => {
@@ -265,14 +343,24 @@ export function TimeSelectorTab() {
            }
         }
       });
-      analysisApi.loadMarks(targetFile).then(res => {
+      analysisApi.loadMarks(targetFile, analysisSourcePath).then(res => {
         if (res.data.status === 'success' && Array.isArray(res.data.marks)) setMarks(res.data.marks);
         else setMarks([]);
       });
       const baseName = targetFile.replace('_tracking.mf4', '').replace('.mf4', '');
       setVideoUrl(`/api/analysis/media?path=${encodeURIComponent(`${baseName}_cam${analysisSelectedCamera}.avi`)}`);
+    } else {
+      setChannels([]);
+      setTopSignal('');
+      setBottomSignal('');
+      setTopData([[], []]);
+      setBottomData([[], []]);
+      setMarks([]);
+      setVideoUrl(null);
+      setIsPlaying(false);
+      setDuration(100);
     }
-  }, [targetFile, analysisSelectedCamera]);
+  }, [targetFile, analysisSelectedCamera, analysisSourcePath]);
 
   useEffect(() => {
     if (!targetFile) return;
@@ -314,8 +402,8 @@ export function TimeSelectorTab() {
     undoStackRef.current.push({type: 'clear', data: {marks: [...marksRef.current]}});
     setUndoCount(undoStackRef.current.length);
     setMarks([]);
-    if (targetFile) analysisApi.saveMarks(targetFile, []).catch(() => {});
-  }, [targetFile]);
+    if (targetFile) analysisApi.saveMarks(targetFile, [], analysisSourcePath).catch(() => {});
+  }, [targetFile, analysisSourcePath]);
 
   const clearLastMark = useCallback(() => {
     const current = marksRef.current;
@@ -324,9 +412,9 @@ export function TimeSelectorTab() {
       addToUndoStack({type: 'remove', data: {time: removed}});
       const newMarks = current.slice(0, -1);
       setMarks(newMarks);
-      if (targetFile) analysisApi.saveMarks(targetFile, newMarks).catch(() => {});
+      if (targetFile) analysisApi.saveMarks(targetFile, newMarks, analysisSourcePath).catch(() => {});
     }
-  }, [targetFile, addToUndoStack]);
+  }, [targetFile, addToUndoStack, analysisSourcePath]);
 
   const removeMarkerByIndex = useCallback((index: number) => {
     const removed = marksRef.current[index];
@@ -337,16 +425,18 @@ export function TimeSelectorTab() {
       const idx = next.indexOf(removed);
       if (idx === -1) return prev;
       next.splice(idx, 1);
-      if (targetFile) analysisApi.saveMarks(targetFile, next).catch(() => {});
+      if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
       return next;
     });
-  }, [targetFile, addToUndoStack]);
+  }, [targetFile, addToUndoStack, analysisSourcePath]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!targetFile) return;
       if (e.ctrlKey && e.code === 'Space') { e.preventDefault(); clearAllMarks(); }
       if (e.ctrlKey && e.key.toLowerCase() === 'd') { e.preventDefault(); clearLastMark(); }
       if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undoLastAction(); }
+      if (e.ctrlKey && e.key.toLowerCase() === 'a') { e.preventDefault(); resetZoom(); }
       if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         if (e.shiftKey) { e.preventDefault(); goToPrevCase(); }
         else { e.preventDefault(); goToNextCase(); }
@@ -354,22 +444,22 @@ export function TimeSelectorTab() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [clearAllMarks, clearLastMark, undoLastAction, goToNextCase, goToPrevCase]);
+  }, [targetFile, clearAllMarks, clearLastMark, undoLastAction, goToNextCase, goToPrevCase, resetZoom]);
 
   const addMarkAtTime = useCallback((t: number) => {
     if (marksRef.current.includes(t)) return;
     addToUndoStack({type: 'add', data: {time: t}});
     setMarks(prev => {
         const next = [...prev, t].sort((a, b) => a - b);
-        if (targetFile) analysisApi.saveMarks(targetFile, next).catch(() => {});
+        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
         return next;
     });
-  }, [targetFile, addToUndoStack]);
+  }, [targetFile, addToUndoStack, analysisSourcePath]);
 
   // Find a marker by x pixel pos (plotting-area coords)
   const findMarkerIndexAtPos = useCallback((u: uPlot, px: number): number | null => {
     const currentMarks = marksRef.current;
-    const tol = 6;
+    const tol = 15;
     for (let i = 0; i < currentMarks.length; i++) {
       const mPx = u.valToPos(currentMarks[i], 'x');
       if (Math.abs(mPx - px) <= tol) return i;
@@ -391,7 +481,7 @@ export function TimeSelectorTab() {
     legend: { show: false },
     axes: [
       { stroke: '#666', grid: { stroke: '#333', width: 0.5 } },
-      { stroke: 'transparent', grid: { stroke: '#333', width: 0.5 }, values: () => '' }
+      { stroke: 'transparent', grid: { stroke: '#333', width: 0.5 }, values: [] }
     ],
     hooks: {
       setCursor: [
@@ -399,43 +489,37 @@ export function TimeSelectorTab() {
           const left = u.cursor.left;
           if (left == null || left < 0) {
             hoverTimeRef.current = null;
-            setTooltipDataRef.current(null);
             return;
           }
           const t = u.posToVal(left, 'x');
           hoverTimeRef.current = t;
 
-          // Skip video sync during pan
-          if (!panRef.current && isSyncedRef.current) {
-            currentTimeRef.current = t;
-            if (videoRef.current && !isPlayingRef.current) {
-               const now = performance.now();
-               if (now - lastSeekTimeRef.current > 33) {
-                  videoRef.current.currentTime = t;
-                  if (blurVideoRef.current) blurVideoRef.current.currentTime = t;
-                  lastSeekTimeRef.current = now;
-               }
-            }
-          }
-
-          // Tooltip
+          // Tooltip via direct DOM (no React state)
           const activeChart = hoveringChartRef.current;
           const chartLabel = label;
           const isCurrentChart = (activeChart === 'top' && chartLabel === topSignalRef.current) ||
                                  (activeChart === 'bottom' && chartLabel === bottomSignalRef.current);
 
-          if (isCurrentChart) {
+          const tipRef = activeChart === 'top' ? topTooltipRef : bottomTooltipRef;
+          if (isCurrentChart && tipRef.current) {
             const idx = u.cursor.idx;
             if (idx != null && idx >= 0 && u.data[1]) {
               const yVal = u.data[1][idx];
               const xVal = u.data[0][idx];
+              if (yVal == null || xVal == null) return;
+
               const tooltipX = u.bbox.left + left;
-              const tooltipY = u.bbox.top + (u.cursor.top || 0);
+              const tooltipY = u.bbox.top + (u.cursor.top ?? 0);
               const isLeft = left > u.bbox.width - 130;
-              setTooltipDataRef.current({
-                x: tooltipX, y: tooltipY, time: xVal, value: yVal, isLeft
-              });
+              const el = tipRef.current;
+              el.style.display = 'block';
+              el.style.left = isLeft ? `${tooltipX - 145}px` : `${tooltipX + 15}px`;
+              el.style.top = `${tooltipY - 15}px`;
+              el.querySelector('[data-tip-time]')!.textContent = `Time: ${xVal.toFixed(3)}s`;
+              el.querySelector('[data-tip-value]')!.textContent = `${yVal.toFixed(2)}°`;
             }
+          } else if (tipRef.current) {
+            tipRef.current.style.display = 'none';
           }
 
           // Update dragging marker (live val only, commit on mouseup)
@@ -454,23 +538,67 @@ export function TimeSelectorTab() {
           if (other) other.batch(() => other.setScale('x', { min: nMin, max: nMax }));
         };
 
+        let markerHoverStart = 0;
+        let lastNearIdx: number | null = null;
+        let markerHoverTimeout: any = null;
+
+        const clearHoverTimeout = () => {
+          if (markerHoverTimeout) {
+            clearTimeout(markerHoverTimeout);
+            markerHoverTimeout = null;
+          }
+        };
+
         u.over.addEventListener('mousemove', (e: MouseEvent) => {
           if (panRef.current || draggingRef.current) return;
           const rect = u.over.getBoundingClientRect();
           const px = e.clientX - rect.left;
           const nearIdx = findMarkerIndexAtPos(u, px);
-          u.over.style.cursor = nearIdx != null ? 'ew-resize' : 'crosshair';
+          if (nearIdx != null) {
+            if (lastNearIdx !== nearIdx) {
+              clearHoverTimeout();
+              markerDragReadyRef.current = null;
+              markerHoverStart = Date.now();
+              lastNearIdx = nearIdx;
+              
+              // Start a 0.25s hover delay timer to activate the drag cursor
+              markerHoverTimeout = setTimeout(() => {
+                u.over.style.setProperty('cursor', 'ew-resize', 'important');
+                markerDragReadyRef.current = nearIdx;
+              }, 250);
+            }
+          } else {
+            clearHoverTimeout();
+            if (lastNearIdx != null) { markerDragReadyRef.current = null; lastNearIdx = null; }
+            u.over.style.removeProperty('cursor');
+          }
+        });
+
+        u.over.addEventListener('mouseleave', () => {
+          clearHoverTimeout();
+          markerDragReadyRef.current = null;
+          lastNearIdx = null;
+          u.over.style.removeProperty('cursor');
         });
 
         u.over.addEventListener('mousedown', (e: MouseEvent) => {
+          clearHoverTimeout();
           if (e.button !== 0) return;
           const rect = u.over.getBoundingClientRect();
           const px = e.clientX - rect.left;
-          const nearIdx = findMarkerIndexAtPos(u, px);
-          if (nearIdx != null) {
-            draggingRef.current = {index: nearIdx, startVal: marksRef.current[nearIdx]};
-            return;
+          // Only start marker drag if the 1s hover threshold was met
+          if (markerDragReadyRef.current != null) {
+            const nearIdx = findMarkerIndexAtPos(u, px);
+            if (nearIdx != null && nearIdx === markerDragReadyRef.current) {
+              draggingRef.current = {index: nearIdx, startVal: marksRef.current[nearIdx]};
+              markerDragReadyRef.current = null;
+              // Keep cursor as ew-resize during drag
+              u.over.style.setProperty('cursor', 'ew-resize', 'important');
+              return;
+            }
           }
+          markerDragReadyRef.current = null;
+          // Always start pan otherwise
           panRef.current = {
             startClientX: e.clientX,
             startMin: u.scales.x.min!,
@@ -503,11 +631,12 @@ export function TimeSelectorTab() {
                 const next = prev.filter(t => Math.abs(t - startVal) > 0.0001);
                 next.push(newVal);
                 next.sort((a, b) => a - b);
-                if (targetFile) analysisApi.saveMarks(targetFile, next).catch(() => {});
+                if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
                 return next;
               });
             }
             draggingRef.current = null;
+            u.over.style.removeProperty('cursor');
             return;
           }
 
@@ -622,162 +751,91 @@ export function TimeSelectorTab() {
         .uplot .u-over { cursor: crosshair !important; }
         .uplot .u-select { background: rgba(0, 170, 255, 0.2) !important; }
         .uplot .u-cursor-x { border-left: 1px dashed rgba(255, 255, 255, 0.4) !important; }
+        
+        @keyframes waveMove1 {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-200px, 0, 0); }
+        }
+        @keyframes waveMove2 {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-150px, 0, 0); }
+        }
+        @keyframes pulseSmoothSync {
+          0%, 100% {
+            opacity: 0.25;
+            filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0));
+            color: rgba(255, 255, 255, 0.35);
+          }
+          50% {
+            opacity: 0.95;
+            filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 25px rgba(255, 255, 255, 0.25));
+            color: rgba(255, 255, 255, 0.95);
+          }
+        }
+        .animate-wave-1 {
+          animation: waveMove1 6s linear infinite;
+        }
+        .animate-wave-2 {
+          animation: waveMove2 4s linear infinite;
+        }
+        .animate-pulse-sync {
+          animation: pulseSmoothSync 3s ease-in-out infinite;
+        }
       `}</style>
 
-      <div className="flex flex-wrap items-end gap-3 shrink-0">
-        <div className="space-y-1 min-w-[120px]">
-          <Label className="text-[9px] uppercase text-muted-foreground ml-1 font-bold">Top Signal</Label>
-          <Select value={topSignal} onValueChange={setTopSignal}>
-            <SelectTrigger className="h-8 bg-surface-2 border-white/5 rounded-lg text-[11px] font-medium">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-surface-2 border-white/5 text-xs max-h-[250px]">
-              {channels.map((ch: any) => (
-                <SelectItem key={ch.name} value={ch.name}>{ch.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1 min-w-[120px]">
-          <Label className="text-[9px] uppercase text-muted-foreground ml-1 font-bold">Bottom Signal</Label>
-          <Select value={bottomSignal} onValueChange={setBottomSignal}>
-            <SelectTrigger className="h-8 bg-surface-2 border-white/5 rounded-lg text-[11px] font-medium">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-surface-2 border-white/5 text-xs max-h-[250px]">
-              {channels.map((ch: any) => (
-                <SelectItem key={ch.name} value={ch.name}>{ch.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1 min-w-[70px]">
-          <Label className="text-[9px] uppercase text-muted-foreground ml-1 font-bold">Subject</Label>
-          <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-            <SelectTrigger className="h-8 bg-surface-2 border-white/5 rounded-lg text-[11px] font-medium"><SelectValue /></SelectTrigger>
-            <SelectContent className="bg-surface-2 border-white/5 text-xs">
-              {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1 min-w-[110px]">
-          <Label className="text-[9px] uppercase text-muted-foreground ml-1 font-bold">Case</Label>
-          <Select value={targetFile?.replace('_tracking.mf4', '.mf4')} onValueChange={(v) => setAnalysisSelectedFile(v)}>
-            <SelectTrigger className="h-8 bg-surface-2 border-white/5 rounded-lg text-[11px] font-medium"><SelectValue /></SelectTrigger>
-            <SelectContent className="bg-surface-2 border-white/5 text-xs max-h-[300px]">
-              {subjectCases.map(c => <SelectItem key={c} value={c}>{c.split(/[\\/]/).pop()?.replace('.mf4', '')}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-1 pb-0.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-lg border border-white/5 bg-surface-2 hover:bg-surface-3 text-[10px] font-bold px-2 gap-1 disabled:opacity-30"
-            disabled={currentCaseIdx <= 0}
-            onClick={goToPrevCase}
-            title={prevCaseName ? `Prev: ${prevCaseName}` : ''}
-          >
-            <ArrowLeft className="w-3 h-3" /><Kbd>Shift+Tab</Kbd>
-          </Button>
-          <span className="text-[9px] text-muted-foreground font-mono whitespace-nowrap">
-            {currentCaseIdx + 1}/{subjectCases.length}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-lg border border-white/5 bg-surface-2 hover:bg-surface-3 text-[10px] font-bold px-2 gap-1 disabled:opacity-30"
-            disabled={currentCaseIdx >= subjectCases.length - 1}
-            onClick={goToNextCase}
-            title={nextCaseName ? `Next: ${nextCaseName}` : ''}
-          >
-            <ArrowRight className="w-3 h-3" /><Kbd>Tab</Kbd>
-          </Button>
-        </div>
-
-        <div className="flex gap-1 pb-0.5 ml-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 rounded-lg border-white/5 bg-surface-2 hover:bg-surface-3 text-[10px] font-bold uppercase gap-1 disabled:opacity-30"
-            disabled={undoCount === 0}
-            onClick={undoLastAction}
-          >
-            <Undo2 className="w-3 h-3" />
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 rounded-lg border-white/5 bg-surface-2 hover:bg-surface-3 text-[10px] font-bold uppercase gap-2 group" onClick={clearLastMark}>
-            Clear Last <Kbd>Ctrl+D</Kbd>
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 rounded-lg border-white/5 bg-surface-2 hover:bg-surface-3 text-[10px] font-bold uppercase gap-2 text-red-500 group" onClick={clearAllMarks}>
-            <Eraser className="w-3 h-3 group-hover:scale-110 transition-transform" /> Clear All <Kbd>Ctrl+Space</Kbd>
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 px-3 rounded-lg border-white/5 bg-surface-2 hover:bg-surface-3 text-[10px] font-bold uppercase gap-2" onClick={resetZoom}>
-            <Maximize className="w-3.5 h-3.5 text-white" /> Autorange
-          </Button>
-        </div>
-      </div>
+      <div className="flex justify-end shrink-0" />
 
       <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
         <div className="flex-[2] flex flex-col gap-2 bg-black/40 rounded-3xl border border-white/5 p-4 overflow-hidden shadow-inner h-full min-h-0 justify-center">
-          <div 
-            className="flex-1 min-h-[90px] bg-surface-1/30 rounded-xl border border-white/5 relative overflow-hidden group"
-            onMouseEnter={() => setHoveringChart('top')}
-            onMouseLeave={() => { setHoveringChart(null); setTooltipData(null); }}
-          >
-            <div className="absolute top-2 left-2 z-10 pointer-events-none">
-              <Badge variant="outline" className="bg-black/60 backdrop-blur-md border-white/5 text-[9px] font-bold text-[#00AAFF]">{topSignal}</Badge>
-            </div>
-            <UPlotChart options={topOptions} data={topData} className="w-full h-full" onReady={u => topChartRef.current = u} />
-            {hoveringChart === 'top' && tooltipData && (
+          {targetFile ? (
+            <>
               <div 
-                className="absolute z-30 pointer-events-none bg-surface-3/90 border border-white/10 backdrop-blur-md rounded-xl p-2.5 shadow-2xl flex flex-col gap-1 transition-all duration-75"
-                style={{
-                  left: tooltipData.isLeft ? `${tooltipData.x - 145}px` : `${tooltipData.x + 15}px`,
-                  top: `${tooltipData.y - 15}px`,
-                  transform: 'translateY(-50%)'
-                }}
+                className="flex-1 min-h-[90px] bg-surface-1/30 rounded-xl border border-white/5 relative overflow-hidden group"
+                onMouseEnter={() => setHoveringChart('top')}
+                onMouseLeave={() => { setHoveringChart(null); if (topTooltipRef.current) topTooltipRef.current.style.display = 'none'; }}
               >
-                <div className="text-[10px] text-white/50 font-bold uppercase tracking-wider font-mono">
-                  Time: {tooltipData.time.toFixed(3)}s
+                <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                  <Badge variant="outline" className="bg-black/60 backdrop-blur-md border-white/5 text-[9px] font-bold text-[#00AAFF]">{topSignal}</Badge>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#00AAFF]" />
-                  <span className="text-[10px] font-bold text-white/80">{topSignal}</span>
-                  <span className="text-[11px] font-extrabold text-white font-mono">{tooltipData.value.toFixed(2)}°</span>
+                <UPlotChart options={topOptions} data={topData} className="w-full h-full" onReady={u => topChartRef.current = u} />
+                <div ref={topTooltipRef} style={{display: 'none', transform: 'translateY(-50%)'}}
+                  className="absolute z-30 pointer-events-none bg-surface-3/45 border border-white/10 backdrop-blur-xl rounded-xl p-2.5 shadow-2xl flex flex-col gap-1"
+                >
+                  <div className="text-[10px] text-white/50 font-bold uppercase tracking-wider font-mono" data-tip-time>Time: 0.000s</div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#00AAFF]" />
+                    <span className="text-[10px] font-bold text-white/80">{topSignal}</span>
+                    <span className="text-[11px] font-extrabold text-white font-mono" data-tip-value>0.00°</span>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-          <div 
-            className="flex-1 min-h-[90px] bg-surface-1/30 rounded-xl border border-white/5 relative overflow-hidden group"
-            onMouseEnter={() => setHoveringChart('bottom')}
-            onMouseLeave={() => { setHoveringChart(null); setTooltipData(null); }}
-          >
-            <div className="absolute top-2 left-2 z-10 pointer-events-none">
-              <Badge variant="outline" className="bg-black/60 backdrop-blur-md border-white/5 text-[9px] font-bold text-[#00FF88]">{bottomSignal}</Badge>
-            </div>
-            <UPlotChart options={bottomOptions} data={bottomData} className="w-full h-full" onReady={u => bottomChartRef.current = u} />
-            {hoveringChart === 'bottom' && tooltipData && (
               <div 
-                className="absolute z-30 pointer-events-none bg-surface-3/90 border border-white/10 backdrop-blur-md rounded-xl p-2.5 shadow-2xl flex flex-col gap-1 transition-all duration-75"
-                style={{
-                  left: tooltipData.isLeft ? `${tooltipData.x - 145}px` : `${tooltipData.x + 15}px`,
-                  top: `${tooltipData.y - 15}px`,
-                  transform: 'translateY(-50%)'
-                }}
+                className="flex-1 min-h-[90px] bg-surface-1/30 rounded-xl border border-white/5 relative overflow-hidden group"
+                onMouseEnter={() => setHoveringChart('bottom')}
+                onMouseLeave={() => { setHoveringChart(null); if (bottomTooltipRef.current) bottomTooltipRef.current.style.display = 'none'; }}
               >
-                <div className="text-[10px] text-white/50 font-bold uppercase tracking-wider font-mono">
-                  Time: {tooltipData.time.toFixed(3)}s
+                <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                  <Badge variant="outline" className="bg-black/60 backdrop-blur-md border-white/5 text-[9px] font-bold text-[#00FF88]">{bottomSignal}</Badge>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#00FF88]" />
-                  <span className="text-[10px] font-bold text-white/80">{bottomSignal}</span>
-                  <span className="text-[11px] font-extrabold text-white font-mono">{tooltipData.value.toFixed(2)}°</span>
+                <UPlotChart options={bottomOptions} data={bottomData} className="w-full h-full" onReady={u => bottomChartRef.current = u} />
+                <div ref={bottomTooltipRef} style={{display: 'none', transform: 'translateY(-50%)'}}
+                  className="absolute z-30 pointer-events-none bg-surface-3/45 border border-white/10 backdrop-blur-xl rounded-xl p-2.5 shadow-2xl flex flex-col gap-1"
+                >
+                  <div className="text-[10px] text-white/50 font-bold uppercase tracking-wider font-mono" data-tip-time>Time: 0.000s</div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#00FF88]" />
+                    <span className="text-[10px] font-bold text-white/80">{bottomSignal}</span>
+                    <span className="text-[11px] font-extrabold text-white font-mono" data-tip-value>0.00°</span>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              <ChartSkeleton title="Gaze Horizontal Angle" colorClass="text-[#00AAFF]" />
+              <ChartSkeleton title="Gaze Vertical Angle" colorClass="text-[#00FF88]" />
+            </>
+          )}
         </div>
 
         <div className="flex-1 bg-black rounded-3xl border border-white/5 overflow-hidden relative shadow-2xl group flex flex-col h-full min-h-0">
@@ -834,31 +892,175 @@ export function TimeSelectorTab() {
                         )}
                     </>
                 ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-20"><Video className="w-12 h-12" /><span className="text-[10px] font-bold uppercase tracking-widest">Video Offline</span></div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 animate-pulse-sync select-none">
+                        {/* Ambient glow circle */}
+                        <div className="absolute w-[220px] h-[220px] rounded-full bg-white/[0.03] blur-[50px] pointer-events-none" />
+                        
+                        <Video className="w-14 h-14 stroke-[1.0]" />
+                        <span className="text-[11px] font-bold uppercase tracking-[0.2em] font-mono">Video Offline</span>
+                    </div>
                 )}
-                <div className="absolute top-3 right-3 z-20">
+                <div className="absolute top-3 left-3 z-20">
                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-7 bg-black/80 hover:bg-black/95 text-white border-white/10 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xl backdrop-blur-md px-2.5">
-                                <Camera className="w-3 h-3 text-primary animate-pulse" />
-                                <span>Cam {analysisSelectedCamera}</span>
+                        <DropdownMenuTrigger asChild disabled={!targetFile}>
+                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/80 hover:bg-black/95 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
+                                <Menu className="w-3.5 h-3.5" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-32 bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl">
-                            {(analysisAvailableCameras.length > 0 ? analysisAvailableCameras : [1, 2, 3]).map(cam => (
-                                <DropdownMenuItem 
-                                    key={cam} 
-                                    className={cn(
-                                        'text-[10px] font-bold cursor-pointer rounded-lg px-2 py-1.5 transition-colors flex items-center justify-between',
-                                        analysisSelectedCamera === cam ? 'bg-primary text-black focus:bg-primary focus:text-black' : 'text-white/80 hover:text-white hover:bg-white/5 focus:bg-white/5 focus:text-white'
-                                    )}
-                                    onClick={() => setAnalysisSelectedCamera(Number(cam))}
-                                >
-                                    <span>Camera {cam}</span>
-                                    {analysisSelectedCamera === cam && <span className="text-[10px] font-bold">✓</span>}
+                        <DropdownMenuContent align="start" className="w-52 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
+                            {/* --- Signals --- */}
+                            <DropdownMenuLabel>Top Signal</DropdownMenuLabel>
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger className="text-sm">{topSignal || 'Select...'}</DropdownMenuSubTrigger>
+                                <DropdownMenuPortal>
+                                    <DropdownMenuSubContent className="max-h-[220px] overflow-y-auto bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                        <DropdownMenuRadioGroup value={topSignal} onValueChange={setTopSignal}>
+                                            {channels.map((ch: any) => (
+                                                <DropdownMenuRadioItem key={ch.name} value={ch.name} className="text-sm">
+                                                    {ch.name}
+                                                </DropdownMenuRadioItem>
+                                            ))}
+                                        </DropdownMenuRadioGroup>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuPortal>
+                            </DropdownMenuSub>
+                            <DropdownMenuLabel className="pt-1">Bottom Signal</DropdownMenuLabel>
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger className="text-sm">{bottomSignal || 'Select...'}</DropdownMenuSubTrigger>
+                                <DropdownMenuPortal>
+                                    <DropdownMenuSubContent className="max-h-[220px] overflow-y-auto bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                        <DropdownMenuRadioGroup value={bottomSignal} onValueChange={setBottomSignal}>
+                                            {channels.map((ch: any) => (
+                                                <DropdownMenuRadioItem key={ch.name} value={ch.name} className="text-sm">
+                                                    {ch.name}
+                                                </DropdownMenuRadioItem>
+                                            ))}
+                                        </DropdownMenuRadioGroup>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuPortal>
+                            </DropdownMenuSub>
+
+                            {/* --- Subject / Case --- */}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Subject</DropdownMenuLabel>
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger className="text-sm">{selectedSubject || 'Select...'}</DropdownMenuSubTrigger>
+                                <DropdownMenuPortal>
+                                    <DropdownMenuSubContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                        <DropdownMenuRadioGroup value={selectedSubject} onValueChange={setSelectedSubject}>
+                                            {subjects.map(s => (
+                                                <DropdownMenuRadioItem key={s} value={s} className="text-sm">{s}</DropdownMenuRadioItem>
+                                            ))}
+                                        </DropdownMenuRadioGroup>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuPortal>
+                            </DropdownMenuSub>
+                            <DropdownMenuLabel className="pt-1">Case</DropdownMenuLabel>
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger className="text-sm">
+                                    {targetFile?.split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '') || 'Select...'}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuPortal>
+                                    <DropdownMenuSubContent className="max-h-[260px] overflow-y-auto bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                        <DropdownMenuRadioGroup value={targetFile?.replace('_tracking.mf4', '.mf4') || ''} onValueChange={setAnalysisSelectedFile}>
+                                            {subjectCases.map(c => (
+                                                <DropdownMenuRadioItem key={c} value={c} className="text-sm">
+                                                    {c.split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '') || c}
+                                                </DropdownMenuRadioItem>
+                                            ))}
+                                        </DropdownMenuRadioGroup>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuPortal>
+                            </DropdownMenuSub>
+
+                            {/* --- Case Navigation --- */}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Navigate</DropdownMenuLabel>
+                            <DropdownMenuItem disabled={currentCaseIdx <= 0} onClick={goToPrevCase} title={prevCaseName ?? ''}>
+                                <ArrowLeft className="w-3 h-3" /> Previous
+                                <DropdownMenuShortcut>⇧+Tab</DropdownMenuShortcut>
+                            </DropdownMenuItem>
+                            <div className="px-2 py-0.5 text-[9px] text-muted-foreground font-mono text-center">
+                                {currentCaseIdx + 1} / {subjectCases.length}
+                            </div>
+                            <DropdownMenuItem disabled={currentCaseIdx >= subjectCases.length - 1} onClick={goToNextCase} title={nextCaseName ?? ''}>
+                                <ArrowRight className="w-3 h-3" /> Next
+                                <DropdownMenuShortcut>Tab</DropdownMenuShortcut>
+                            </DropdownMenuItem>
+
+                            {/* --- Marker Actions --- */}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Markers</DropdownMenuLabel>
+                            <DropdownMenuItem disabled={undoCount === 0} onClick={undoLastAction}>
+                                <Undo2 className="w-3 h-3" /> Undo
+                                <DropdownMenuShortcut>⌘Z</DropdownMenuShortcut>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={clearLastMark} disabled={marks.length === 0}>
+                                <Eraser className="w-3 h-3" /> Clear Last
+                                <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
+                            </DropdownMenuItem>
+                            <AlertDialog open={confirmClearAll} onOpenChange={setConfirmClearAll}>
+                                <DropdownMenuItem variant="destructive" disabled={marks.length === 0} onSelect={(e) => { e.preventDefault(); setConfirmClearAll(true); }}>
+                                    <Trash2 className="w-3 h-3" /> Clear All
+                                    <DropdownMenuShortcut>⌘Space</DropdownMenuShortcut>
                                 </DropdownMenuItem>
-                            ))}
+                                <AlertDialogContent className="max-w-[340px] border border-white/10 bg-surface-2/80 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
+                                    <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
+                                        <Trash2 className="w-5 h-5" />
+                                    </div>
+                                    <AlertDialogHeader className="items-center text-center gap-1.5">
+                                        <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+                                            Clear All Markers?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription className="text-sm text-white/70 max-w-[280px]">
+                                            This will permanently delete all <span className="text-red-400 font-extrabold">{marks.length}</span> markers. This action cannot be undone.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="flex-row items-center justify-center gap-3 w-full mt-2">
+                                        <AlertDialogCancel className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
+                                            Cancel
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction onClick={clearAllMarks} className="flex-1 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 active:bg-red-500/30 text-red-500 rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-lg shadow-red-500/5">
+                                            Clear All
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+
+                            {/* --- View --- */}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={resetZoom}>
+                                <Maximize className="w-3.5 h-3.5" /> Autorange
+                                <DropdownMenuShortcut>⌘A</DropdownMenuShortcut>
+                            </DropdownMenuItem>
                         </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+                <div className="absolute top-3 right-3 z-20">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild disabled={!targetFile}>
+                            <Button variant="outline" size="sm" className={cn("h-7 bg-black/80 hover:bg-black/95 text-white border-white/10 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xl backdrop-blur-md px-2.5", !targetFile && "opacity-50 pointer-events-none")}>
+                                <Camera className={cn("w-3 h-3", targetFile ? "text-primary animate-pulse" : "text-muted-foreground")} />
+                                <span>{targetFile ? `Cam ${analysisSelectedCamera}` : "No cameras found"}</span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        {targetFile && (
+                            <DropdownMenuContent align="end" className="w-32 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
+                                {(analysisAvailableCameras.length > 0 ? analysisAvailableCameras : [1, 2, 3]).map(cam => (
+                                    <DropdownMenuItem 
+                                        key={cam} 
+                                        className={cn(
+                                            'text-[10px] font-bold cursor-pointer rounded-lg px-2 py-1.5 transition-colors flex items-center justify-between',
+                                            analysisSelectedCamera === cam ? 'bg-primary text-black focus:bg-primary focus:text-black' : 'text-white/80 hover:text-white hover:bg-white/5 focus:bg-white/5 focus:text-white'
+                                        )}
+                                        onClick={() => setAnalysisSelectedCamera(Number(cam))}
+                                    >
+                                        <span>Camera {cam}</span>
+                                        {analysisSelectedCamera === cam && <span className="text-[10px] font-bold">✓</span>}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        )}
                     </DropdownMenu>
                 </div>
             </div>
@@ -868,30 +1070,35 @@ export function TimeSelectorTab() {
                     <div className="flex-1 relative py-2 flex items-center">
                         <Slider 
                             value={[currentTime]} 
+                            disabled={!targetFile}
                             onValueChange={([v]) => { 
                                 currentTimeRef.current = v; 
                                 setCurrentTime(v); 
                                 if (videoRef.current) videoRef.current.currentTime = v; 
                                 if (blurVideoRef.current) blurVideoRef.current.currentTime = v; 
                             }} 
-                            max={duration} 
+                            max={targetFile ? duration : 100} 
                             step={0.001} 
                             className={cn(
                                 'flex-1 cursor-pointer',
                                 '[&>span:first-child]:!h-[3px] [&>span:first-child]:!bg-white/10',
                                 '[&>span:first-child>span]:!bg-primary',
-                                '[&>span:last-child]:!hidden'
+                                '[&>span:last-child]:!hidden',
+                                !targetFile && "opacity-30 pointer-events-none"
                             )}
                         />
                     </div>
-                    <span className="text-xs font-bold text-muted-foreground/60 font-mono">{duration.toFixed(2)}s</span>
+                    <span className={cn("font-bold text-muted-foreground/60", targetFile ? "text-xs font-mono" : "text-xl font-sans relative -top-[1.5px]")}>
+                        {targetFile ? `${duration.toFixed(2)}s` : "∞"}
+                    </span>
                 </div>
                 <div className="flex items-center justify-between w-full mt-1">
                     <div className="flex items-center gap-1">
                         <Button 
+                            disabled={!targetFile}
                             size="icon" 
                             variant="ghost" 
-                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center"
+                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center disabled:opacity-30"
                             title="Restart from beginning"
                             onClick={() => {
                                 currentTimeRef.current = 0;
@@ -905,9 +1112,10 @@ export function TimeSelectorTab() {
                             <ArrowLeftToLine className="w-3.5 h-3.5" />
                         </Button>
                         <Button 
+                            disabled={!targetFile}
                             size="icon" 
                             variant="ghost" 
-                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center"
+                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center disabled:opacity-30"
                             title="Rewind 5 seconds"
                             onClick={() => {
                                 const t = Math.max(0, currentTime - 5);
@@ -922,6 +1130,7 @@ export function TimeSelectorTab() {
                             <RotateCcw className="w-3.5 h-3.5" />
                         </Button>
                         <Button 
+                            disabled={!targetFile}
                             size="icon" 
                             variant="outline" 
                             onClick={() => { 
@@ -937,7 +1146,7 @@ export function TimeSelectorTab() {
                                 } 
                             }} 
                             className={cn(
-                                'h-7 w-7 rounded-lg border-white/10 bg-surface-3 transition-colors text-white hover:text-white', 
+                                'h-7 w-7 rounded-lg border-white/10 bg-surface-3 transition-colors text-white hover:text-white disabled:opacity-30',
                                 isPlaying ? 'bg-primary hover:bg-primary/90' : 'hover:bg-white/5'
                             )}
                             title={isPlaying ? 'Pause' : 'Play'}
@@ -945,9 +1154,10 @@ export function TimeSelectorTab() {
                             {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current text-white" /> : <Play className="w-3.5 h-3.5 fill-current text-white ml-0.5" />}
                         </Button>
                         <Button 
+                            disabled={!targetFile}
                             size="icon" 
                             variant="ghost" 
-                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center"
+                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center disabled:opacity-30"
                             title="Forward 5 seconds"
                             onClick={() => {
                                 const t = Math.min(duration, currentTime + 5);
@@ -962,11 +1172,12 @@ export function TimeSelectorTab() {
                             <RotateCw className="w-3.5 h-3.5" />
                         </Button>
                         <Button 
+                            disabled={!targetFile}
                             size="icon" 
                             variant="outline" 
-                            onClick={() => setIsSynced(!isSynced)} 
+                            onClick={toggleSync} 
                             className={cn(
-                                'h-7 w-7 rounded-lg border-white/10 transition-all text-white hover:text-white', 
+                                'h-7 w-7 rounded-lg border-white/10 transition-all text-white hover:text-white disabled:opacity-30',
                                 isSynced ? 'bg-primary hover:bg-primary/90' : 'bg-surface-3 hover:bg-surface-2'
                             )} 
                             title={isSynced ? 'Disable Mouse Sync' : 'Enable Mouse Sync'}
@@ -974,8 +1185,8 @@ export function TimeSelectorTab() {
                             {isSynced ? <Mouse className="w-3.5 h-3.5 text-white" /> : <MouseOff className="w-3.5 h-3.5 text-white" />}
                         </Button>
                     </div>
-                    <div className="bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider truncate max-w-[200px]" title={videoFileName}>
-                        {videoFileName}
+                    <div className="bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider truncate max-w-[200px]" title={targetFile ? videoFileName : "No project loaded"}>
+                        {targetFile ? videoFileName : "NO PROJECT LOADED"}
                     </div>
                 </div>
             </div>

@@ -20,9 +20,39 @@
   --color-border: rgba(240, 237, 233, 0.10);
   --color-input: rgba(240, 237, 233, 0.10);
   --color-ring: rgba(240, 237, 233, 0.60);
-  --radius: 999px;
+  --radius: 0.5rem;
   --color-success: #2da44e;
   --color-warning: #CF4500;
+  
+  --color-surface-1: #161514;
+  --color-surface-2: #201E1C;
+  --color-surface-3: #2A2825;
+  --color-surface-ink: #0F0E0D;
+
+  --animate-in: dropdownEnter 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-out: dropdownExit 150ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes dropdownEnter {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes dropdownExit {
+    from {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.96) translateY(-4px);
+    }
+  }
 }
 
 * {
@@ -76,4 +106,9 @@ input:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-
 
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out;
+}
+
+.scroll-fade-mask [data-radix-scroll-area-viewport] {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
 }
