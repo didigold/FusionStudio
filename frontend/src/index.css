@@ -112,3 +112,65 @@ input:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-
   mask-image: linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
 }
+
+@keyframes ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.35;
+  }
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.animate-ripple {
+  animation: ripple 600ms cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes pulseSmoothSync {
+  0%, 100% {
+    opacity: 0.25;
+    color: rgba(255, 255, 255, 0.35);
+  }
+  50% {
+    opacity: 0.95;
+    color: rgba(255, 255, 255, 0.95);
+  }
+}
+
+.animate-pulse-sync {
+  animation: pulseSmoothSync 4s ease-in-out infinite;
+}
+
+@keyframes inputGlowPulse {
+  0%, 100% {
+    border-color: rgba(207, 69, 0, 0.35);
+    box-shadow: 0 0 10px rgba(207, 69, 0, 0.15), inset 0 0 2px rgba(207, 69, 0, 0.05);
+  }
+  50% {
+    border-color: rgba(207, 69, 0, 0.95);
+    box-shadow: 0 0 20px rgba(207, 69, 0, 0.45), inset 0 0 4px rgba(207, 69, 0, 0.15);
+  }
+}
+
+.animate-input-glow {
+  animation: inputGlowPulse 4s infinite ease-in-out;
+}
+
+@keyframes buttonGlowPulse {
+  0%, 100% {
+    border-color: rgba(207, 69, 0, 0.2);
+    color: rgba(207, 69, 0, 0.6);
+    box-shadow: 0 0 4px rgba(207, 69, 0, 0.05);
+  }
+  50% {
+    border-color: rgba(207, 69, 0, 0.8);
+    color: rgba(207, 69, 0, 1);
+    box-shadow: 0 0 12px rgba(207, 69, 0, 0.3);
+  }
+}
+
+.animate-btn-pulse {
+  animation: buttonGlowPulse 4s infinite ease-in-out;
+}

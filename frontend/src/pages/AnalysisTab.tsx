@@ -19,11 +19,12 @@ import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { SidebarProvider } from "@/components/ui/sidebar"
+import { motion, AnimatePresence } from 'framer-motion'
 
 import { AudioTab } from '@/components/analysis/AudioTab'
 import { TrackingTab } from '@/components/analysis/TrackingTab'
-import { TimeSelectorTab } from '@/components/analysis/TimeSelectorTab'
-import { LogicTab } from '@/components/analysis/LogicTab'
+import { GazeTimeTab } from '@/components/analysis/GazeTimeTab'
+import { GazeLogicTab } from '@/components/analysis/GazeLogicTab'
 import { LogTab } from '@/components/analysis/LogTab'
 import { AnalysisSidebar } from '@/components/analysis/AnalysisSidebar'
 import { PlaceholderTab } from '@/components/analysis/PlaceholderTab'
@@ -68,6 +69,13 @@ const ProgressRing = ({ value, max, title }: { value: number; max: number; title
   )
 }
 
+interface FileFolderRipple {
+  key: number
+  x: number
+  y: number
+  size: number
+}
+
 // --- TREE NODE COMPONENT ---
 function RecordingNode({ 
   node, 
@@ -87,6 +95,7 @@ function RecordingNode({
   expandedAll: boolean | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [ripples, setRipples] = useState<FileFolderRipple[]>([])
   
   // Sync expansion with global toggle
   useEffect(() => {
@@ -95,20 +104,48 @@ function RecordingNode({
     }
   }, [expandedAll, node.type])
 
+  const createRipple = (event: React.MouseEvent<HTMLDivElement>) => {
+    const container = event.currentTarget
+    const rect = container.getBoundingClientRect()
+    const size = Math.max(rect.width, rect.height)
+    const x = event.clientX - rect.left - size / 2
+    const y = event.clientY - rect.top - size / 2
+
+    const newRipple: FileFolderRipple = {
+      key: Date.now() + Math.random(),
+      x,
+      y,
+      size,
+    }
+
+    setRipples((prev) => [...prev, newRipple])
+  }
+
+  const handleAnimationEnd = (key: number) => {
+    setRipples((prev) => prev.filter((ripple) => ripple.key !== key))
+  }
+
   const hasChildren = node.children && node.children.length > 0
   const isChecked = node.type === 'file' ? checkedFiles.includes(node.path) : false
 
   if (node.type === 'file') {
     return (
       <div 
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", node.path)
+        }}
         className={cn(
-          "flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-all mb-0.5",
+          "flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-all mb-0.5 relative overflow-hidden",
           selectedPath === node.path ? "bg-primary/20 ring-1 ring-primary/30" : "text-foreground/80"
         )}
         style={{ paddingLeft: `${(level * 12) + 8}px` }}
-        onClick={() => onSelect(node.path)}
+        onClick={(e) => {
+          createRipple(e)
+          onSelect(node.path)
+        }}
       >
-        <div className="flex items-center gap-2 overflow-hidden flex-1">
+        <div className="flex items-center gap-2 overflow-hidden flex-1 relative z-10">
           <div onClick={(e) => { e.stopPropagation(); onToggleCheck(node.path); }}>
              <Checkbox 
                checked={isChecked} 
@@ -118,7 +155,7 @@ function RecordingNode({
           <File className={cn("w-3.5 h-3.5 shrink-0", selectedPath === node.path ? "text-primary" : "text-muted-foreground")} />
           <span className={cn("text-sm font-medium truncate", selectedPath === node.path && "text-primary font-bold")}>{node.name}</span>
         </div>
-        <div className="flex gap-1 shrink-0 ml-2">
+        <div className="flex gap-1 shrink-0 ml-2 relative z-10">
           <Badge 
             variant={node.has_tracking ? "success" : "destructive"} 
             className="p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md"
@@ -141,6 +178,20 @@ function RecordingNode({
             {node.has_report ? <FileChartColumnIncreasing className="w-3.5 h-3.5" /> : <File className="w-3.5 h-3.5" />}
           </Badge>
         </div>
+
+        {ripples.map((ripple) => (
+          <span
+            key={ripple.key}
+            className="absolute rounded-full bg-white/20 pointer-events-none animate-ripple"
+            style={{
+              width: ripple.size,
+              height: ripple.size,
+              left: ripple.x,
+              top: ripple.y,
+            }}
+            onAnimationEnd={() => handleAnimationEnd(ripple.key)}
+          />
+        ))}
       </div>
     )
   }
@@ -148,11 +199,14 @@ function RecordingNode({
   return (
     <div className="flex flex-col">
       <div 
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-all mb-0.5"
+        onClick={(e) => {
+          createRipple(e)
+          setIsExpanded(!isExpanded)
+        }}
+        className="flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-all mb-0.5 relative overflow-hidden"
         style={{ paddingLeft: `${(level * 12) + 8}px` }}
       >
-        <div className="flex items-center gap-2 overflow-hidden">
+        <div className="flex items-center gap-2 overflow-hidden relative z-10">
           <div className="w-4 h-4 flex items-center justify-center">
             {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
           </div>
@@ -160,7 +214,7 @@ function RecordingNode({
           <span className="text-sm font-bold text-foreground/90 truncate">{node.name}</span>
         </div>
         {!isExpanded && node.tracking_stats && (
-           <div className="flex items-center gap-1.5 shrink-0 select-none">
+           <div className="flex items-center gap-1.5 shrink-0 select-none relative z-10">
              <div className="flex gap-1 items-center bg-surface-3/30 border border-white/5 px-1.5 py-0.5 rounded-md">
                <ProgressRing value={node.tracking_stats[0]} max={node.tracking_stats[1]} title="Tracking" />
                <ProgressRing value={node.marks_stats?.[0] || 0} max={node.marks_stats?.[1] || 0} title="Marks" />
@@ -171,6 +225,20 @@ function RecordingNode({
              </span>
            </div>
         )}
+
+        {ripples.map((ripple) => (
+          <span
+            key={ripple.key}
+            className="absolute rounded-full bg-white/20 pointer-events-none animate-ripple"
+            style={{
+              width: ripple.size,
+              height: ripple.size,
+              left: ripple.x,
+              top: ripple.y,
+            }}
+            onAnimationEnd={() => handleAnimationEnd(ripple.key)}
+          />
+        ))}
       </div>
       {hasChildren && (
         <div 
@@ -201,13 +269,10 @@ function RecordingNode({
 
 export default function AnalysisTab() {
   const {
-    analysisSourcePath, setAnalysisSourcePath,
-    analysisResults, setAnalysisResults,
+    analysisResults,
     analysisSelectedFile, setAnalysisSelectedFile,
     analysisCheckedFiles, toggleAnalysisFile, setAllAnalysisFiles,
     analysisExpandedAll, setAnalysisExpandedAll,
-    setAnalysisAvailableCameras,
-    addLog
   } = useAppStore()
 
   useAnalysisWS()
@@ -280,8 +345,8 @@ export default function AnalysisTab() {
             </RadioGroup>
           </div>
 
-          <ScrollArea className="flex-1 bg-[#121211]/30 scroll-fade-mask">
-            <div className="flex flex-col gap-0.5 p-2">
+          <ScrollArea className="flex-1 bg-[#121211]/30 scroll-fade-mask relative">
+            <div className={cn("flex flex-col gap-0.5 p-2", analysisResults.length === 0 && "h-full min-h-[350px] justify-center items-center")}>
               {analysisResults.map((res, i) => (
                 <RecordingNode 
                   key={i} 
@@ -294,9 +359,21 @@ export default function AnalysisTab() {
                 />
               ))}
               {analysisResults.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-20">
-                  <FileSearch className="w-12 h-12 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground tracking-tight">No recordings found</p>
+                <div className="flex flex-col items-center justify-center gap-4 select-none w-full relative">
+                  {/* Ambient glow circle */}
+                  <div className="absolute w-[180px] h-[180px] rounded-full bg-white/[0.02] blur-[40px] pointer-events-none" />
+                  
+                  <div className="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center animate-pulse-sync mb-1">
+                    <FileSearch className="w-6 h-6 stroke-[1.2]" />
+                  </div>
+                  <div className="text-center space-y-1.5 animate-pulse-sync">
+                    <p className="text-sm tracking-[0.2em] font-extrabold uppercase text-foreground">
+                      No recordings found
+                    </p>
+                    <p className="text-xs uppercase tracking-wider opacity-60 font-mono text-muted-foreground">
+                      Enter a valid source path to scan
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -324,18 +401,108 @@ export default function AnalysisTab() {
             {['time-selector', 'tracking'].includes(activeTab) ? (
               <>
                 {activeTab === 'tracking' && <TrackingTab />}
-                {activeTab === 'time-selector' && <TimeSelectorTab />}
+                {activeTab === 'time-selector' && <GazeTimeTab />}
               </>
             ) : (
               <ScrollArea className="flex-1">
-                {activeTab === 'audio' && <AudioTab selectedFile={analysisSelectedFile} />}
-                {activeTab === 'metadata' && <MetadataTab />}
-                {activeTab === 'logic' && <LogicTab />}
-                {activeTab === 'occupant-time' && <PlaceholderTab label="Misuse Time" />}
-                {activeTab === 'misuse-logic' && <PlaceholderTab label="Misuse Logic" />}
-                {activeTab === 'classification' && <PlaceholderTab label="Classification" />}
-                {activeTab === 'reporting' && <PlaceholderTab label="Reporting" />}
-                {activeTab === 'log' && <LogTab />}
+                <AnimatePresence mode="wait">
+                  {activeTab === 'audio' && (
+                    <motion.div
+                      key="audio"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <AudioTab selectedFile={analysisSelectedFile} />
+                    </motion.div>
+                  )}
+                  {activeTab === 'metadata' && (
+                    <motion.div
+                      key="metadata"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <MetadataTab />
+                    </motion.div>
+                  )}
+                  {activeTab === 'logic' && (
+                    <motion.div
+                      key="logic"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <GazeLogicTab />
+                    </motion.div>
+                  )}
+                  {activeTab === 'occupant-time' && (
+                    <motion.div
+                      key="occupant-time"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <PlaceholderTab label="Misuse Time" />
+                    </motion.div>
+                  )}
+                  {activeTab === 'misuse-logic' && (
+                    <motion.div
+                      key="misuse-logic"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <PlaceholderTab label="Misuse Logic" />
+                    </motion.div>
+                  )}
+                  {activeTab === 'classification' && (
+                    <motion.div
+                      key="classification"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <PlaceholderTab label="Classification" />
+                    </motion.div>
+                  )}
+                  {activeTab === 'reporting' && (
+                    <motion.div
+                      key="reporting"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <PlaceholderTab label="Reporting" />
+                    </motion.div>
+                  )}
+                  {activeTab === 'log' && (
+                    <motion.div
+                      key="log"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="h-full w-full"
+                    >
+                      <LogTab />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </ScrollArea>
             )}
           </div>

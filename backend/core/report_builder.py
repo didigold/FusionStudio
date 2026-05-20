@@ -235,14 +235,16 @@ class MatplotlibReportBuilder:
 
         category = self.config.get('target_category', '')
         try:
-            config_path = self.config.get('gauge_rules_path')
-            if not config_path or not os.path.exists(config_path):
-                config_path = resource_path('config/gauge_rules.json')
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    all_rules = json.load(f)
-            else:
-                all_rules = {}
+            all_rules = self.config.get('gauge_rules')
+            if not isinstance(all_rules, dict):
+                config_path = self.config.get('gauge_rules_path')
+                if not config_path or not os.path.exists(config_path):
+                    config_path = resource_path('config/gauge_rules.json')
+                if os.path.exists(config_path):
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        all_rules = json.load(f)
+                else:
+                    all_rules = {}
         except Exception:
             all_rules = {}
             

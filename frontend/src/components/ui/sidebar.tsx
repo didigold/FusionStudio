@@ -6,7 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 const SIDEBAR_COOKIE_NAME = "sidebar:state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
+// const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 
 type SidebarContext = {
@@ -191,14 +191,85 @@ interface SidebarMenuButtonProps extends React.ComponentProps<"button">, Variant
   asChild?: boolean
 }
 
+interface Ripple {
+  key: number
+  x: number
+  y: number
+  size: number
+}
+
 const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
-  ({ asChild = false, variant, size, className, onClick, ...props }, ref) => {
+  ({ asChild = false, variant, size, className, onClick, children, ...props }, ref) => {
+    const [ripples, setRipples] = React.useState<Ripple[]>([])
+
+    const createRipple = (event: React.MouseEvent<HTMLButtonElement>) => {
+      const button = event.currentTarget
+      const rect = button.getBoundingClientRect()
+      const size = Math.max(rect.width, rect.height)
+      const x = event.clientX - rect.left - size / 2
+      const y = event.clientY - rect.top - size / 2
+
+      const newRipple: Ripple = {
+        key: Date.now() + Math.random(),
+        x,
+        y,
+        size,
+      }
+
+      setRipples((prev) => [...prev, newRipple])
+    }
+
+    const handleAnimationEnd = (key: number) => {
+      setRipples((prev) => prev.filter((ripple) => ripple.key !== key))
+    }
+
     const Comp = asChild ? React.Fragment : "button"
+    
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (!asChild) {
+        createRipple(e)
+      }
       onClick?.(e)
       ;(e.currentTarget as HTMLElement)?.blur()
     }
-    return <Comp ref={ref} className={cn(sidebarMenuButtonVariants({ variant, size }), className)} {...props} onClick={handleClick} onPointerDown={(e) => { e.preventDefault(); props.onPointerDown?.(e) }} />
+
+    if (asChild) {
+      return (
+        <Comp 
+          ref={ref} 
+          className={cn(sidebarMenuButtonVariants({ variant, size }), className)} 
+          {...props} 
+          onClick={handleClick} 
+        />
+      )
+    }
+
+    return (
+      <Comp
+        ref={ref}
+        className={cn(sidebarMenuButtonVariants({ variant, size }), "relative overflow-hidden", className)}
+        onClick={handleClick}
+        onPointerDown={(e) => { e.preventDefault(); props.onPointerDown?.(e) }}
+        {...props}
+      >
+        <span className="relative z-10 flex items-center gap-3 w-full h-full pointer-events-none">
+          {children}
+        </span>
+        {ripples.map((ripple) => (
+          <span
+            key={ripple.key}
+            className="absolute rounded-full bg-white/20 pointer-events-none animate-ripple"
+            style={{
+              width: ripple.size,
+              height: ripple.size,
+              left: ripple.x,
+              top: ripple.y,
+            }}
+            onAnimationEnd={() => handleAnimationEnd(ripple.key)}
+          />
+        ))}
+      </Comp>
+    )
   }
 )
 SidebarMenuButton.displayName = "SidebarMenuButton"

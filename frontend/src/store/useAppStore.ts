@@ -139,6 +139,20 @@ interface AppState {
   classifyStatus: string
   setClassifyStatus: (s: string) => void
 
+  // Analysis Metadata state
+  analysisOem: string
+  setAnalysisOem: (v: string) => void
+  analysisVehicle: string
+  setAnalysisVehicle: (v: string) => void
+  analysisTrack: string
+  setAnalysisTrack: (v: string) => void
+  analysisEngineer: string
+  setAnalysisEngineer: (v: string) => void
+  analysisAnalyst: string
+  setAnalysisAnalyst: (v: string) => void
+  analysisEuroNcap: boolean
+  setAnalysisEuroNcap: (v: boolean) => void
+
   // Reporting state
   reportingRootFolder: string
   setReportingRootFolder: (p: string) => void
@@ -371,6 +385,20 @@ export const useAppStore = create<AppState>((set) => ({
   setClassifyProgress: (v) => set({ classifyProgress: v }),
   classifyStatus: '',
   setClassifyStatus: (s) => set({ classifyStatus: s }),
+
+  // Analysis Metadata state
+  analysisOem: '',
+  setAnalysisOem: (v) => set({ analysisOem: v }),
+  analysisVehicle: '',
+  setAnalysisVehicle: (v) => set({ analysisVehicle: v }),
+  analysisTrack: '',
+  setAnalysisTrack: (v) => set({ analysisTrack: v }),
+  analysisEngineer: '',
+  setAnalysisEngineer: (v) => set({ analysisEngineer: v }),
+  analysisAnalyst: '',
+  setAnalysisAnalyst: (v) => set({ analysisAnalyst: v }),
+  analysisEuroNcap: false,
+  setAnalysisEuroNcap: (v) => set({ analysisEuroNcap: v }),
 
   // Reporting state
   reportingRootFolder: '',

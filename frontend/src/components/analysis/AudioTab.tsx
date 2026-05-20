@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Minus, Plus, Activity, Mic, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import { useAppStore } from '@/store/useAppStore';
 
 // Custom hook for hold-to-repeat behavior with acceleration
@@ -73,7 +74,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
   minFreqRef.current = minFreq;
   maxFreqRef.current = maxFreq;
 
-  // Hooks must be called at top level, before any early return
+  // Hooks must be called at top level
   const minMinusHandlers = useHoldRepeat(() => setMinFreq(f => Math.max(1, f - 1)));
   const minPlusHandlers = useHoldRepeat(() => setMinFreq(f => Math.min(maxFreqRef.current - 1, f + 1)));
   const maxMinusHandlers = useHoldRepeat(() => setMaxFreq(f => Math.max(minFreqRef.current + 1, f - 1)));
@@ -126,24 +127,66 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
     }
   };
 
-  if (!fileToUse) {
-    return (
-      <div className="flex items-center justify-center h-full p-8">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Mic className="w-10 h-10 opacity-40" />
-          <p className="text-sm font-medium">No recording selected</p>
-          <p className="text-xs opacity-60">Check a recording in the Recordings panel to enable audio analysis</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex items-center justify-center h-full p-8">
-      <div className="w-full max-w-sm space-y-8">
+    <div className="relative flex items-center justify-center min-h-[calc(100vh-14rem)] overflow-hidden p-8 bg-[#121211]">
+      
+      {/* Background Grid & Animation Layer */}
+      <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
+        {/* Pulsing Grid Backdrop - centered to align coordinates mathematically */}
+        <div 
+          className="absolute inset-0 w-full h-full pointer-events-none" 
+          style={{ 
+            maskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)', 
+            WebkitMaskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)' 
+          }}
+        >
+          <svg 
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[2048px] h-[2048px]"
+          >
+            <defs>
+              {/* Base Grid Pattern */}
+              <pattern id="audio-base-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+                <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+              </pattern>
+              
+              {/* Glowing Active Grid Pattern (Light gray/white pulse) */}
+              <pattern id="audio-active-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+                <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="1.2" />
+              </pattern>
+
+            </defs>
+
+            {/* Base constant faint grid */}
+            <rect width="100%" height="100%" fill="url(#audio-base-grid)" />
+
+            {/* Active pulsing glowing grid */}
+            <rect width="100%" height="100%" fill="url(#audio-active-grid)" className="animate-pulse-sync" />
+          </svg>
+        </div>
+
+        {/* Soft orange glowing core with breathing animation (radial-gradient for 0% CPU cost) */}
+        <motion.div
+          animate={{
+            scale: [0.9, 1.1, 0.9],
+            opacity: [0.5, 1.0, 0.5],
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute w-[400px] h-[400px] rounded-full pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle, rgba(249, 115, 22, 0.05) 0%, rgba(249, 115, 22, 0) 70%)'
+          }}
+        />
+      </div>
+
+      <div className="w-full max-w-sm space-y-6 relative z-10">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            {/* Header Icon Container with backdrop-blur for grid masking consistency */}
+            <div className="w-8 h-8 rounded-lg bg-surface-2/40 border border-white/5 backdrop-blur-md flex items-center justify-center shadow-md">
               <Mic className="w-4 h-4 text-primary" />
             </div>
             <div>
@@ -151,19 +194,21 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <p className="text-sm text-muted-foreground tracking-tight">Frequency & Peak Detection</p>
             </div>
           </div>
-          <Badge variant="outline" className="text-sm tracking-tight bg-surface-3 ml-4 truncate max-w-[180px]">
-            {fileToUse.split(/[\\/]/).pop()}
+          <Badge variant="outline" className={`text-sm tracking-tight bg-surface-3 ml-4 truncate max-w-[180px] ${!fileToUse ? 'text-muted-foreground border-white/5' : ''}`}>
+            {fileToUse ? fileToUse.split(/[\\/]/).pop() : "No recording active"}
           </Badge>
         </div>
 
-        <div className="flex flex-col gap-6 rounded-xl bg-surface-2 border border-white/5 p-4">
+        {/* Glassmorphic blur frame container */}
+        <div className="flex flex-col gap-6 rounded-2xl bg-surface-2/20 border border-white/5 p-6 shadow-2xl backdrop-blur-xl relative z-10 transition-all duration-300">
+          
           <div className="flex flex-col gap-3">
             <span className="text-sm font-medium text-foreground">Minimum frequency</span>
             <div className="flex items-center justify-center gap-4">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 rounded-full shrink-0"
+                className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={minFreq <= 1}
                 {...minMinusHandlers}
               >
@@ -173,22 +218,25 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 rounded-full shrink-0"
+                className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={minFreq >= maxFreq - 1}
                 {...minPlusHandlers}
               >
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
-            <span className="text-sm text-muted-foreground text-center">Hz</span>
+            <span className="text-xs text-muted-foreground text-center tracking-tight">Hz</span>
           </div>
+
+          <div className="h-[1px] bg-white/5" />
+
           <div className="flex flex-col gap-3">
             <span className="text-sm font-medium text-foreground">Maximum frequency</span>
             <div className="flex items-center justify-center gap-4">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 rounded-full shrink-0"
+                className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={maxFreq <= minFreq + 1}
                 {...maxMinusHandlers}
               >
@@ -198,46 +246,50 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 rounded-full shrink-0"
+                className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={maxFreq >= 24000}
                 {...maxPlusHandlers}
               >
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
-            <span className="text-sm text-muted-foreground text-center">Hz</span>
+            <span className="text-xs text-muted-foreground text-center tracking-tight">Hz</span>
           </div>
-        </div>
 
-        <div className="flex flex-col gap-3 rounded-xl bg-surface-2 border border-white/5 p-4">
-          <span className="text-sm font-medium text-foreground">Threshold</span>
-          <div className="flex items-center justify-center gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-full shrink-0"
-              onClick={() => setThreshold(Math.max(0.01, Number((threshold - 0.01).toFixed(2))))}
-              disabled={threshold <= 0.01}
-            >
-              <Minus className="w-4 h-4" />
-            </Button>
-            <span className="text-4xl font-bold tracking-tighter tabular-nums w-24 text-center">{threshold.toFixed(2)}</span>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-full shrink-0"
-              onClick={() => setThreshold(Number((threshold + 0.01).toFixed(2)))}
-              disabled={threshold >= 5}
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
+          <div className="h-[1px] bg-white/5" />
+
+          <div className="flex flex-col gap-3">
+            <span className="text-sm font-medium text-foreground">Threshold</span>
+            <div className="flex items-center justify-center gap-4">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
+                onClick={() => setThreshold(Math.max(0.01, Number((threshold - 0.01).toFixed(2))))}
+                disabled={threshold <= 0.01}
+              >
+                <Minus className="w-4 h-4" />
+              </Button>
+              <span className="text-4xl font-bold tracking-tighter tabular-nums w-24 text-center">{threshold.toFixed(2)}</span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
+                onClick={() => setThreshold(Number((threshold + 0.01).toFixed(2)))}
+                disabled={threshold >= 5}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            <span className="text-xs text-muted-foreground text-center tracking-tight leading-normal">
+              Sensitivity for peak detection. Lower values detect more peaks.
+            </span>
           </div>
-          <span className="text-sm text-muted-foreground text-center">Sensitivity for peak detection. Lower values detect more peaks.</span>
         </div>
 
         <Button
           onClick={handleAutodetect}
-          disabled={isDetecting}
+          disabled={isDetecting || !fileToUse}
           className="w-full h-10 text-sm font-medium bg-primary text-black hover:bg-primary/90 rounded-lg shadow-lg shadow-primary/20"
         >
           {isDetecting ? (

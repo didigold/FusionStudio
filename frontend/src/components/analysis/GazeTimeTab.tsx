@@ -99,7 +99,7 @@ const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: strin
   );
 };
 
-export function TimeSelectorTab() {
+export function GazeTimeTab() {
   const {
     analysisCheckedFiles,
     analysisSelectedFile,
@@ -538,7 +538,6 @@ export function TimeSelectorTab() {
           if (other) other.batch(() => other.setScale('x', { min: nMin, max: nMax }));
         };
 
-        let markerHoverStart = 0;
         let lastNearIdx: number | null = null;
         let markerHoverTimeout: any = null;
 
@@ -558,7 +557,6 @@ export function TimeSelectorTab() {
             if (lastNearIdx !== nearIdx) {
               clearHoverTimeout();
               markerDragReadyRef.current = null;
-              markerHoverStart = Date.now();
               lastNearIdx = nearIdx;
               
               // Start a 0.25s hover delay timer to activate the drag cursor

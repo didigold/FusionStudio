@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { 
-  Mic, FileText, Video, Clock, GitBranch, Package,
+  Mic, FileText, Clock, GitBranch, Package,
   AlertTriangle, BrainCircuit, Tags, FileSpreadsheet,
   Terminal, Eye, UserCheck, ChevronRight, Construction, ScanFace
 } from "lucide-react"

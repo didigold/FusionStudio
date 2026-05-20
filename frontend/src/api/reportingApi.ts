@@ -19,4 +19,32 @@ export const reportingApi = {
   }) => api.post('/run', params),
 
   stop: () => api.post('/stop'),
+
+  gazePreview: (params: {
+    file_path: string
+    protocol: string
+    metadata: {
+      oem_name?: string
+      vehicle?: string
+      engineer?: string
+      analyst?: string
+      track?: string
+    }
+    category_configs: Record<string, any>
+    gauge_rules: Record<string, any>
+  }) => api.post('/gaze/preview', params),
+
+  gazeGenerate: (params: {
+    files: string[]
+    protocol: string
+    metadata: {
+      oem_name?: string
+      vehicle?: string
+      engineer?: string
+      analyst?: string
+      track?: string
+    }
+    category_configs: Record<string, any>
+    gauge_rules: Record<string, any>
+  }) => api.post('/gaze/generate', params),
 }

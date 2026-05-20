@@ -35,7 +35,7 @@ const Drawer = ({ children, ...props }: { children: React.ReactNode; open?: bool
 const DrawerTrigger = React.forwardRef<HTMLButtonElement, React.ComponentProps<"button"> & { asChild?: boolean }>(
   ({ asChild, className, ...props }, ref) => {
     if (asChild) {
-      return React.cloneElement(React.Children.only(props.children as React.ReactElement), { ref })
+      return React.cloneElement(React.Children.only(props.children) as any, { ref } as any)
     }
     return <button ref={ref} className={className} {...props} />
   }
@@ -77,7 +77,7 @@ const DrawerClose = React.forwardRef<HTMLButtonElement, React.ComponentProps<"bu
   ({ asChild, className, ...props }, ref) => {
     const { onClose } = React.useContext(DrawerContext)
     if (asChild) {
-      return React.cloneElement(React.Children.only(props.children as React.ReactElement), { onClick: onClose, ref })
+      return React.cloneElement(React.Children.only(props.children) as any, { onClick: onClose, ref } as any)
     }
     return <button ref={ref} onClick={onClose} className={className} {...props} />
   }

@@ -59,6 +59,12 @@ class ChronosRequest(BaseModel):
     source_dir: str = ""
 
 
+class SignalUniqueValuesRequest(BaseModel):
+    file_path: str
+    channel_name: str
+    max_unique: int = 200
+
+
 class BrowseRequest(BaseModel):
     path: str = ""
 
@@ -335,6 +341,40 @@ async def get_channels(req: SignalPreviewRequest):
     if isinstance(result, dict) and "error" in result:
         return {"channels": [], "error": result["error"]}
     return {"channels": result}
+
+
+@router.post("/signal_unique_values")
+async def get_signal_unique_values(req: SignalUniqueValuesRequest):
+    loop = asyncio.get_event_loop()
+
+    def _load():
+        try:
+            from asammdf import MDF
+            import numpy as np
+            with MDF(req.file_path) as mdf:
+                sig = None
+                for ch in mdf.iter_channels():
+                    if ch.name == req.channel_name:
+                        sig = ch
+                        break
+                if sig is None:
+                    if req.channel_name in mdf:
+                        sig = mdf.get(req.channel_name)
+                    else:
+                        return {"values": [], "error": f"Channel '{req.channel_name}' not found"}
+                samples = np.asarray(sig.samples, dtype=float)
+                unique_vals = np.unique(samples)
+                if len(unique_vals) > req.max_unique:
+                    return {"values": [], "continuous": True}
+                return {
+                    "values": sorted([round(float(v), 6) for v in unique_vals]),
+                    "continuous": False
+                }
+        except Exception as e:
+            return {"values": [], "error": str(e)}
+
+    result = await loop.run_in_executor(None, _load)
+    return result
 
 
 @router.post("/signal")

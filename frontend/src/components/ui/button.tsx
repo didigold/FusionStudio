@@ -1,3 +1,4 @@
+import * as React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -40,18 +41,71 @@ const buttonVariants = cva(
   }
 )
 
+interface Ripple {
+  key: number
+  x: number
+  y: number
+  size: number
+}
+
 function Button({
   className,
   variant = "default",
   size = "default",
+  onClick,
+  children,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  const [ripples, setRipples] = React.useState<Ripple[]>([])
+
+  const createRipple = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const button = event.currentTarget
+    const rect = button.getBoundingClientRect()
+    const size = Math.max(rect.width, rect.height)
+    const x = event.clientX - rect.left - size / 2
+    const y = event.clientY - rect.top - size / 2
+
+    const newRipple: Ripple = {
+      key: Date.now() + Math.random(),
+      x,
+      y,
+      size,
+    }
+
+    setRipples((prev) => [...prev, newRipple])
+  }
+
+  const handleAnimationEnd = (key: number) => {
+    setRipples((prev) => prev.filter((ripple) => ripple.key !== key))
+  }
+
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size, className }), "relative overflow-hidden")}
+      onClick={(e) => {
+        createRipple(e)
+        if (onClick) onClick(e)
+      }}
       {...props}
-    />
+    >
+      <span className="relative z-10 flex items-center justify-center gap-inherit pointer-events-none w-full h-full">
+        {children}
+      </span>
+      {ripples.map((ripple) => (
+        <span
+          key={ripple.key}
+          className="absolute rounded-full bg-white/20 pointer-events-none animate-ripple"
+          style={{
+            width: ripple.size,
+            height: ripple.size,
+            left: ripple.x,
+            top: ripple.y,
+          }}
+          onAnimationEnd={() => handleAnimationEnd(ripple.key)}
+        />
+      ))}
+    </ButtonPrimitive>
   )
 }
 

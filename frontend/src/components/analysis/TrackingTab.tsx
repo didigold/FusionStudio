@@ -6,7 +6,7 @@ import {
   ButtonGroup,
   ButtonGroupSeparator,
 } from "@/components/ui/button-group";
-import { Play, Square, Video, Activity, StopCircle, CircleGauge, MoveHorizontal, MoveVertical } from "lucide-react";
+import { Play, Square, Video, StopCircle, CircleGauge, MoveHorizontal, MoveVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
 import { analysisApi } from "@/api/analysisApi";
@@ -159,7 +159,7 @@ export function TrackingTab() {
                   <Square className="w-4 h-4 fill-current" />
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent size="sm">
+              <AlertDialogContent className="sm:max-w-md">
                 <AlertDialogHeader>
                   <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
                     <StopCircle className="w-6 h-6" />
@@ -171,11 +171,11 @@ export function TrackingTab() {
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel variant="outline">
+                  <AlertDialogCancel>
                     Cancel
                   </AlertDialogCancel>
                   <AlertDialogAction
-                    variant="destructive"
+                    className="bg-red-500 hover:bg-red-600 text-white font-medium"
                     onClick={stopTracking}
                   >
                     Stop
