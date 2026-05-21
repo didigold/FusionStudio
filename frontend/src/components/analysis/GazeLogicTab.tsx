@@ -16,8 +16,11 @@ import {
   DropdownMenuItem, 
   DropdownMenuRadioGroup, 
   DropdownMenuRadioItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator 
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal
 } from "@/components/ui/dropdown-menu"
 import { SearchableSelect } from "@/components/analysis/SearchableSelect"
 import { 
@@ -132,8 +135,16 @@ export function GazeLogicTab() {
     analysisVehicle,
     analysisTrack,
     analysisEngineer,
-    analysisAnalyst
+    analysisAnalyst,
+    analysisSourcePath,
+    setAnalysisSourcePath,
+    setAnalysisResults,
+    setAnalysisAvailableCameras,
+    setAllAnalysisFiles
   } = useAppStore()
+
+  // Local state to track imported config name
+  const [importedConfigName, setImportedConfigName] = useState<string | null>(null)
 
   // Protocol state
   const [protocol, setProtocol] = useState<'Euro NCAP' | 'GSR ADDW'>('Euro NCAP')
@@ -243,6 +254,7 @@ export function GazeLogicTab() {
     const configObj = {
       version: 1,
       protocol,
+      analysis_source_path: analysisSourcePath,
       categories: signalsConfig,
       pass_criteria: passCriteria,
       gauge_rules: gaugeRules
@@ -290,7 +302,8 @@ export function GazeLogicTab() {
   // Load and merge channels from target MF4 files for each scenario
   const autoLoadChannelsAndMerge = async (
     importedCategories?: Record<string, SignalConfig[]>,
-    targetProtocol?: 'Euro NCAP' | 'GSR ADDW'
+    targetProtocol?: 'Euro NCAP' | 'GSR ADDW',
+    targetResults?: any[]
   ) => {
     const activeProtocol = targetProtocol || protocol
     const targetCategoriesList = activeProtocol === 'Euro NCAP' 
@@ -309,8 +322,10 @@ export function GazeLogicTab() {
           "Low Speed"
         ]
 
+    const activeResults = targetResults || analysisResults
+
     // 1. Check if we have participants
-    if (!analysisResults || analysisResults.length === 0) {
+    if (!activeResults || activeResults.length === 0) {
       if (importedCategories) {
         setSignalsConfig(importedCategories)
       }
@@ -318,7 +333,7 @@ export function GazeLogicTab() {
     }
 
     // Find first participant
-    const firstParticipant = analysisResults.find((r: any) => r.type === 'participant')
+    const firstParticipant = activeResults.find((r: any) => r.type === 'participant')
     if (!firstParticipant) {
       if (importedCategories) {
         setSignalsConfig(importedCategories)
@@ -585,9 +600,82 @@ export function GazeLogicTab() {
         setPassCriteria(mergedPassCriteria)
         setGaugeRules(mergedGaugeRules)
 
-        // Autoload channels & merge with the imported categories configuration
-        await autoLoadChannelsAndMerge(mergedCategories, validatedProtocol)
+        let resultsData = analysisResults
+        if (!analysisSourcePath) {
+          let targetPath = parsed.analysis_source_path || ''
+          let scanSuccess = false
 
+          if (targetPath) {
+            const toastId = toast.loading(`Scanning path from config: ${targetPath}`)
+            try {
+              const res = await fetch('/api/analysis/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_dir: targetPath }),
+              })
+              const data = await res.json()
+              if (data.results && data.results.length > 0) {
+                setAnalysisSourcePath(targetPath)
+                setAnalysisResults(data.results)
+                setAnalysisAvailableCameras(data.available_cameras || [])
+                setAllAnalysisFiles(true)
+                resultsData = data.results
+                scanSuccess = true
+                toast.success("Path found and loaded successfully.")
+              } else {
+                toast.error("No results found in the saved path.")
+              }
+            } catch (err) {
+              console.error("Error scanning path:", err)
+            } finally {
+              toast.dismiss(toastId)
+            }
+          }
+
+          while (!scanSuccess) {
+            const promptMsg = targetPath 
+              ? `The folder "${targetPath}" could not be found or is empty. Please enter the correct working directory path:`
+              : `No project path is loaded. Please enter the working directory path:`
+            const promptedPath = window.prompt(promptMsg, targetPath)
+            if (promptedPath === null) {
+              // User cancelled
+              break
+            }
+            if (!promptedPath.trim()) {
+              continue
+            }
+
+            const scanToastId = toast.loading(`Scanning prompted path: ${promptedPath}`)
+            try {
+              const res = await fetch('/api/analysis/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_dir: promptedPath }),
+              })
+              const data = await res.json()
+              if (data.results && data.results.length > 0) {
+                setAnalysisSourcePath(promptedPath)
+                setAnalysisResults(data.results)
+                setAnalysisAvailableCameras(data.available_cameras || [])
+                setAllAnalysisFiles(true)
+                resultsData = data.results
+                scanSuccess = true
+                toast.success("Path updated and loaded successfully.")
+              } else {
+                toast.error("No results found in that path. Please try again.")
+              }
+            } catch (err) {
+              toast.error("Failed to scan path. Please try again.")
+            } finally {
+              toast.dismiss(scanToastId)
+            }
+          }
+        }
+
+        // Autoload channels & merge with the imported categories configuration
+        await autoLoadChannelsAndMerge(mergedCategories, validatedProtocol, resultsData)
+
+        setImportedConfigName(file.name)
         toast.success("Configuration imported successfully")
       } catch (err) {
         console.error("Import error:", err)
@@ -595,6 +683,16 @@ export function GazeLogicTab() {
       }
     }
     reader.readAsText(file)
+  }
+
+  const handleUnmountConfig = () => {
+    setSignalsConfig(DEFAULT_SIGNAL_LISTS)
+    setPassCriteria(DEFAULT_PASS_CRITERIA)
+    setGaugeRules(DEFAULT_GAUGE_RULES)
+    setProtocol('Euro NCAP')
+    setLoadedFiles({})
+    setImportedConfigName(null)
+    toast.success("Configuration unmounted. Defaults restored.")
   }
 
   const handleAutoLoadData = async () => {
@@ -887,13 +985,16 @@ export function GazeLogicTab() {
           white-space: nowrap;
           animation: marquee-path 14s linear infinite;
         }
+        .gaze-table-container > div {
+          overflow: visible !important;
+        }
       `}</style>
 
       {/* MAIN CONFIGURATION CARD */}
       <Card className="bg-surface-2/40 border-white/5 shadow-xl flex flex-col min-w-0 overflow-hidden">
         
         {/* MERGED CARD HEADER: Title, Scenario, Filter Bar, & Settings Dropdown */}
-        <CardHeader className="pb-4 border-b border-white/5 bg-surface-3/60 backdrop-blur-md flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-t-xl">
+        <CardHeader className="pb-4 border-b border-white/5 bg-surface-3/95 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-t-3xl">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-left">
             {/* Scenario selector Combobox with Radio buttons */}
             <div className="flex items-center gap-2.5">
@@ -908,6 +1009,17 @@ export function GazeLogicTab() {
                 />
               </div>
             </div>
+
+            {/* Active Configuration Name Badge */}
+            <Badge variant="outline" className={cn(
+              "h-8 px-3 rounded-full flex items-center gap-1.5 shrink-0 text-xs font-semibold select-none border-white/5",
+              importedConfigName 
+                ? "bg-primary/10 text-primary border-primary/20"
+                : "bg-white/5 text-muted-foreground"
+            )}>
+              <Sliders className="w-3.5 h-3.5" />
+              Config: {importedConfigName || "Default"}
+            </Badge>
           </div>
 
           <div className="flex items-center gap-3.5 self-end lg:self-auto">
@@ -966,21 +1078,38 @@ export function GazeLogicTab() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
-                <DropdownMenuLabel className="text-sm font-bold text-muted-foreground uppercase px-2.5 py-1.5 tracking-wider">Protocol</DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/5" />
-                <DropdownMenuRadioGroup value={protocol} onValueChange={(val: any) => setProtocol(val)}>
-                  <DropdownMenuRadioItem value="Euro NCAP" className="text-sm focus:bg-primary focus:text-black focus:font-bold">Euro NCAP</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="GSR ADDW" className="text-sm focus:bg-primary focus:text-black focus:font-bold">GSR ADDW</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="text-sm focus:bg-primary focus:text-black focus:font-bold">
+                    Protocols
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl">
+                      <DropdownMenuRadioGroup value={protocol} onValueChange={(val: any) => setProtocol(val)}>
+                        <DropdownMenuRadioItem value="Euro NCAP" className="text-sm focus:bg-primary focus:text-black focus:font-bold">Euro NCAP</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="GSR ADDW" className="text-sm focus:bg-primary focus:text-black focus:font-bold">GSR ADDW</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
                 
-                <DropdownMenuSeparator className="bg-white/5" />
-                
-                <DropdownMenuItem onClick={() => document.getElementById('import-config-input')?.click()} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
-                  <Download className="w-3.5 h-3.5" /> Import JSON
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportConfig} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
-                  <Save className="w-3.5 h-3.5" /> Save JSON
-                </DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="text-sm focus:bg-primary focus:text-black focus:font-bold">
+                    Configuration
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl w-48">
+                      <DropdownMenuItem onClick={() => document.getElementById('import-config-input')?.click()} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
+                        <Download className="w-3.5 h-3.5" /> Import JSON
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleExportConfig} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
+                        <Save className="w-3.5 h-3.5" /> Save JSON
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleUnmountConfig} className="text-sm text-red-400 hover:text-red-300 focus:bg-red-500/20 focus:text-red-200 gap-2 cursor-pointer">
+                        <X className="w-3.5 h-3.5" /> Unmount JSON
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
                 
                 <DropdownMenuSeparator className="bg-white/5" />
                 
@@ -1007,7 +1136,7 @@ export function GazeLogicTab() {
         
         <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
           {/* Scrollable table with fixed height to prevent pushing buttons out of viewport */}
-          <div className="h-[320px] overflow-y-auto">
+          <div className="h-[320px] overflow-y-auto gaze-table-container">
             <Table>
               <TableHeader>
                 <TableRow className="border-white/5 hover:bg-transparent">
