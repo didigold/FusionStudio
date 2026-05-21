@@ -47,7 +47,7 @@ interface SignalConfig {
   name: string
   checked: boolean
   operator: string
-  threshold: number
+  threshold: number | string
   alias: string
 }
 
@@ -198,7 +198,7 @@ export function GazeLogicTab() {
   const [allParticipantMf4s, setAllParticipantMf4s] = useState<string[]>([])
   const [fileSearchQuery, setFileSearchQuery] = useState('')
   // Unique signal values cache keyed by "filePath::signalName"
-  const [signalValuesCache, setSignalValuesCache] = useState<Record<string, number[]>>({})
+  const [signalValuesCache, setSignalValuesCache] = useState<Record<string, (number | string)[]>>({})
   const fetchingValuesRef = useRef<Set<string>>(new Set())
 
   // Sync participant files whenever analysisResults changes
@@ -457,7 +457,16 @@ export function GazeLogicTab() {
               }
             }
 
-            newConfigs[category] = rebuiltList
+            const seen = new Set<string>()
+            const uniqueRebuiltList: SignalConfig[] = []
+            for (const sig of rebuiltList) {
+              if (sig && sig.name && !seen.has(sig.name)) {
+                seen.add(sig.name)
+                uniqueRebuiltList.push(sig)
+              }
+            }
+
+            newConfigs[category] = uniqueRebuiltList
             newLoadedFiles[category] = matchingFile
             loadedCount++
           }
@@ -527,33 +536,50 @@ export function GazeLogicTab() {
         if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
           for (const [catName, signalList] of Object.entries(parsed.categories)) {
             if (Array.isArray(signalList)) {
-              validatedCategories[catName] = signalList
-                .filter((sig: any) => {
-                  if (!sig || typeof sig !== 'object') return false
-                  const name = sig.name ?? sig.signal
-                  return typeof name === 'string' && name.trim() !== ''
-                })
-                .map((sig: any) => {
-                  const name = (sig.name ?? sig.signal ?? '').trim()
-                  const rawThreshold = sig.threshold ?? sig.value
-                  let threshold = 0.0
-                  if (typeof rawThreshold === 'number') {
-                    threshold = rawThreshold
-                  } else if (typeof rawThreshold === 'string') {
-                    const parsedFloat = parseFloat(rawThreshold)
-                    if (!isNaN(parsedFloat)) {
-                      threshold = parsedFloat
-                    }
+              const seen = new Set<string>()
+              const list: SignalConfig[] = []
+              for (const sig of signalList) {
+                if (!sig || typeof sig !== 'object') continue
+                const rawName = sig.name ?? sig.signal
+                if (typeof rawName !== 'string' || rawName.trim() === '') continue
+                const name = rawName.trim()
+                
+                // Deduplicate by name
+                if (seen.has(name)) continue
+                seen.add(name)
+                
+                const rawThreshold = sig.threshold ?? sig.value
+                let threshold: number | string = 0.0
+                if (typeof rawThreshold === 'number') {
+                  threshold = rawThreshold
+                } else if (typeof rawThreshold === 'string') {
+                  // Strip Python bytes literal repr: b'value' → value
+                  const stripped = rawThreshold.replace(/^b'(.*)'$/, '$1').replace(/^b"(.*)"$/, '$1')
+                  const parsedFloat = parseFloat(stripped)
+                  if (!isNaN(parsedFloat) && stripped.trim() !== '') {
+                    threshold = parsedFloat
+                  } else {
+                    threshold = stripped
                   }
-                  const alias = typeof sig.alias === 'string' ? sig.alias : name
-                  return {
-                    name,
-                    checked: typeof sig.checked === 'boolean' ? sig.checked : false,
-                    operator: typeof sig.operator === 'string' ? sig.operator : 'None',
-                    threshold,
-                    alias
-                  }
+                } else if (rawThreshold !== undefined && rawThreshold !== null) {
+                  threshold = String(rawThreshold)
+                }
+                const alias = typeof sig.alias === 'string' ? sig.alias : name
+                
+                const rawOp = sig.operator ?? 'None'
+                const operator = (typeof rawOp === 'string' && ['None', '>', '<', '>=', '<=', '==', '!='].includes(rawOp))
+                  ? rawOp
+                  : 'None'
+                
+                list.push({
+                  name,
+                  checked: typeof sig.checked === 'boolean' ? sig.checked : false,
+                  operator,
+                  threshold,
+                  alias
                 })
+              }
+              validatedCategories[catName] = list
             }
           }
         }
@@ -566,12 +592,17 @@ export function GazeLogicTab() {
         if (parsed.pass_criteria && typeof parsed.pass_criteria === 'object' && !Array.isArray(parsed.pass_criteria)) {
           for (const [catName, pc] of Object.entries(parsed.pass_criteria)) {
             if (pc && typeof pc === 'object') {
+              const op1 = typeof (pc as any).operator1 === 'string' ? (pc as any).operator1 : '<'
+              const operator1 = ['None', '>', '<', '>=', '<=', '==', '!='].includes(op1) ? op1 : 'None'
+              const op2 = typeof (pc as any).operator2 === 'string' ? (pc as any).operator2 : 'None'
+              const operator2 = ['None', '>', '<', '>=', '<=', '==', '!='].includes(op2) ? op2 : 'None'
+              
               validatedPassCriteria[catName] = {
                 signal: typeof (pc as any).signal === 'string' ? (pc as any).signal : 'SoundPressure',
                 value1: typeof (pc as any).value1 === 'number' ? (pc as any).value1 : 3.0,
-                operator1: typeof (pc as any).operator1 === 'string' ? (pc as any).operator1 : '<',
+                operator1: operator1 as any,
                 value2: typeof (pc as any).value2 === 'number' ? (pc as any).value2 : 0.0,
-                operator2: typeof (pc as any).operator2 === 'string' ? (pc as any).operator2 : 'None',
+                operator2: operator2 as any,
                 mask: typeof (pc as any).mask === 'number' ? (pc as any).mask : 6.0
               }
             }
@@ -603,7 +634,6 @@ export function GazeLogicTab() {
         let resultsData = analysisResults
         if (!analysisSourcePath) {
           let targetPath = parsed.analysis_source_path || ''
-          let scanSuccess = false
 
           if (targetPath) {
             const toastId = toast.loading(`Scanning path from config: ${targetPath}`)
@@ -620,55 +650,18 @@ export function GazeLogicTab() {
                 setAnalysisAvailableCameras(data.available_cameras || [])
                 setAllAnalysisFiles(true)
                 resultsData = data.results
-                scanSuccess = true
                 toast.success("Path found and loaded successfully.")
               } else {
-                toast.error("No results found in the saved path.")
+                toast.error(`The folder from configuration could not be loaded: "${targetPath}". Please select the folder using the directory picker.`)
               }
             } catch (err) {
               console.error("Error scanning path:", err)
+              toast.error("Failed to scan configuration path.")
             } finally {
               toast.dismiss(toastId)
             }
-          }
-
-          while (!scanSuccess) {
-            const promptMsg = targetPath 
-              ? `The folder "${targetPath}" could not be found or is empty. Please enter the correct working directory path:`
-              : `No project path is loaded. Please enter the working directory path:`
-            const promptedPath = window.prompt(promptMsg, targetPath)
-            if (promptedPath === null) {
-              // User cancelled
-              break
-            }
-            if (!promptedPath.trim()) {
-              continue
-            }
-
-            const scanToastId = toast.loading(`Scanning prompted path: ${promptedPath}`)
-            try {
-              const res = await fetch('/api/analysis/scan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ source_dir: promptedPath }),
-              })
-              const data = await res.json()
-              if (data.results && data.results.length > 0) {
-                setAnalysisSourcePath(promptedPath)
-                setAnalysisResults(data.results)
-                setAnalysisAvailableCameras(data.available_cameras || [])
-                setAllAnalysisFiles(true)
-                resultsData = data.results
-                scanSuccess = true
-                toast.success("Path updated and loaded successfully.")
-              } else {
-                toast.error("No results found in that path. Please try again.")
-              }
-            } catch (err) {
-              toast.error("Failed to scan path. Please try again.")
-            } finally {
-              toast.dismiss(scanToastId)
-            }
+          } else {
+            toast.error("No analysis source path found in the imported configuration. Please select a folder.")
           }
         }
 
@@ -718,6 +711,22 @@ export function GazeLogicTab() {
     }
   }
 
+  // Fetch unique signal values when files are loaded or configuration changes
+  useEffect(() => {
+    const activeFile = loadedFiles[activeCategory]
+    if (!activeFile) return
+
+    const categorySignals = signalsConfig[activeCategory] || []
+    categorySignals.forEach(sig => {
+      if (sig && sig.name !== 'SoundPressure') {
+        const cacheKey = `${activeFile}::${sig.name}`
+        if (!signalValuesCache[cacheKey] && !fetchingValuesRef.current.has(cacheKey)) {
+          fetchSignalValues(activeFile, sig.name)
+        }
+      }
+    })
+  }, [activeCategory, loadedFiles, signalsConfig, signalValuesCache])
+
   const handleSelectFile = async (filePath: string) => {
     setFileSelectorOpen(false)
     const toastId = toast.loading(`Loading channels from ${filePath.split(/[/\\]/).pop()}...`)
@@ -759,13 +768,22 @@ export function GazeLogicTab() {
           }
         }
 
-        setSignalsConfig(prev => ({ ...prev, [activeCategory]: rebuiltList }))
+        const seen = new Set<string>()
+        const uniqueRebuiltList: SignalConfig[] = []
+        for (const sig of rebuiltList) {
+          if (sig && sig.name && !seen.has(sig.name)) {
+            seen.add(sig.name)
+            uniqueRebuiltList.push(sig)
+          }
+        }
+
+        setSignalsConfig(prev => ({ ...prev, [activeCategory]: uniqueRebuiltList }))
         setLoadedFiles(prev => ({ ...prev, [activeCategory]: filePath }))
         toast.dismiss(toastId)
         toast.success(`Loaded channels for ${activeCategory}.`)
-        // Background: fetch unique threshold values for all checked, non-SoundPressure signals
+        // Background: fetch unique threshold values for all non-SoundPressure signals
         rebuiltList
-          .filter(s => s.checked && s.name !== 'SoundPressure')
+          .filter(s => s.name !== 'SoundPressure')
           .forEach(s => fetchSignalValues(filePath, s.name))
       } else {
         toast.dismiss(toastId)
@@ -825,7 +843,7 @@ export function GazeLogicTab() {
           signalsMap[sig.name] = {
             checked: !!sig.checked,
             operator: sig.operator || 'None',
-            threshold: typeof sig.threshold === 'number' ? sig.threshold : 0.0,
+            threshold: (typeof sig.threshold === 'number' || typeof sig.threshold === 'string') ? sig.threshold : 0.0,
             alias: sig.alias || sig.name
           }
         }
@@ -996,6 +1014,63 @@ export function GazeLogicTab() {
         {/* MERGED CARD HEADER: Title, Scenario, Filter Bar, & Settings Dropdown */}
         <CardHeader className="pb-4 border-b border-white/5 bg-surface-3/95 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-t-3xl">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-left">
+            <div className="flex items-center gap-3">
+              {/* Setup Actions Dropdown using GazeTimeTab style trigger button & menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 w-9 p-0 bg-black/50 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all duration-300">
+                    <Menu className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-52 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-sm">
+                      Protocols
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl">
+                        <DropdownMenuRadioGroup value={protocol} onValueChange={(val: any) => setProtocol(val)}>
+                          <DropdownMenuRadioItem value="Euro NCAP" className="text-sm">Euro NCAP</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="GSR ADDW" className="text-sm">GSR ADDW</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
+                  
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-sm">
+                      Configuration
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl w-48">
+                        <DropdownMenuItem onClick={() => document.getElementById('import-config-input')?.click()} className="text-sm gap-2 cursor-pointer">
+                          <Download className="w-3.5 h-3.5" /> Import JSON
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleExportConfig} className="text-sm gap-2 cursor-pointer">
+                          <Save className="w-3.5 h-3.5" /> Save JSON
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleUnmountConfig} className="text-sm text-red-400 hover:text-red-300 focus:bg-red-500/20 focus:text-red-200 gap-2 cursor-pointer">
+                          <X className="w-3.5 h-3.5" /> Unmount JSON
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
+                  
+                  <DropdownMenuSeparator className="bg-white/5" />
+                  
+                  <DropdownMenuItem onClick={handleAutoLoadData} className="text-sm gap-2 cursor-pointer">
+                    <RefreshCw className="w-3.5 h-3.5" /> Auto-Load data
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem onClick={() => setGaugeRulesModalOpen(true)} className="text-sm gap-2 cursor-pointer">
+                    <Sliders className="w-3.5 h-3.5" /> Edit Gauge Limits
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="h-6 w-[1px] bg-white/10" />
+            </div>
+
             {/* Scenario selector Combobox with Radio buttons */}
             <div className="flex items-center gap-2.5">
               <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Scenario:</span>
@@ -1067,71 +1142,16 @@ export function GazeLogicTab() {
                 </Badge>
               )}
             </div>
-
-            <div className="h-6 w-[1px] bg-white/10" />
-
-            {/* Setup Actions Dropdown using GazeTimeTab style trigger button & menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 w-9 p-0 bg-black/80 hover:bg-black/95 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md">
-                  <Menu className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="text-sm focus:bg-primary focus:text-black focus:font-bold">
-                    Protocols
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl">
-                      <DropdownMenuRadioGroup value={protocol} onValueChange={(val: any) => setProtocol(val)}>
-                        <DropdownMenuRadioItem value="Euro NCAP" className="text-sm focus:bg-primary focus:text-black focus:font-bold">Euro NCAP</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="GSR ADDW" className="text-sm focus:bg-primary focus:text-black focus:font-bold">GSR ADDW</DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-                
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="text-sm focus:bg-primary focus:text-black focus:font-bold">
-                    Configuration
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl w-48">
-                      <DropdownMenuItem onClick={() => document.getElementById('import-config-input')?.click()} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
-                        <Download className="w-3.5 h-3.5" /> Import JSON
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleExportConfig} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
-                        <Save className="w-3.5 h-3.5" /> Save JSON
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleUnmountConfig} className="text-sm text-red-400 hover:text-red-300 focus:bg-red-500/20 focus:text-red-200 gap-2 cursor-pointer">
-                        <X className="w-3.5 h-3.5" /> Unmount JSON
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-                
-                <DropdownMenuSeparator className="bg-white/5" />
-                
-                <DropdownMenuItem onClick={handleAutoLoadData} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
-                  <RefreshCw className="w-3.5 h-3.5" /> Auto-Load data
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onClick={() => setGaugeRulesModalOpen(true)} className="text-sm focus:bg-primary focus:text-black focus:font-bold gap-2 cursor-pointer">
-                  <Sliders className="w-3.5 h-3.5" /> Edit Gauge Limits
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Hidden Import Input */}
-            <input 
-              type="file" 
-              id="import-config-input" 
-              className="hidden" 
-              accept=".json"
-              onChange={handleImportConfig} 
-            />
           </div>
+
+          {/* Hidden Import Input */}
+          <input 
+            type="file" 
+            id="import-config-input" 
+            className="hidden" 
+            accept=".json"
+            onChange={handleImportConfig} 
+          />
         </CardHeader>
         
         <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
@@ -1165,7 +1185,7 @@ export function GazeLogicTab() {
                         <span className="text-sm text-muted-foreground/60 px-2 font-medium">Bandpass</span>
                       ) : (
                         <Select 
-                          value={sig.operator} 
+                          value={['None', '>', '<', '>=', '<=', '==', '!='].includes(sig.operator) ? sig.operator : 'None'} 
                           onValueChange={(val) => updateSignalField(activeCategory, sig.name, 'operator', val)}
                         >
                           <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2.5">
@@ -1186,25 +1206,44 @@ export function GazeLogicTab() {
                     <TableCell className="py-2.5">
                       {sig.name === 'SoundPressure' ? (
                         <span className="text-sm text-muted-foreground/60 text-center block">—</span>
-                      ) : sig.operator === 'None' ? (
-                        <span className="text-sm text-muted-foreground text-center block">-</span>
                       ) : (() => {
                         const cacheKey = `${loadedFiles[activeCategory] ?? ''}::${sig.name}`
-                        const cachedVals = signalValuesCache[cacheKey]
+                        const cachedVals = signalValuesCache[cacheKey] || []
                         if (cachedVals && cachedVals.length > 0) {
-                          const hasVal = cachedVals.some(v => Math.abs(v - sig.threshold) < 1e-5)
-                          const allVals = hasVal ? cachedVals : [sig.threshold, ...cachedVals].sort((a, b) => a - b)
+                          const cleanCached = cachedVals.filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+                          const currentVal = (sig.threshold !== null && sig.threshold !== undefined && String(sig.threshold).trim() !== '') ? sig.threshold : 0.0
+                          
+                          // Deduplicate values based on their string representation to prevent duplicate select keys/values
+                          const uniqueMap = new Map<string, any>()
+                          uniqueMap.set(String(currentVal), currentVal)
+                          cleanCached.forEach(v => {
+                            uniqueMap.set(String(v), v)
+                          })
+                          
+                          const allVals = Array.from(uniqueMap.values())
+                          allVals.sort((a, b) => {
+                            const numA = Number(a)
+                            const numB = Number(b)
+                            if (!isNaN(numA) && !isNaN(numB)) {
+                              return numA - numB
+                            }
+                            return String(a).localeCompare(String(b))
+                          })
                           return (
                             <Select
-                              value={String(sig.threshold)}
-                              onValueChange={(val) => updateSignalField(activeCategory, sig.name, 'threshold', parseFloat(val) || 0.0)}
+                              value={String(currentVal)}
+                              onValueChange={(val) => {
+                                const parsed = parseFloat(val)
+                                const finalVal = isNaN(parsed) ? val : parsed
+                                updateSignalField(activeCategory, sig.name, 'threshold', finalVal)
+                              }}
                             >
                               <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2.5">
                                 <SelectValue placeholder="Value" />
                               </SelectTrigger>
                               <SelectContent className="bg-surface-2/90 border-white/5 text-white backdrop-blur-xl text-sm max-h-48 overflow-y-auto">
                                 {allVals.map(v => (
-                                  <SelectItem key={v} value={String(v)} className="text-sm font-mono">{v}</SelectItem>
+                                  <SelectItem key={String(v)} value={String(v)} className="text-sm font-mono">{String(v)}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -1212,9 +1251,16 @@ export function GazeLogicTab() {
                         }
                         return (
                           <Input
-                            type="number"
-                            value={sig.threshold}
-                            onChange={(e) => updateSignalField(activeCategory, sig.name, 'threshold', parseFloat(e.target.value) || 0.0)}
+                            type={typeof sig.threshold === 'number' ? 'number' : 'text'}
+                            value={sig.threshold !== null && sig.threshold !== undefined ? String(sig.threshold) : ''}
+                            onChange={(e) => {
+                              const rawVal = e.target.value
+                              if (typeof sig.threshold === 'number') {
+                                updateSignalField(activeCategory, sig.name, 'threshold', parseFloat(rawVal) || 0.0)
+                              } else {
+                                updateSignalField(activeCategory, sig.name, 'threshold', rawVal)
+                              }
+                            }}
                             className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-2.5"
                             step="0.1"
                           />
@@ -1263,9 +1309,25 @@ export function GazeLogicTab() {
                     <SelectValue placeholder="Signal" />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl text-sm">
-                    {currentSignalsList.filter(s => s && typeof s.name === 'string').map(s => (
-                      <SelectItem key={s.name} value={s.name} className="text-sm">{s.name}</SelectItem>
-                    ))}
+                    {(() => {
+                      const seen = new Set<string>()
+                      const items = currentSignalsList
+                        .filter(s => s && typeof s.name === 'string' && s.name.trim() !== '')
+                        .filter(s => {
+                          if (seen.has(s.name)) return false
+                          seen.add(s.name)
+                          return true
+                        })
+                        .map(s => s.name)
+                      
+                      if (currentPassCriteria.signal && !seen.has(currentPassCriteria.signal)) {
+                        items.push(currentPassCriteria.signal)
+                      }
+                      
+                      return items.map(name => (
+                        <SelectItem key={name} value={name} className="text-sm">{name}</SelectItem>
+                      ))
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
@@ -1274,7 +1336,7 @@ export function GazeLogicTab() {
 
               <div className="w-[85px]">
                 <Select 
-                  value={currentPassCriteria.operator1} 
+                  value={['None', '>', '<', '>=', '<=', '==', '!='].includes(currentPassCriteria.operator1) ? currentPassCriteria.operator1 : 'None'} 
                   onValueChange={(val) => updatePassCriteriaField(activeCategory, 'operator1', val)}
                 >
                   <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2">
@@ -1308,7 +1370,7 @@ export function GazeLogicTab() {
 
               <div className="w-[85px]">
                 <Select 
-                  value={currentPassCriteria.operator2} 
+                  value={['None', '>', '<', '>=', '<=', '==', '!='].includes(currentPassCriteria.operator2) ? currentPassCriteria.operator2 : 'None'} 
                   onValueChange={(val) => updatePassCriteriaField(activeCategory, 'operator2', val)}
                 >
                   <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2">

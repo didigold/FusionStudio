@@ -314,11 +314,37 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             if mdf_sig is None:
                 continue
 
+            # Safe conversion of samples to list of float or list of string
+            raw_samples = mdf_sig.samples
+            processed_samples = []
+            if raw_samples is not None:
+                if not isinstance(raw_samples, np.ndarray):
+                    raw_samples = np.array(raw_samples)
+                if np.issubdtype(raw_samples.dtype, np.number) or np.issubdtype(raw_samples.dtype, np.bool_):
+                    processed_samples = list(np.asarray(raw_samples, dtype=float))
+                else:
+                    for v in raw_samples:
+                        if isinstance(v, bytes):
+                            processed_samples.append(v.decode('utf-8', errors='ignore'))
+                        elif v is None:
+                            processed_samples.append("")
+                        else:
+                            processed_samples.append(str(v))
+            
+            thresh_val = sig_info.get('threshold', 0.0)
+            try:
+                if isinstance(thresh_val, (int, float)):
+                    thresh_val = float(thresh_val)
+                else:
+                    thresh_val = float(thresh_val)
+            except (ValueError, TypeError):
+                thresh_val = str(thresh_val)
+
             signals[sig_name] = {
                 'timestamps': list(np.asarray(mdf_sig.timestamps, dtype=float)),
-                'samples': list(np.asarray(mdf_sig.samples, dtype=float)),
+                'samples': processed_samples,
                 'operator': sig_info.get('operator', '>='),
-                'threshold': float(sig_info.get('threshold', 0.0)),
+                'threshold': thresh_val,
                 'unit': getattr(mdf_sig, 'unit', 'Value'),
                 'category': target_category,
                 'alias': sig_info.get('alias') or sig_name
@@ -363,19 +389,38 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             except Exception as e:
                 logger.error(f"Error calculating SoundPressure: {e}")
         elif threshold is not None and operator and operator != 'None':
-            for t, val in zip(timestamps, samples):
-                if t < mask_start:
-                    continue
-                match = False
-                if operator == '>': match = val > threshold
-                elif operator == '<': match = val < threshold
-                elif operator == '>=': match = val >= threshold
-                elif operator == '<=': match = val <= threshold
-                elif operator == '==': match = abs(val - threshold) < 1e-6
-                elif operator == '!=': match = abs(val - threshold) >= 1e-6
-                if match:
-                    first_match_time = t
-                    break
+            try:
+                threshold_num = float(threshold)
+                for t, val in zip(timestamps, samples):
+                    if t < mask_start:
+                        continue
+                    val_num = float(val)
+                    match = False
+                    if operator == '>': match = val_num > threshold_num
+                    elif operator == '<': match = val_num < threshold_num
+                    elif operator == '>=': match = val_num >= threshold_num
+                    elif operator == '<=': match = val_num <= threshold_num
+                    elif operator == '==': match = abs(val_num - threshold_num) < 1e-6
+                    elif operator == '!=': match = abs(val_num - threshold_num) >= 1e-6
+                    if match:
+                        first_match_time = t
+                        break
+            except (ValueError, TypeError):
+                threshold_str = str(threshold)
+                for t, val in zip(timestamps, samples):
+                    if t < mask_start:
+                        continue
+                    val_str = str(val)
+                    match = False
+                    if operator == '==': match = val_str == threshold_str
+                    elif operator == '!=': match = val_str != threshold_str
+                    elif operator == '>': match = val_str > threshold_str
+                    elif operator == '<': match = val_str < threshold_str
+                    elif operator == '>=': match = val_str >= threshold_str
+                    elif operator == '<=': match = val_str <= threshold_str
+                    if match:
+                        first_match_time = t
+                        break
         signal_times[sig_name] = first_match_time
 
     tgaze = mask_start

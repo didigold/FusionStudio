@@ -362,14 +362,53 @@ async def get_signal_unique_values(req: SignalUniqueValuesRequest):
                         sig = mdf.get(req.channel_name)
                     else:
                         return {"values": [], "error": f"Channel '{req.channel_name}' not found"}
-                samples = np.asarray(sig.samples, dtype=float)
-                unique_vals = np.unique(samples)
-                if len(unique_vals) > req.max_unique:
-                    return {"values": [], "continuous": True}
-                return {
-                    "values": sorted([round(float(v), 6) for v in unique_vals]),
-                    "continuous": False
-                }
+                samples = sig.samples
+                if samples is None:
+                    return {"values": [], "continuous": False}
+                
+                if not isinstance(samples, np.ndarray):
+                    samples = np.array(samples)
+                
+                if np.issubdtype(samples.dtype, np.bytes_) or np.issubdtype(samples.dtype, np.str_):
+                    if np.issubdtype(samples.dtype, np.bytes_):
+                        samples = np.char.decode(samples, 'utf-8', errors='ignore')
+                    unique_vals = np.unique(samples)
+                    unique_vals = [str(v).strip() for v in unique_vals if v is not None]
+                    unique_vals = sorted(list(set(unique_vals)))
+                    if len(unique_vals) > req.max_unique:
+                        return {"values": [], "continuous": True}
+                    return {"values": unique_vals, "continuous": False}
+                
+                try:
+                    float_samples = np.asarray(samples, dtype=float)
+                    unique_vals = np.unique(float_samples)
+                    if len(unique_vals) > req.max_unique:
+                        return {"values": [], "continuous": True}
+                    rounded_vals = []
+                    for v in unique_vals:
+                        try:
+                            if np.isnan(v):
+                                continue
+                            rounded_vals.append(round(float(v), 6))
+                        except Exception:
+                            pass
+                    return {
+                        "values": sorted(list(set(rounded_vals))),
+                        "continuous": False
+                    }
+                except (ValueError, TypeError):
+                    str_samples = []
+                    for v in samples:
+                        if isinstance(v, bytes):
+                            str_samples.append(v.decode('utf-8', errors='ignore'))
+                        else:
+                            str_samples.append(str(v))
+                    unique_vals = np.unique(str_samples)
+                    unique_vals = [v.strip() for v in unique_vals if v is not None]
+                    unique_vals = sorted(list(set(unique_vals)))
+                    if len(unique_vals) > req.max_unique:
+                        return {"values": [], "continuous": True}
+                    return {"values": unique_vals, "continuous": False}
         except Exception as e:
             return {"values": [], "error": str(e)}
 

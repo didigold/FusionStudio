@@ -33,8 +33,8 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors focus:bg-surface-2/80 focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      variant === 'destructive' && "text-red-500 focus:text-red-400 focus:bg-red-500/10",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors focus:bg-white focus:text-black hover:bg-white hover:text-black data-[highlighted]:bg-white data-[highlighted]:text-black data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      variant === 'destructive' && "text-red-500 focus:text-white focus:bg-red-500",
       className
     )}
     {...props}
@@ -80,7 +80,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none focus:bg-surface-2/80 data-[state=open]:bg-surface-2/80",
+      "flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none focus:bg-white focus:text-black hover:bg-white hover:text-black data-[highlighted]:bg-white data-[highlighted]:text-black data-[state=open]:bg-white data-[state=open]:text-black",
       className
     )}
     {...props}
@@ -117,14 +117,14 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-surface-2/80 focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-white focus:text-black hover:bg-white hover:text-black data-[highlighted]:bg-white data-[highlighted]:text-black data-[disabled]:pointer-events-none data-[disabled]:opacity-50 group",
       className
     )}
     {...props}
   >
     <span className="absolute left-2.5 flex h-3.5 w-3.5 items-center justify-center">
       <DropdownMenuPrimitive.ItemIndicator>
-        <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+        <div className="h-1.5 w-1.5 rounded-full bg-primary group-focus:bg-black" />
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}

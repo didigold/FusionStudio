@@ -20,6 +20,8 @@ import {
   ArrowRight,
   Trash2,
   Menu,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -193,6 +195,28 @@ export function GazeTimeTab() {
   const topChartRef = useRef<uPlot | null>(null);
   const bottomChartRef = useRef<uPlot | null>(null);
 
+  // Video zoom state
+  const [videoZoom, setVideoZoom] = useState(1);
+  const zoomIn = useCallback(() => setVideoZoom(z => Math.min(3, parseFloat((z + 0.25).toFixed(2)))), []);
+  const zoomOut = useCallback(() => setVideoZoom(z => Math.max(1, parseFloat((z - 0.25).toFixed(2)))), []);
+
+  // Zoom overlay timer logic
+  const [showZoomOverlay, setShowZoomOverlay] = useState(false);
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setShowZoomOverlay(true);
+    const timer = setTimeout(() => {
+      setShowZoomOverlay(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [videoZoom]);
+
   const [subjects, setSubjects] = useState<string[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [subjectCases, setSubjectCases] = useState<string[]>([]);
@@ -359,6 +383,7 @@ export function GazeTimeTab() {
       setVideoUrl(null);
       setIsPlaying(false);
       setDuration(100);
+      setVideoZoom(1);
     }
   }, [targetFile, analysisSelectedCamera, analysisSourcePath]);
 
@@ -851,7 +876,8 @@ export function GazeTimeTab() {
                          <video 
                              ref={videoRef} 
                              src={videoUrl} 
-                             className="w-full h-full object-contain relative z-10" 
+                             className="w-full h-full object-contain relative z-10 transition-transform duration-200"
+                             style={{ transform: `scale(${videoZoom})`, transformOrigin: 'center center' }}
                              onTimeUpdate={() => {
                                  if (videoRef.current) {
                                      const t = videoRef.current.currentTime;
@@ -875,6 +901,18 @@ export function GazeTimeTab() {
                                  setVideoError('Failed to decode video format');
                              }}
                          />
+                         {/* Zoom Level Indicator Overlay */}
+                         <div className={cn(
+                             "absolute inset-0 flex items-center justify-center pointer-events-none z-20 transition-all duration-500",
+                             showZoomOverlay ? "opacity-100 scale-100" : "opacity-0 scale-95"
+                         )}>
+                             <div 
+                                 className="text-white/80 text-7xl font-extrabold font-sans tracking-widest select-none"
+                                 style={{ textShadow: '0 0 16px rgba(0,0,0,0.9), 0 0 32px rgba(0,0,0,0.5)' }}
+                             >
+                                 {Math.round(videoZoom * 100)}%
+                             </div>
+                         </div>
                         {videoLoading && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20">
                                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -901,7 +939,7 @@ export function GazeTimeTab() {
                 <div className="absolute top-3 left-3 z-20">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild disabled={!targetFile}>
-                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/80 hover:bg-black/95 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
+                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/50 hover:bg-black/70 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
                                 <Menu className="w-3.5 h-3.5" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -1034,12 +1072,11 @@ export function GazeTimeTab() {
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
-                <div className="absolute top-3 right-3 z-20">
+                <div className="absolute top-3 right-3 z-20 flex flex-col items-end gap-2">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild disabled={!targetFile}>
-                            <Button variant="outline" size="sm" className={cn("h-7 bg-black/80 hover:bg-black/95 text-white border-white/10 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xl backdrop-blur-md px-2.5", !targetFile && "opacity-50 pointer-events-none")}>
-                                <Camera className={cn("w-3 h-3", targetFile ? "text-primary animate-pulse" : "text-muted-foreground")} />
-                                <span>{targetFile ? `Cam ${analysisSelectedCamera}` : "No cameras found"}</span>
+                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/50 hover:bg-black/70 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
+                                <Camera className={cn("w-3.5 h-3.5", targetFile ? "text-primary animate-pulse" : "text-muted-foreground")} />
                             </Button>
                         </DropdownMenuTrigger>
                         {targetFile && (
@@ -1049,7 +1086,7 @@ export function GazeTimeTab() {
                                         key={cam} 
                                         className={cn(
                                             'text-[10px] font-bold cursor-pointer rounded-lg px-2 py-1.5 transition-colors flex items-center justify-between',
-                                            analysisSelectedCamera === cam ? 'bg-primary text-black focus:bg-primary focus:text-black' : 'text-white/80 hover:text-white hover:bg-white/5 focus:bg-white/5 focus:text-white'
+                                            analysisSelectedCamera === cam ? 'bg-primary text-black focus:bg-primary focus:text-black' : 'text-white/80 hover:bg-white hover:text-black focus:bg-white focus:text-black'
                                         )}
                                         onClick={() => setAnalysisSelectedCamera(Number(cam))}
                                     >
@@ -1060,6 +1097,32 @@ export function GazeTimeTab() {
                             </DropdownMenuContent>
                         )}
                     </DropdownMenu>
+                    <div className={cn(
+                        "flex flex-col w-7 bg-black/50 border border-white/10 rounded-lg shadow-xl backdrop-blur-md overflow-hidden",
+                        !targetFile && "opacity-50 pointer-events-none"
+                    )}>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={!targetFile || videoZoom >= 3}
+                            onClick={zoomIn}
+                            className="h-7 w-7 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
+                            title="Zoom In"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                        </Button>
+                        <div className="w-full h-[1px] bg-white/10" />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={!targetFile || videoZoom <= 1}
+                            onClick={zoomOut}
+                            className="h-7 w-7 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
+                            title="Zoom Out"
+                        >
+                            <Minus className="w-3.5 h-3.5" />
+                        </Button>
+                    </div>
                 </div>
             </div>
             <div className="h-24 bg-surface-2/50 border-t border-white/5 p-3 shrink-0 flex flex-col justify-between">
