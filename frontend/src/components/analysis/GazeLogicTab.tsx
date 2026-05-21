@@ -288,7 +288,27 @@ export function GazeLogicTab() {
   }
 
   // Load and merge channels from target MF4 files for each scenario
-  const autoLoadChannelsAndMerge = async (importedCategories?: Record<string, SignalConfig[]>) => {
+  const autoLoadChannelsAndMerge = async (
+    importedCategories?: Record<string, SignalConfig[]>,
+    targetProtocol?: 'Euro NCAP' | 'GSR ADDW'
+  ) => {
+    const activeProtocol = targetProtocol || protocol
+    const targetCategoriesList = activeProtocol === 'Euro NCAP' 
+      ? [
+          "Long Distraction (NDT)",
+          "Long Distraction (DT)",
+          "Short Distraction (NDT)",
+          "Short Distraction (DT)",
+          "Microsleep",
+          "Sleep",
+          "Drowsiness",
+          "Unresponsive driver"
+        ]
+      : [
+          "High Speed",
+          "Low Speed"
+        ]
+
     // 1. Check if we have participants
     if (!analysisResults || analysisResults.length === 0) {
       if (importedCategories) {
@@ -373,7 +393,7 @@ export function GazeLogicTab() {
     const toastId = toast.loading("Auto-loading MF4 data...")
 
     try {
-      for (const category of categoriesList) {
+      for (const category of targetCategoriesList) {
         const matchingFile = mdfFiles.find(f => determineCategoryFromFilename(f) === category)
         if (matchingFile) {
           const response = await fetch('/api/analysis/channels', {
@@ -388,16 +408,19 @@ export function GazeLogicTab() {
             
             // Get already defined signals for this category
             const existingCategoryConfig = newConfigs[category] || []
+            const isConfigValid = existingCategoryConfig && Array.isArray(existingCategoryConfig)
             
             // Re-build signals list: for each channel, preserve imported config if present, or add default
             const rebuiltList: SignalConfig[] = [
-              existingCategoryConfig.find(sig => sig.name === 'SoundPressure') || { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+              isConfigValid
+                ? existingCategoryConfig.find(sig => sig && sig.name === 'SoundPressure') || { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+                : { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
             ]
 
             for (const name of filteredNames) {
               if (name === 'SoundPressure') continue
               
-              const existingSig = existingCategoryConfig.find(sig => sig.name === name)
+              const existingSig = isConfigValid ? existingCategoryConfig.find(sig => sig && sig.name === name) : undefined
               if (existingSig) {
                 rebuiltList.push(existingSig)
               } else {
@@ -411,9 +434,11 @@ export function GazeLogicTab() {
               }
             }
 
-            for (const sig of existingCategoryConfig) {
-              if (sig.name !== 'SoundPressure' && !filteredNames.includes(sig.name)) {
-                rebuiltList.push(sig)
+            if (isConfigValid) {
+              for (const sig of existingCategoryConfig) {
+                if (sig && sig.name !== 'SoundPressure' && !filteredNames.includes(sig.name)) {
+                  rebuiltList.push(sig)
+                }
               }
             }
 
@@ -445,18 +470,127 @@ export function GazeLogicTab() {
     const reader = new FileReader()
     reader.onload = async (event) => {
       try {
-        const parsed = JSON.parse(event.target?.result as string)
-        if (parsed.protocol) setProtocol(parsed.protocol)
-        if (parsed.pass_criteria) setPassCriteria(parsed.pass_criteria)
-        if (parsed.gauge_rules) setGaugeRules(parsed.gauge_rules)
-        
-        // Autoload channels & merge with the imported categories configuration
-        if (parsed.categories) {
-          await autoLoadChannelsAndMerge(parsed.categories)
+        const fileContent = event.target?.result as string
+        if (!fileContent) {
+          toast.error("The imported file is empty.")
+          return
         }
-        
+        const parsed = JSON.parse(fileContent)
+        if (!parsed || typeof parsed !== 'object') {
+          toast.error("Invalid configuration file format.")
+          return
+        }
+
+        // Support backward compatibility / Python format splits
+        if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
+          if ("Microsleep & Sleep" in parsed.categories && !("Microsleep" in parsed.categories) && !("Sleep" in parsed.categories)) {
+            parsed.categories["Microsleep"] = parsed.categories["Microsleep & Sleep"]
+            parsed.categories["Sleep"] = parsed.categories["Microsleep & Sleep"]
+          }
+        }
+        if (parsed.pass_criteria && typeof parsed.pass_criteria === 'object' && !Array.isArray(parsed.pass_criteria)) {
+          if ("Microsleep & Sleep" in parsed.pass_criteria && !("Microsleep" in parsed.pass_criteria) && !("Sleep" in parsed.pass_criteria)) {
+            parsed.pass_criteria["Microsleep"] = parsed.pass_criteria["Microsleep & Sleep"]
+            parsed.pass_criteria["Sleep"] = parsed.pass_criteria["Microsleep & Sleep"]
+          }
+        }
+        if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
+          if ("Microsleep & Sleep" in parsed.gauge_rules && !("Microsleep" in parsed.gauge_rules) && !("Sleep" in parsed.gauge_rules)) {
+            parsed.gauge_rules["Microsleep"] = parsed.gauge_rules["Microsleep & Sleep"]
+            parsed.gauge_rules["Sleep"] = parsed.gauge_rules["Microsleep & Sleep"]
+          }
+        }
+
+        // 1. Validate and sanitize protocol
+        let validatedProtocol: 'Euro NCAP' | 'GSR ADDW' = 'Euro NCAP'
+        if (parsed.protocol === 'GSR ADDW' || parsed.protocol === 'Euro NCAP') {
+          validatedProtocol = parsed.protocol
+        }
+
+        // 2. Validate and sanitize categories
+        const validatedCategories: Record<string, SignalConfig[]> = {}
+        if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
+          for (const [catName, signalList] of Object.entries(parsed.categories)) {
+            if (Array.isArray(signalList)) {
+              validatedCategories[catName] = signalList
+                .filter((sig: any) => {
+                  if (!sig || typeof sig !== 'object') return false
+                  const name = sig.name ?? sig.signal
+                  return typeof name === 'string' && name.trim() !== ''
+                })
+                .map((sig: any) => {
+                  const name = (sig.name ?? sig.signal ?? '').trim()
+                  const rawThreshold = sig.threshold ?? sig.value
+                  let threshold = 0.0
+                  if (typeof rawThreshold === 'number') {
+                    threshold = rawThreshold
+                  } else if (typeof rawThreshold === 'string') {
+                    const parsedFloat = parseFloat(rawThreshold)
+                    if (!isNaN(parsedFloat)) {
+                      threshold = parsedFloat
+                    }
+                  }
+                  const alias = typeof sig.alias === 'string' ? sig.alias : name
+                  return {
+                    name,
+                    checked: typeof sig.checked === 'boolean' ? sig.checked : false,
+                    operator: typeof sig.operator === 'string' ? sig.operator : 'None',
+                    threshold,
+                    alias
+                  }
+                })
+            }
+          }
+        }
+
+        // Merge with defaults to ensure completeness
+        const mergedCategories = { ...DEFAULT_SIGNAL_LISTS, ...validatedCategories }
+
+        // 3. Validate and sanitize pass_criteria
+        const validatedPassCriteria: Record<string, PassConfig> = {}
+        if (parsed.pass_criteria && typeof parsed.pass_criteria === 'object' && !Array.isArray(parsed.pass_criteria)) {
+          for (const [catName, pc] of Object.entries(parsed.pass_criteria)) {
+            if (pc && typeof pc === 'object') {
+              validatedPassCriteria[catName] = {
+                signal: typeof (pc as any).signal === 'string' ? (pc as any).signal : 'SoundPressure',
+                value1: typeof (pc as any).value1 === 'number' ? (pc as any).value1 : 3.0,
+                operator1: typeof (pc as any).operator1 === 'string' ? (pc as any).operator1 : '<',
+                value2: typeof (pc as any).value2 === 'number' ? (pc as any).value2 : 0.0,
+                operator2: typeof (pc as any).operator2 === 'string' ? (pc as any).operator2 : 'None',
+                mask: typeof (pc as any).mask === 'number' ? (pc as any).mask : 6.0
+              }
+            }
+          }
+        }
+        const mergedPassCriteria = { ...DEFAULT_PASS_CRITERIA, ...validatedPassCriteria }
+
+        // 4. Validate and sanitize gauge_rules
+        const validatedGaugeRules: Record<string, GaugeConfig> = {}
+        if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
+          for (const [catName, gr] of Object.entries(parsed.gauge_rules)) {
+            if (gr && typeof gr === 'object') {
+              validatedGaugeRules[catName] = {
+                min: typeof (gr as any).min === 'number' ? (gr as any).min : 0,
+                max: typeof (gr as any).max === 'number' ? (gr as any).max : 10,
+                green_min: typeof (gr as any).green_min === 'number' ? (gr as any).green_min : 0,
+                green_max: typeof (gr as any).green_max === 'number' ? (gr as any).green_max : 3
+              }
+            }
+          }
+        }
+        const mergedGaugeRules = { ...DEFAULT_GAUGE_RULES, ...validatedGaugeRules }
+
+        // Update states
+        setProtocol(validatedProtocol)
+        setPassCriteria(mergedPassCriteria)
+        setGaugeRules(mergedGaugeRules)
+
+        // Autoload channels & merge with the imported categories configuration
+        await autoLoadChannelsAndMerge(mergedCategories, validatedProtocol)
+
         toast.success("Configuration imported successfully")
       } catch (err) {
+        console.error("Import error:", err)
         toast.error("Failed to parse JSON file")
       }
     }
@@ -502,12 +636,12 @@ export function GazeLogicTab() {
         
         const existingCategoryConfig = signalsConfig[activeCategory] || []
         const rebuiltList: SignalConfig[] = [
-          existingCategoryConfig.find(sig => sig.name === 'SoundPressure') || { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+          existingCategoryConfig.find(sig => sig && sig.name === 'SoundPressure') || { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
         ]
 
         for (const name of filteredNames) {
           if (name === 'SoundPressure') continue
-          const existingSig = existingCategoryConfig.find(sig => sig.name === name)
+          const existingSig = existingCategoryConfig.find(sig => sig && sig.name === name)
           if (existingSig) {
             rebuiltList.push(existingSig)
           } else {
@@ -522,7 +656,7 @@ export function GazeLogicTab() {
         }
 
         for (const sig of existingCategoryConfig) {
-          if (sig.name !== 'SoundPressure' && !filteredNames.includes(sig.name)) {
+          if (sig && sig.name !== 'SoundPressure' && !filteredNames.includes(sig.name)) {
             rebuiltList.push(sig)
           }
         }
@@ -589,11 +723,13 @@ export function GazeLogicTab() {
       
       const signalsMap: Record<string, any> = {}
       signalsList.forEach((sig) => {
-        signalsMap[sig.name] = {
-          checked: sig.checked,
-          operator: sig.operator,
-          threshold: sig.threshold,
-          alias: sig.alias
+        if (sig && sig.name) {
+          signalsMap[sig.name] = {
+            checked: !!sig.checked,
+            operator: sig.operator || 'None',
+            threshold: typeof sig.threshold === 'number' ? sig.threshold : 0.0,
+            alias: sig.alias || sig.name
+          }
         }
       })
 
@@ -731,10 +867,13 @@ export function GazeLogicTab() {
   const currentPassCriteria = passCriteria[activeCategory] || { signal: 'SoundPressure', value1: 3.0, operator1: '<', value2: 0.0, operator2: 'None', mask: 6.0 }
 
   // Filter signals list by query string
-  const filteredSignals = currentSignalsList.filter(sig => 
-    sig.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    sig.alias.toLowerCase().includes(filterQuery.toLowerCase())
-  )
+  const filteredSignals = currentSignalsList.filter(sig => {
+    if (!sig || typeof sig.name !== 'string') return false
+    const nameLower = sig.name.toLowerCase()
+    const aliasLower = typeof sig.alias === 'string' ? sig.alias.toLowerCase() : nameLower
+    const queryLower = filterQuery.toLowerCase()
+    return nameLower.includes(queryLower) || aliasLower.includes(queryLower)
+  })
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-in fade-in duration-500 max-w-full w-full overflow-hidden">
@@ -995,7 +1134,7 @@ export function GazeLogicTab() {
                     <SelectValue placeholder="Signal" />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl text-sm">
-                    {currentSignalsList.map(s => (
+                    {currentSignalsList.filter(s => s && typeof s.name === 'string').map(s => (
                       <SelectItem key={s.name} value={s.name} className="text-sm">{s.name}</SelectItem>
                     ))}
                   </SelectContent>
