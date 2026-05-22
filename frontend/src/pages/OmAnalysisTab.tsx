@@ -83,18 +83,18 @@ export default function OmAnalysisTab() {
   return (
     <div className="flex h-full gap-6 p-1 overflow-hidden">
       <div className="w-80 flex flex-col gap-6 overflow-hidden">
-        <div className="bg-card/50 border border-border/50 rounded-xl p-5 shadow-sm flex flex-col gap-4">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-5 shadow-sm flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <FileSearch className="text-primary w-5 h-5" />
             <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">OM Source</h2>
           </div>
-          <input type="text" value={sourcePath} onChange={(e) => setSourcePath(e.target.value)} placeholder="Path to analysis results..." className="bg-surface-3 border border-border/50 rounded-md px-3 py-2 text-xs focus:outline-none" />
-          <button onClick={handleScan} disabled={scanning || !sourcePath} className="bg-primary text-background rounded-full py-2 font-bold text-xs hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+          <input type="text" value={sourcePath} onChange={(e) => setSourcePath(e.target.value)} placeholder="Path to analysis results..." className="bg-surface-3 border border-border/50 rounded-lg px-3 py-2 text-xs focus:outline-none" />
+          <button onClick={handleScan} disabled={scanning || !sourcePath} className="bg-primary text-background rounded-lg py-2 font-bold text-xs hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
             {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {scanning ? 'Scanning...' : 'Scan Directory'}
           </button>
         </div>
 
-        <div className="bg-card/50 border border-border/50 rounded-xl flex-1 overflow-hidden flex flex-col shadow-sm">
+        <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
           <div className="p-4 border-b border-border/50 bg-surface-2/30 flex items-center gap-2">
             <Video className="text-primary w-4 h-4" />
             <span className="text-xs font-bold text-foreground uppercase">Files ({files.length})</span>
@@ -115,7 +115,7 @@ export default function OmAnalysisTab() {
 
       <div className="flex-1 flex flex-col gap-6 overflow-hidden">
         <div className="grid grid-cols-3 gap-6 h-2/3">
-          <div className="col-span-2 bg-black border border-border/50 rounded-2xl overflow-hidden relative group flex items-center justify-center">
+          <div className="col-span-2 bg-black border border-border/50 rounded-3xl overflow-hidden relative group flex items-center justify-center">
             <Video className="w-16 h-16 text-white/5" />
             <div className="absolute bottom-4 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-4 bg-background/80 backdrop-blur-md px-6 py-3 rounded-full border border-border/30">
               <button className="text-foreground hover:text-primary"><Play className="w-5 h-5 fill-current" /></button>
@@ -127,7 +127,7 @@ export default function OmAnalysisTab() {
             </div>
           </div>
 
-          <div className="bg-card/50 border border-border/50 rounded-2xl p-6 flex flex-col gap-4 shadow-sm overflow-hidden">
+          <div className="bg-card/50 border border-border/50 rounded-3xl p-6 flex flex-col gap-4 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2"><BarChart3 className="text-primary w-4 h-4" /><span className="text-xs font-bold text-foreground uppercase">OM Metrics</span></div>
 
             {metrics && !metrics.error ? (
@@ -156,7 +156,7 @@ export default function OmAnalysisTab() {
 
             {channels.length > 0 && (
               <div className="border-t border-border/30 pt-3">
-                <select value={selectedChannel} onChange={(e) => { setSelectedChannel(e.target.value); analyzeSignal(e.target.value) }} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-[11px] focus:outline-none appearance-none">
+                <select value={selectedChannel} onChange={(e) => { setSelectedChannel(e.target.value); analyzeSignal(e.target.value) }} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-[11px] focus:outline-none appearance-none">
                   <option value="">Select channel...</option>
                   {channels.map((ch: any, i: number) => <option key={i} value={ch.name}>{ch.name}</option>)}
                 </select>
@@ -167,7 +167,7 @@ export default function OmAnalysisTab() {
           </div>
         </div>
 
-        <div className="flex-1 bg-card/50 border border-border/50 rounded-2xl p-6 shadow-sm flex flex-col gap-4 overflow-hidden">
+        <div className="flex-1 bg-card/50 border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col gap-4 overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Activity className="text-primary w-4 h-4" />

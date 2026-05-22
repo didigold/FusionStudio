@@ -3,13 +3,13 @@ import { useAppStore } from '../store/useAppStore'
 import { useAnalysisWS } from '../hooks/useAnalysisWS'
 import { 
   ChevronRight, ChevronDown, Folder, File,
-  LayoutGrid,
   ListChevronsUpDown, ListChevronsDownUp,
   Smile, Frown,
   Locate, LocateOff,
   FileChartColumnIncreasing,
   FileSearch,
-  CheckSquare
+  CheckSquare,
+  LayoutGrid
 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -29,6 +29,8 @@ import { LogTab } from '@/components/analysis/LogTab'
 import { AnalysisSidebar } from '@/components/analysis/AnalysisSidebar'
 import { PlaceholderTab } from '@/components/analysis/PlaceholderTab'
 import { MetadataTab } from '@/components/analysis/MetadataTab'
+import ClassificationTab from './ClassificationTab'
+import ReportingTab from './ReportingTab'
 
 // --- PROGRESS RING COMPONENT ---
 const ProgressRing = ({ value, max, title }: { value: number; max: number; title: string }) => {
@@ -305,7 +307,7 @@ export default function AnalysisTab() {
     <div className="flex h-full gap-6 p-1 overflow-hidden">
       <div className="w-80 flex flex-col gap-6 overflow-hidden">
         {/* Participant Status Panel */}
-        <div className="bg-card/50 border border-border/50 rounded-xl flex-1 overflow-hidden flex flex-col shadow-sm">
+        <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
           <div className="p-4 border-b border-white/5 bg-surface-2/30">
             <div className="flex items-center justify-between mb-4">
                <div className="flex items-center gap-2">
@@ -394,117 +396,142 @@ export default function AnalysisTab() {
       </div>
 
       {/* Main Analysis Panel (Sidebar + Content) */}
-      <div className="flex-1 bg-card/50 border border-border/50 rounded-xl flex overflow-hidden shadow-sm relative min-h-0">
+      <div className="flex-1 bg-card/50 border border-border/50 rounded-3xl flex overflow-hidden shadow-sm relative min-h-0">
         <SidebarProvider defaultOpen className="h-full w-full flex overflow-hidden min-h-0">
           <AnalysisSidebar activeTab={activeTab} onTabChange={setActiveTab} />
           <div className="flex-1 flex flex-col overflow-hidden bg-[#121211]">
-            {['time-selector', 'tracking'].includes(activeTab) ? (
-              <>
-                {activeTab === 'tracking' && <TrackingTab />}
-                {activeTab === 'time-selector' && <GazeTimeTab />}
-              </>
-            ) : (
-              <ScrollArea className="flex-1">
-                <AnimatePresence mode="wait">
-                  {activeTab === 'audio' && (
-                    <motion.div
-                      key="audio"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <AudioTab selectedFile={analysisSelectedFile} />
-                    </motion.div>
-                  )}
-                  {activeTab === 'metadata' && (
-                    <motion.div
-                      key="metadata"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <MetadataTab />
-                    </motion.div>
-                  )}
-                  {activeTab === 'logic' && (
-                    <motion.div
-                      key="logic"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <GazeLogicTab />
-                    </motion.div>
-                  )}
-                  {activeTab === 'occupant-time' && (
-                    <motion.div
-                      key="occupant-time"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <PlaceholderTab label="Misuse Time" />
-                    </motion.div>
-                  )}
-                  {activeTab === 'misuse-logic' && (
-                    <motion.div
-                      key="misuse-logic"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <PlaceholderTab label="Misuse Logic" />
-                    </motion.div>
-                  )}
-                  {activeTab === 'classification' && (
-                    <motion.div
-                      key="classification"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <PlaceholderTab label="Classification" />
-                    </motion.div>
-                  )}
-                  {activeTab === 'reporting' && (
-                    <motion.div
-                      key="reporting"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <PlaceholderTab label="Reporting" />
-                    </motion.div>
-                  )}
-                  {activeTab === 'log' && (
-                    <motion.div
-                      key="log"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
-                      className="h-full w-full"
-                    >
-                      <LogTab />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </ScrollArea>
-            )}
+            <AnimatePresence mode="wait">
+              {activeTab === 'tracking' && (
+                <motion.div
+                  key="tracking"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <TrackingTab />
+                </motion.div>
+              )}
+              {activeTab === 'time-selector' && (
+                <motion.div
+                  key="time-selector"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <GazeTimeTab />
+                </motion.div>
+              )}
+              {activeTab === 'logic' && (
+                <motion.div
+                  key="logic"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <GazeLogicTab />
+                </motion.div>
+              )}
+              {activeTab === 'audio' && (
+                <motion.div
+                  key="audio"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <ScrollArea className="flex-1">
+                    <AudioTab selectedFile={analysisSelectedFile} />
+                  </ScrollArea>
+                </motion.div>
+              )}
+              {activeTab === 'metadata' && (
+                <motion.div
+                  key="metadata"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <ScrollArea className="flex-1">
+                    <MetadataTab />
+                  </ScrollArea>
+                </motion.div>
+              )}
+              {activeTab === 'occupant-time' && (
+                <motion.div
+                  key="occupant-time"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <ScrollArea className="flex-1">
+                    <PlaceholderTab label="Misuse Time" />
+                  </ScrollArea>
+                </motion.div>
+              )}
+              {activeTab === 'misuse-logic' && (
+                <motion.div
+                  key="misuse-logic"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <ScrollArea className="flex-1">
+                    <PlaceholderTab label="Misuse Logic" />
+                  </ScrollArea>
+                </motion.div>
+              )}
+              {activeTab === 'classification' && (
+                <motion.div
+                  key="classification"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <ClassificationTab />
+                </motion.div>
+              )}
+              {activeTab === 'reporting' && (
+                <motion.div
+                  key="reporting"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <ReportingTab />
+                </motion.div>
+              )}
+              {activeTab === 'log' && (
+                <motion.div
+                  key="log"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <ScrollArea className="flex-1">
+                    <LogTab />
+                  </ScrollArea>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </SidebarProvider>
       </div>

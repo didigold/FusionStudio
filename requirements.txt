@@ -38,3 +38,4 @@ onnx>=1.14.0
 # Utilities
 Pillow
 packaging
+imageio-ffmpeg>=0.4.9

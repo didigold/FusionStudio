@@ -200,7 +200,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
         </div>
 
         {/* Glassmorphic blur frame container */}
-        <div className="flex flex-col gap-6 rounded-2xl bg-surface-2/20 border border-white/5 p-6 shadow-2xl backdrop-blur-xl relative z-10 transition-all duration-300">
+        <div className="flex flex-col gap-6 rounded-3xl bg-surface-2/20 border border-white/5 p-6 shadow-2xl backdrop-blur-xl relative z-10 transition-all duration-300">
           
           <div className="flex flex-col gap-3">
             <span className="text-sm font-medium text-foreground">Minimum frequency</span>

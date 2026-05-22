@@ -85,7 +85,7 @@ export default function BrainTab() {
   return (
     <div className="flex h-full gap-6 p-1 overflow-hidden">
       <div className="w-96 flex flex-col gap-6 overflow-hidden">
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col gap-5">
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 p-2 rounded-full"><Settings className="text-primary w-4 h-4" /></div>
             <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Training Params</h2>
@@ -93,28 +93,28 @@ export default function BrainTab() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-2"><Layers className="w-3 h-3" /> Architecture</label>
-              <div className="flex bg-surface-3 rounded-full p-1 border border-border/30">
-                <button onClick={() => setBrainArchitecture('multimodal')} className={`flex-1 py-2 text-[10px] font-bold rounded-full transition-all ${brainArchitecture === 'multimodal' ? 'bg-primary text-background shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>MULTIMODAL</button>
-                <button onClick={() => setBrainArchitecture('legacy')} className={`flex-1 py-2 text-[10px] font-bold rounded-full transition-all ${brainArchitecture === 'legacy' ? 'bg-primary text-background shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>LEGACY</button>
+              <div className="flex bg-surface-3 rounded-lg p-1 border border-border/30">
+                <button onClick={() => setBrainArchitecture('multimodal')} className={`flex-1 py-2 text-[10px] font-bold rounded-md transition-all ${brainArchitecture === 'multimodal' ? 'bg-primary text-background shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>MULTIMODAL</button>
+                <button onClick={() => setBrainArchitecture('legacy')} className={`flex-1 py-2 text-[10px] font-bold rounded-md transition-all ${brainArchitecture === 'legacy' ? 'bg-primary text-background shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>LEGACY</button>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">Model Name</label><input type="text" value={brainModelName} onChange={(e) => setBrainModelName(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none" /></div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">Epochs</label><input type="number" value={brainEpochs} onChange={(e) => setBrainEpochs(parseInt(e.target.value) || 100)} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">Model Name</label><input type="text" value={brainModelName} onChange={(e) => setBrainModelName(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">Epochs</label><input type="number" value={brainEpochs} onChange={(e) => setBrainEpochs(parseInt(e.target.value) || 100)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none" /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">LR</label><input type="text" value={brainLR} onChange={(e) => setBrainLR(parseFloat(e.target.value) || 0.001)} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none" /></div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">Patience</label><input type="number" value={brainPatience} onChange={(e) => setBrainPatience(parseInt(e.target.value) || 15)} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">LR</label><input type="text" value={brainLR} onChange={(e) => setBrainLR(parseFloat(e.target.value) || 0.001)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase">Patience</label><input type="number" value={brainPatience} onChange={(e) => setBrainPatience(parseInt(e.target.value) || 15)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none" /></div>
             </div>
           </div>
         </div>
 
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6 shadow-sm flex flex-col gap-4">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col gap-4">
           <div className="flex items-center gap-3"><Database className="text-primary w-4 h-4" /><h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Projects</h2></div>
           <div className="space-y-3">
             <div className="flex gap-2">
-              <input type="text" value={brainProjectsRoot} onChange={(e) => setBrainProjectsRoot(e.target.value)} placeholder="Projects directory..." className="flex-1 bg-surface-3 border border-border/50 rounded-md px-3 py-2 text-[10px] focus:outline-none" />
-              <button onClick={handleScan} className="bg-surface-ink border border-border/50 p-2 rounded-full hover:bg-surface-3"><RefreshCw className={`w-3.5 h-3.5 ${scanning ? 'animate-spin' : ''}`} /></button>
+              <input type="text" value={brainProjectsRoot} onChange={(e) => setBrainProjectsRoot(e.target.value)} placeholder="Projects directory..." className="flex-1 bg-surface-3 border border-border/50 rounded-lg px-3 py-2 text-[10px] focus:outline-none" />
+              <button onClick={handleScan} className="bg-surface-ink border border-border/50 p-2 rounded-lg hover:bg-surface-3"><RefreshCw className={`w-3.5 h-3.5 ${scanning ? 'animate-spin' : ''}`} /></button>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={selectAll} className="text-[10px] text-primary hover:underline">{selectedProjects.length === brainProjects.length ? 'Deselect All' : 'Select All'}</button>
@@ -133,7 +133,7 @@ export default function BrainTab() {
 
         {/* Models */}
         {brainModels.length > 0 && (
-          <div className="bg-card/50 border border-border/50 rounded-xl p-4 shadow-sm">
+          <div className="bg-card/50 border border-border/50 rounded-3xl p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-2"><History className="text-primary w-3 h-3" /><span className="text-[10px] font-bold text-muted-foreground uppercase">Saved Models</span></div>
             <div className="space-y-0.5 max-h-24 overflow-y-auto text-[10px] font-mono text-muted-foreground">
               {brainModels.map((m: any, i: number) => (
@@ -145,12 +145,12 @@ export default function BrainTab() {
 
         <div className="mt-auto pt-2">
           {!brainTraining ? (
-            <button onClick={handleStartTraining} disabled={selectedProjects.length === 0} className="w-full bg-primary text-background rounded-full py-5 font-bold flex items-center justify-center gap-3 shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50">
+            <button onClick={handleStartTraining} disabled={selectedProjects.length === 0} className="w-full bg-primary text-background rounded-lg py-5 font-bold flex items-center justify-center gap-3 shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50">
               <Play className="w-5 h-5 fill-current" /> START TRAINING
             </button>
           ) : (
             <div className="space-y-3">
-              <button onClick={handleStop} className="w-full bg-destructive text-white rounded-full py-5 font-bold flex items-center justify-center gap-3 hover:bg-destructive/90 transition-all">
+              <button onClick={handleStop} className="w-full bg-destructive text-white rounded-lg py-5 font-bold flex items-center justify-center gap-3 hover:bg-destructive/90 transition-all">
                 <Square className="w-5 h-5 fill-current" /> STOP TRAINING
               </button>
               <span className="text-xs text-primary font-semibold animate-pulse block text-center uppercase">{brainPhase || 'Running...'}</span>
@@ -161,7 +161,7 @@ export default function BrainTab() {
 
       {/* Training Monitor */}
       <div className="flex-1 flex flex-col gap-6 overflow-hidden">
-        <div className="bg-card/50 border border-border/50 rounded-2xl p-8 flex-1 flex flex-col overflow-hidden shadow-sm relative">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-8 flex-1 flex flex-col overflow-hidden shadow-sm relative">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-xl font-bold text-foreground mb-1">Training Monitor</h2>

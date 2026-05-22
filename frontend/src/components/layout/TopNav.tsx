@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SystemBadge } from './SystemBadge'
 import {
   FolderOpen,
   Loader2,
   X,
+  Download,
+  Save
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -15,7 +17,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAppStore } from '@/store/useAppStore'
 import { FolderBrowser } from '@/components/analysis/FolderBrowser'
-import { GlowEffect } from '@/components/core/glow-effect'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 declare const __USERNAME__: string | undefined
 
@@ -30,10 +34,29 @@ export function TopNav() {
     setAllAnalysisFiles,
     setAnalysisSelectedFile,
     addLog,
+
+    // Config actions & states
+    importedConfigName,
+    importConfigJSON,
+    exportConfig,
+    handleUnmountConfig,
+    isPromptingForPath,
+    setIsPromptingForPath,
+    pendingConfig,
+    confirmPromptedPath
   } = useAppStore()
 
   const [scanning, setScanning] = useState(false)
   const [browseOpen, setBrowseOpen] = useState(false)
+  const [promptedPath, setPromptedPath] = useState('')
+  const [promptFolderBrowserOpen, setPromptFolderBrowserOpen] = useState(false)
+
+  // Pre-populate promptedPath when pendingConfig/analysisSourcePath changes
+  useEffect(() => {
+    if (isPromptingForPath) {
+      setPromptedPath(pendingConfig?.analysis_source_path || analysisSourcePath || '')
+    }
+  }, [isPromptingForPath, pendingConfig, analysisSourcePath])
 
   const triggerScanForPath = async (path: string) => {
     if (!path) return
@@ -70,177 +93,251 @@ export function TopNav() {
     addLog('Analysis source path cleared.')
   }
 
+  const handleConfirmPromptedPath = async () => {
+    if (!promptedPath) return
+    const success = await confirmPromptedPath(promptedPath)
+    if (success) {
+      // On success, isPromptingForPath is set to false in store
+    }
+  }
+
   return (
     <>
-      <div className="w-full flex justify-center px-6 mt-6 absolute top-0 z-50 pointer-events-none">
-        <nav className="bg-[#201E1C] shadow-[0_4px_24px_rgba(0,0,0,0.25)] rounded-full px-10 py-3 flex items-center justify-between pointer-events-auto max-w-7xl w-full border border-border/50">
+      <header className="w-full h-16 border-b border-white/5 bg-[#121110] flex items-center justify-between px-8 z-40 sticky top-0">
+        
+        {/* Left Side: Brand Logo and Text */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="21" viewBox="0 0 48 46" fill="none" className="text-white">
+            <path fill="currentColor" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z" />
+          </svg>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-extrabold text-white tracking-wide">FusionStudio</span>
+            <span className="text-sm text-neutral-400 font-medium">|</span>
+            <span className="text-xs font-bold text-orange-500 tracking-wider">IDIADA</span>
+          </div>
+        </div>
+
+        {/* Center: Data Source Input Area */}
+        <div className="flex items-center justify-center flex-1 max-w-xl mx-4 gap-2">
+          <div className={cn(
+            "relative flex-1 h-9 flex items-center bg-[#1e1d1c] border rounded-lg px-2 transition-all shadow-inner",
+            !analysisSourcePath ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]" : "border-white/5"
+          )}>
+            <input
+              type="text"
+              value={analysisSourcePath}
+              onChange={(e) => setAnalysisSourcePath(e.target.value)}
+              onPaste={(e) => {
+                const pastedText = e.clipboardData.getData('text')
+                if (pastedText) {
+                  setAnalysisSourcePath(pastedText)
+                  triggerScanForPath(pastedText)
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  triggerScanForPath(analysisSourcePath)
+                }
+              }}
+              onBlur={() => {
+                triggerScanForPath(analysisSourcePath)
+              }}
+              placeholder="Select project folder..."
+              className="bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 text-xs text-zinc-200 placeholder:text-zinc-500 w-full pl-2 pr-2"
+            />
+            {analysisSourcePath && (
+              <button
+                type="button"
+                onClick={handleClearPath}
+                className="p-1 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-md transition-all mr-1"
+                title="Clear Path"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           
-          {/* Brand / Logo */}
-          <div className="flex items-center gap-2 shrink-0 w-64">
-            <span className="text-[16px] font-bold text-foreground">FusionStudio</span>
-            <span className="text-[16px] font-bold text-warning">Applus+ IDIADA</span>
+          <Button
+            type="button"
+            onClick={() => setBrowseOpen(true)}
+            variant="outline"
+            size="icon"
+            className="w-9 h-9 rounded-lg border border-white/5 bg-[#1e1d1c] text-white hover:bg-white/5 hover:border-white/10 transition-all shrink-0"
+            title="Browse Folder"
+          >
+            {scanning ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+            ) : (
+              <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
+            )}
+          </Button>
+        </div>
+
+        {/* Right Side: Global Config Buttons, SystemBadge, and User Profile */}
+        <div className="flex items-center gap-4 shrink-0 justify-end">
+          
+          {/* Global Config Actions */}
+          <div className="flex items-center gap-1.5">
+            {importedConfigName ? (
+              <div className="flex items-center bg-[#1e1d1c] border border-primary/20 rounded-lg p-0.5 pr-2 gap-1.5 h-9">
+                <span className="text-[9px] uppercase font-extrabold text-primary px-1.5 py-0.5 bg-primary/10 rounded">
+                  Config
+                </span>
+                <span className="text-xs text-white max-w-[100px] truncate font-medium" title={importedConfigName}>
+                  {importedConfigName}
+                </span>
+                <button 
+                  onClick={handleUnmountConfig}
+                  className="text-zinc-500 hover:text-white transition-colors p-0.5 hover:bg-white/5 rounded"
+                  title="Unmount Configuration"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : null}
+
+            {/* Import Config */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => document.getElementById('global-import-config-input')?.click()}
+              className="h-9 px-3 rounded-lg text-zinc-400 hover:bg-white/5 hover:text-white transition-all text-xs font-semibold gap-1.5"
+              title="Import Configuration JSON"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Import Config</span>
+            </Button>
+            <input 
+              type="file" 
+              id="global-import-config-input" 
+              className="hidden" 
+              accept=".json"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = async (event) => {
+                  const fileContent = event.target?.result as string
+                  await importConfigJSON(fileContent, file.name)
+                }
+                reader.readAsText(file)
+                e.target.value = '' // Reset
+              }} 
+            />
+
+            {/* Save Config */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={exportConfig}
+              className="h-9 px-3 rounded-lg text-zinc-400 hover:bg-white/5 hover:text-white transition-all text-xs font-semibold gap-1.5"
+              title="Save Configuration JSON"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Save Config</span>
+            </Button>
           </div>
 
-          {/* Data Source Capsule */}
-          <div className="flex items-center justify-center flex-1 max-w-2xl mx-4 gap-3 pointer-events-auto">
-            <div className="relative flex-1 h-10">
-              {!analysisSourcePath ? (
-                <GlowEffect
-                  colors={['#FFFFFF', '#FFECE0', '#FF8C42', '#FF5722', '#E64A19', '#FFFFFF']}
-                  mode="colorShift"
-                  blur="medium"
-                  duration={3}
-                  scale={0.99}
-                  className="w-full h-10 rounded-full"
-                >
-                  <div className="group flex items-center w-full h-full px-2 py-1 relative z-10 transition-all duration-300">
-                    <div className="flex-1 min-w-0">
-                      <input
-                        type="text"
-                        value={analysisSourcePath}
-                        onChange={(e) => setAnalysisSourcePath(e.target.value)}
-                        onPaste={(e) => {
-                          const pastedText = e.clipboardData.getData('text')
-                          if (pastedText) {
-                            setAnalysisSourcePath(pastedText)
-                            triggerScanForPath(pastedText)
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            triggerScanForPath(analysisSourcePath)
-                          }
-                        }}
-                        onBlur={() => {
-                          triggerScanForPath(analysisSourcePath)
-                        }}
-                        placeholder="Select analysis directory..."
-                        className="bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 text-sm text-zinc-200 placeholder:text-zinc-400 w-full pl-3 pr-4 min-w-0"
-                        style={{
-                          maskImage: 'linear-gradient(to right, white calc(100% - 24px), transparent 100%)',
-                          WebkitMaskImage: 'linear-gradient(to right, white calc(100% - 24px), transparent 100%)'
-                        }}
-                      />
-                    </div>
-                  </div>
-                </GlowEffect>
-              ) : (
-                <div 
-                  className="group flex items-center bg-[#2A2825]/40 border border-white/5 rounded-full px-2 py-1 w-full h-10 shadow-inner transition-all duration-300"
-                >
-                  <div className="flex-1 min-w-0">
-                    <input
-                      type="text"
-                      value={analysisSourcePath}
-                      onChange={(e) => setAnalysisSourcePath(e.target.value)}
-                      onPaste={(e) => {
-                        const pastedText = e.clipboardData.getData('text')
-                        if (pastedText) {
-                          setAnalysisSourcePath(pastedText)
-                          triggerScanForPath(pastedText)
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          triggerScanForPath(analysisSourcePath)
-                        }
-                      }}
-                      onBlur={() => {
-                        triggerScanForPath(analysisSourcePath)
-                      }}
-                      placeholder="Select analysis directory..."
-                      className="bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 text-sm text-zinc-200 placeholder:text-zinc-400 w-full pl-3 pr-4 min-w-0"
-                      style={{
-                        maskImage: 'linear-gradient(to right, white calc(100% - 24px), transparent 100%)',
-                        WebkitMaskImage: 'linear-gradient(to right, white calc(100% - 24px), transparent 100%)'
-                      }}
-                    />
-                  </div>
-                  {analysisSourcePath && (
-                    <div className="flex items-center shrink-0 mr-1">
-                      <button
-                        type="button"
-                        onClick={handleClearPath}
-                        className="p-1.5 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-full transition-all opacity-0 group-hover:opacity-100"
-                        title="Clear Path"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+          <div className="h-6 w-[1px] bg-white/10" />
 
-            {/* Separate Circular Browse Button to the right */}
-            <div className="flex items-center shrink-0 w-10 h-10">
-              {scanning ? (
-                <div className="w-10 h-10 rounded-full border border-white/5 bg-[#2A2825]/40 flex items-center justify-center shadow-lg">
-                  <Loader2 className="w-4 h-4 animate-spin text-warning" />
-                </div>
-              ) : (
-                !analysisSourcePath ? (
-                  <GlowEffect
-                    colors={['#FFFFFF', '#FFECE0', '#FF8C42', '#FF5722', '#E64A19', '#FFFFFF']}
-                    mode="colorShift"
-                    blur="soft"
-                    duration={3}
-                    scale={0.9}
-                    className="w-10 h-10 rounded-full"
-                  >
-                    <Button
-                      type="button"
-                      onClick={() => setBrowseOpen(true)}
-                      variant="ghost"
-                      size="icon"
-                      className="w-full h-full rounded-full bg-[#151413] text-white hover:bg-[#2A2825]/80 transition-all border-none relative z-10"
-                      title="Browse Folder"
-                    >
-                      <FolderOpen className="w-4 h-4 text-white" />
-                    </Button>
-                  </GlowEffect>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={() => setBrowseOpen(true)}
-                    variant="outline"
-                    size="icon"
-                    className="w-10 h-10 rounded-full border border-white/5 bg-[#2A2825]/40 text-white hover:bg-[#2A2825]/80 hover:border-warning/30 transition-all shadow-lg"
-                    title="Browse Folder"
-                  >
-                    <FolderOpen className="w-4 h-4 text-white" />
-                  </Button>
-                )
-              )}
-            </div>
-          </div>
-
-          {/* Right side: Avatar Dropdown / Badge */}
-          <div className="flex items-center gap-4 shrink-0 w-64 justify-end">
+          {/* System status and user profile */}
+          <div className="flex items-center gap-3">
             <SystemBadge />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Avatar>
-                    <AvatarFallback>{userName.charAt(0).toUpperCase()}</AvatarFallback>
+                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 hover:bg-white/5">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="text-xs bg-zinc-800 text-white">{userName.charAt(0).toUpperCase()}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-40">
-                <div className="px-2 py-2 text-sm font-medium text-foreground border-b border-border/50">
+              <DropdownMenuContent align="end" className="w-44 bg-[#1e1d1c] border-white/5 text-white">
+                <div className="px-2 py-2 text-xs font-bold text-muted-foreground border-b border-white/5">
                   {userName}
                 </div>
-                <DropdownMenuItem className="cursor-default text-muted-foreground text-xs">
+                <DropdownMenuItem className="cursor-default text-zinc-400 text-xs hover:bg-transparent">
                   Accredited user
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
-        </nav>
-      </div>
+        </div>
+
+      </header>
+
+      {/* FALLBACK PATH PROMPT DIALOG */}
+      <Dialog open={isPromptingForPath} onOpenChange={setIsPromptingForPath}>
+        <DialogContent className="bg-surface-2 border-white/10 text-foreground w-[520px] max-w-[95vw] rounded-2xl overflow-hidden shadow-2xl p-0">
+          <DialogHeader className="p-5 pb-3 border-b border-white/5 bg-surface-3/30 text-left">
+            <DialogTitle className="text-sm font-bold uppercase text-foreground/90 flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-warning" /> Configure Project Path
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="p-5 flex flex-col gap-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              The imported configuration requires a valid project source directory to automatically scan and load signals.
+              {pendingConfig?.analysis_source_path && (
+                <span className="block mt-2 font-mono text-[10px] text-orange-400 bg-orange-500/5 border border-orange-500/10 p-2.5 rounded-lg break-all">
+                  Configured path not found: {pendingConfig.analysis_source_path}
+                </span>
+              )}
+            </p>
+            
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Select Project Directory
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input 
+                    placeholder="c:/path/to/project/folder..." 
+                    value={promptedPath}
+                    onChange={(e) => setPromptedPath(e.target.value)}
+                    className="h-9 bg-surface-3 border-white/10 text-xs rounded-lg placeholder:text-muted-foreground/40"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => setPromptFolderBrowserOpen(true)}
+                  variant="outline"
+                  className="h-9 rounded-lg border border-white/10 bg-surface-3 text-white hover:bg-white/5 transition-all text-xs font-semibold px-4"
+                >
+                  Browse
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-4 pt-2 border-t border-white/5 bg-surface-3/30 flex items-center justify-end gap-3">
+            <Button 
+              variant="outline"
+              onClick={() => setIsPromptingForPath(false)}
+              className="h-8 border-white/10 hover:bg-white/5 text-foreground font-bold uppercase text-[10px] tracking-widest rounded-lg px-4"
+            >
+              Cancel
+            </Button>
+            <Button 
+              disabled={!promptedPath}
+              onClick={handleConfirmPromptedPath}
+              className="h-8 bg-primary hover:bg-primary/95 text-white font-bold uppercase text-[10px] tracking-widest rounded-lg px-4"
+            >
+              Confirm
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <FolderBrowser open={browseOpen} onOpenChange={setBrowseOpen} onSelect={handleFolderSelect} />
+      <FolderBrowser 
+        open={promptFolderBrowserOpen} 
+        onOpenChange={setPromptFolderBrowserOpen} 
+        onSelect={(path) => {
+          setPromptedPath(path)
+          setPromptFolderBrowserOpen(false)
+        }} 
+      />
     </>
   )
 }

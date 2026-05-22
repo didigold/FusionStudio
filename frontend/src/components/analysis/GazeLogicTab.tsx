@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, useScroll } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +27,8 @@ import { SearchableSelect } from "@/components/analysis/SearchableSelect"
 import { 
   Save, 
   Download, 
-  PlayCircle, 
+  Play,
+  PlayCircle,
   AlertCircle,
   Clock,
   Sliders,
@@ -42,6 +44,17 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from '@/store/useAppStore'
 import { reportingApi } from '@/api/reportingApi'
 import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface SignalConfig {
   name: string
@@ -67,52 +80,6 @@ interface GaugeConfig {
   green_max: number
 }
 
-const DEFAULT_SIGNAL_LISTS: Record<string, SignalConfig[]> = {
-  "Long Distraction (NDT)": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Long Distraction (DT)": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Short Distraction (NDT)": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Short Distraction (DT)": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Microsleep": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Sleep": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Drowsiness": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Unresponsive driver": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "High Speed": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ],
-  "Low Speed": [
-    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-  ]
-}
-
-const DEFAULT_PASS_CRITERIA: Record<string, PassConfig> = {
-  "Long Distraction (NDT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Long Distraction (DT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Short Distraction (NDT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Short Distraction (DT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Microsleep": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Sleep": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Drowsiness": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Unresponsive driver": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "High Speed": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Low Speed": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 }
-}
-
 const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
   "Long Distraction (NDT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
   "Long Distraction (DT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
@@ -126,6 +93,8 @@ const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
   "Low Speed": { min: 0, max: 10, green_min: 0, green_max: 3 }
 }
 
+const fetchingValues = new Set<string>()
+
 export function GazeLogicTab() {
   const { 
     analysisSelectedFile, 
@@ -136,18 +105,26 @@ export function GazeLogicTab() {
     analysisTrack,
     analysisEngineer,
     analysisAnalyst,
-    analysisSourcePath,
-    setAnalysisSourcePath,
-    setAnalysisResults,
-    setAnalysisAvailableCameras,
-    setAllAnalysisFiles
+
+    // Store states
+    protocol,
+    setProtocol,
+    signalsConfig,
+    setSignalsConfig,
+    passCriteria,
+    setPassCriteria,
+    gaugeRules,
+    setGaugeRules,
+    loadedFiles,
+    setLoadedFiles,
+    importedConfigName,
+
+    // Store actions
+    autoLoadChannelsAndMerge,
+    importConfigJSON,
+    exportConfig,
+    handleUnmountConfig
   } = useAppStore()
-
-  // Local state to track imported config name
-  const [importedConfigName, setImportedConfigName] = useState<string | null>(null)
-
-  // Protocol state
-  const [protocol, setProtocol] = useState<'Euro NCAP' | 'GSR ADDW'>('Euro NCAP')
 
   // Categories list based on active protocol
   const categoriesList = protocol === 'Euro NCAP' 
@@ -173,11 +150,6 @@ export function GazeLogicTab() {
     setActiveCategory(protocol === 'Euro NCAP' ? "Long Distraction (NDT)" : "High Speed")
   }, [protocol])
 
-  // Primary states
-  const [signalsConfig, setSignalsConfig] = useState<Record<string, SignalConfig[]>>(DEFAULT_SIGNAL_LISTS)
-  const [passCriteria, setPassCriteria] = useState<Record<string, PassConfig>>(DEFAULT_PASS_CRITERIA)
-  const [gaugeRules, setGaugeRules] = useState<Record<string, GaugeConfig>>(DEFAULT_GAUGE_RULES)
-
   // Filter signals state
   const [filterQuery, setFilterQuery] = useState('')
 
@@ -188,18 +160,18 @@ export function GazeLogicTab() {
   const [batchProgress, setBatchProgress] = useState(0)
   const [batchLogs, setBatchLogs] = useState<string[]>([])
   const wsRef = useRef<WebSocket | null>(null)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ container: tableContainerRef })
 
   // Modals / Dropdowns
   const [gaugeRulesModalOpen, setGaugeRulesModalOpen] = useState(false)
 
-  // Loaded MF4 files per scenario state
-  const [loadedFiles, setLoadedFiles] = useState<Record<string, string>>({})
+  // File selector states
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false)
   const [allParticipantMf4s, setAllParticipantMf4s] = useState<string[]>([])
   const [fileSearchQuery, setFileSearchQuery] = useState('')
   // Unique signal values cache keyed by "filePath::signalName"
   const [signalValuesCache, setSignalValuesCache] = useState<Record<string, (number | string)[]>>({})
-  const fetchingValuesRef = useRef<Set<string>>(new Set())
 
   // Sync participant files whenever analysisResults changes
   useEffect(() => {
@@ -247,455 +219,23 @@ export function GazeLogicTab() {
         }
       })
       .catch((err) => console.error("Error loading gauge rules:", err))
-  }, [])
-
-  // JSON Config Import & Export
-  const handleExportConfig = async () => {
-    const configObj = {
-      version: 1,
-      protocol,
-      analysis_source_path: analysisSourcePath,
-      categories: signalsConfig,
-      pass_criteria: passCriteria,
-      gauge_rules: gaugeRules
-    }
-    
-    const suggestedName = `gaze_logic_config_${protocol.replace(/\s+/g, '_').toLowerCase()}.json`
-    
-    if ('showSaveFilePicker' in window) {
-      try {
-        const handle = await (window as any).showSaveFilePicker({
-          suggestedName,
-          types: [{
-            description: 'JSON Files',
-            accept: {
-              'application/json': ['.json'],
-            },
-          }],
-        })
-        const writable = await handle.createWritable()
-        await writable.write(JSON.stringify(configObj, null, 2))
-        await writable.close()
-        toast.success("Configuration saved successfully")
-        return
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          return
-        }
-        console.warn("showSaveFilePicker error, falling back to download anchor", err)
-      }
-    }
-
-    // Fallback download anchor
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(
-      JSON.stringify(configObj, null, 2)
-    )
-    const downloadAnchor = document.createElement('a')
-    downloadAnchor.setAttribute("href", dataStr)
-    downloadAnchor.setAttribute("download", suggestedName)
-    document.body.appendChild(downloadAnchor)
-    downloadAnchor.click()
-    downloadAnchor.remove()
-    toast.success("Configuration exported successfully")
-  }
-
-  // Load and merge channels from target MF4 files for each scenario
-  const autoLoadChannelsAndMerge = async (
-    importedCategories?: Record<string, SignalConfig[]>,
-    targetProtocol?: 'Euro NCAP' | 'GSR ADDW',
-    targetResults?: any[]
-  ) => {
-    const activeProtocol = targetProtocol || protocol
-    const targetCategoriesList = activeProtocol === 'Euro NCAP' 
-      ? [
-          "Long Distraction (NDT)",
-          "Long Distraction (DT)",
-          "Short Distraction (NDT)",
-          "Short Distraction (DT)",
-          "Microsleep",
-          "Sleep",
-          "Drowsiness",
-          "Unresponsive driver"
-        ]
-      : [
-          "High Speed",
-          "Low Speed"
-        ]
-
-    const activeResults = targetResults || analysisResults
-
-    // 1. Check if we have participants
-    if (!activeResults || activeResults.length === 0) {
-      if (importedCategories) {
-        setSignalsConfig(importedCategories)
-      }
-      return
-    }
-
-    // Find first participant
-    const firstParticipant = activeResults.find((r: any) => r.type === 'participant')
-    if (!firstParticipant) {
-      if (importedCategories) {
-        setSignalsConfig(importedCategories)
-      }
-      return
-    }
-
-    // 2. Gather all non-tracking MF4 files recursively
-    const getMf4Files = (node: any): string[] => {
-      let files: string[] = []
-      if (node.type === 'file' && node.path.toLowerCase().endsWith('.mf4') && !node.path.toLowerCase().includes('tracking')) {
-        files.push(node.path)
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          files = files.concat(getMf4Files(child))
-        }
-      }
-      return files
-    }
-
-    const mdfFiles = getMf4Files(firstParticipant)
-    if (mdfFiles.length === 0) {
-      if (importedCategories) {
-        setSignalsConfig(importedCategories)
-      }
-      return
-    }
-
-    // 3. Match MF4 files to categories and load signals
-    const determineCategoryFromFilename = (filename: string): string | null => {
-      const cleanName = filename.split(/[/\\]/).pop() || ''
-      const basename = cleanName.substring(0, cleanName.lastIndexOf('.')) || cleanName
-      
-      if (basename.toUpperCase().includes('ADDW')) {
-        const lowerPath = filename.toLowerCase()
-        if (lowerPath.includes('high speed')) {
-          return 'High Speed'
-        } else if (lowerPath.includes('low speed')) {
-          return 'Low Speed'
-        } else {
-          return 'High Speed'
-        }
-      }
-      
-      const dMatch = basename.match(/^D(\d+)/i)
-      if (dMatch) {
-        const num = parseInt(dMatch[1], 10)
-        if (num >= 1 && num <= 9) return 'Long Distraction (NDT)'
-        if (num >= 10 && num <= 15) return 'Long Distraction (DT)'
-        if ((num >= 16 && num <= 19) || num === 28 || (num >= 29 && num <= 42)) return 'Short Distraction (NDT)'
-        if (num >= 20 && num <= 27) return 'Short Distraction (DT)'
-      }
-      
-      const fMatch = basename.match(/^F(\d+)/i)
-      if (fMatch) {
-        const num = parseInt(fMatch[1], 10)
-        if (num === 1) return 'Microsleep'
-        if (num === 2) return 'Sleep'
-        if (num === 3) return 'Drowsiness'
-        if (num === 4 || num === 5) return 'Unresponsive driver'
-      }
-      
-      return null
-    }
-
-    let loadedCount = 0
-    
-    // We will update the configs in a loop
-    const newConfigs = importedCategories ? { ...importedCategories } : { ...signalsConfig }
-    const newLoadedFiles = { ...loadedFiles }
-    const toastId = toast.loading("Auto-loading MF4 data...")
-
-    try {
-      for (const category of targetCategoriesList) {
-        const matchingFile = mdfFiles.find(f => determineCategoryFromFilename(f) === category)
-        if (matchingFile) {
-          const response = await fetch('/api/analysis/channels', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_path: matchingFile })
-          })
-          const data = await response.json()
-          if (data.channels && Array.isArray(data.channels)) {
-            const names = data.channels.map((ch: any) => ch.name).sort()
-            const filteredNames = names.filter((name: string) => name.toLowerCase() !== 't' && name.toLowerCase() !== 'time')
-            
-            // Get already defined signals for this category
-            const existingCategoryConfig = newConfigs[category] || []
-            const isConfigValid = existingCategoryConfig && Array.isArray(existingCategoryConfig)
-            
-            // Re-build signals list: for each channel, preserve imported config if present, or add default
-            const rebuiltList: SignalConfig[] = [
-              isConfigValid
-                ? existingCategoryConfig.find(sig => sig && sig.name === 'SoundPressure') || { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-                : { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
-            ]
-
-            for (const name of filteredNames) {
-              if (name === 'SoundPressure') continue
-              
-              const existingSig = isConfigValid ? existingCategoryConfig.find(sig => sig && sig.name === name) : undefined
-              if (existingSig) {
-                rebuiltList.push(existingSig)
-              } else {
-                rebuiltList.push({
-                  name,
-                  checked: false,
-                  operator: 'None',
-                  threshold: 0.0,
-                  alias: name
-                })
-              }
-            }
-
-            if (isConfigValid) {
-              for (const sig of existingCategoryConfig) {
-                if (sig && sig.name !== 'SoundPressure' && !filteredNames.includes(sig.name)) {
-                  rebuiltList.push(sig)
-                }
-              }
-            }
-
-            const seen = new Set<string>()
-            const uniqueRebuiltList: SignalConfig[] = []
-            for (const sig of rebuiltList) {
-              if (sig && sig.name && !seen.has(sig.name)) {
-                seen.add(sig.name)
-                uniqueRebuiltList.push(sig)
-              }
-            }
-
-            newConfigs[category] = uniqueRebuiltList
-            newLoadedFiles[category] = matchingFile
-            loadedCount++
-          }
-        }
-      }
-
-      setSignalsConfig(newConfigs)
-      setLoadedFiles(newLoadedFiles)
-      toast.dismiss(toastId)
-      if (loadedCount > 0) {
-        toast.success(`Auto-loaded & merged MF4 data for ${loadedCount} categories.`)
-      } else {
-        toast.warning("No matching MF4 files found in the source directory.")
-      }
-    } catch (error) {
-      toast.dismiss(toastId)
-      toast.error("Failed to auto-load signals from files.")
-      console.error(error)
-    }
-  }
+  }, [setGaugeRules])
 
   const handleImportConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = async (event) => {
-      try {
-        const fileContent = event.target?.result as string
-        if (!fileContent) {
-          toast.error("The imported file is empty.")
-          return
-        }
-        const parsed = JSON.parse(fileContent)
-        if (!parsed || typeof parsed !== 'object') {
-          toast.error("Invalid configuration file format.")
-          return
-        }
-
-        // Support backward compatibility / Python format splits
-        if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
-          if ("Microsleep & Sleep" in parsed.categories && !("Microsleep" in parsed.categories) && !("Sleep" in parsed.categories)) {
-            parsed.categories["Microsleep"] = parsed.categories["Microsleep & Sleep"]
-            parsed.categories["Sleep"] = parsed.categories["Microsleep & Sleep"]
-          }
-        }
-        if (parsed.pass_criteria && typeof parsed.pass_criteria === 'object' && !Array.isArray(parsed.pass_criteria)) {
-          if ("Microsleep & Sleep" in parsed.pass_criteria && !("Microsleep" in parsed.pass_criteria) && !("Sleep" in parsed.pass_criteria)) {
-            parsed.pass_criteria["Microsleep"] = parsed.pass_criteria["Microsleep & Sleep"]
-            parsed.pass_criteria["Sleep"] = parsed.pass_criteria["Microsleep & Sleep"]
-          }
-        }
-        if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
-          if ("Microsleep & Sleep" in parsed.gauge_rules && !("Microsleep" in parsed.gauge_rules) && !("Sleep" in parsed.gauge_rules)) {
-            parsed.gauge_rules["Microsleep"] = parsed.gauge_rules["Microsleep & Sleep"]
-            parsed.gauge_rules["Sleep"] = parsed.gauge_rules["Microsleep & Sleep"]
-          }
-        }
-
-        // 1. Validate and sanitize protocol
-        let validatedProtocol: 'Euro NCAP' | 'GSR ADDW' = 'Euro NCAP'
-        if (parsed.protocol === 'GSR ADDW' || parsed.protocol === 'Euro NCAP') {
-          validatedProtocol = parsed.protocol
-        }
-
-        // 2. Validate and sanitize categories
-        const validatedCategories: Record<string, SignalConfig[]> = {}
-        if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
-          for (const [catName, signalList] of Object.entries(parsed.categories)) {
-            if (Array.isArray(signalList)) {
-              const seen = new Set<string>()
-              const list: SignalConfig[] = []
-              for (const sig of signalList) {
-                if (!sig || typeof sig !== 'object') continue
-                const rawName = sig.name ?? sig.signal
-                if (typeof rawName !== 'string' || rawName.trim() === '') continue
-                const name = rawName.trim()
-                
-                // Deduplicate by name
-                if (seen.has(name)) continue
-                seen.add(name)
-                
-                const rawThreshold = sig.threshold ?? sig.value
-                let threshold: number | string = 0.0
-                if (typeof rawThreshold === 'number') {
-                  threshold = rawThreshold
-                } else if (typeof rawThreshold === 'string') {
-                  // Strip Python bytes literal repr: b'value' → value
-                  const stripped = rawThreshold.replace(/^b'(.*)'$/, '$1').replace(/^b"(.*)"$/, '$1')
-                  const parsedFloat = parseFloat(stripped)
-                  if (!isNaN(parsedFloat) && stripped.trim() !== '') {
-                    threshold = parsedFloat
-                  } else {
-                    threshold = stripped
-                  }
-                } else if (rawThreshold !== undefined && rawThreshold !== null) {
-                  threshold = String(rawThreshold)
-                }
-                const alias = typeof sig.alias === 'string' ? sig.alias : name
-                
-                const rawOp = sig.operator ?? 'None'
-                const operator = (typeof rawOp === 'string' && ['None', '>', '<', '>=', '<=', '==', '!='].includes(rawOp))
-                  ? rawOp
-                  : 'None'
-                
-                list.push({
-                  name,
-                  checked: typeof sig.checked === 'boolean' ? sig.checked : false,
-                  operator,
-                  threshold,
-                  alias
-                })
-              }
-              validatedCategories[catName] = list
-            }
-          }
-        }
-
-        // Merge with defaults to ensure completeness
-        const mergedCategories = { ...DEFAULT_SIGNAL_LISTS, ...validatedCategories }
-
-        // 3. Validate and sanitize pass_criteria
-        const validatedPassCriteria: Record<string, PassConfig> = {}
-        if (parsed.pass_criteria && typeof parsed.pass_criteria === 'object' && !Array.isArray(parsed.pass_criteria)) {
-          for (const [catName, pc] of Object.entries(parsed.pass_criteria)) {
-            if (pc && typeof pc === 'object') {
-              const op1 = typeof (pc as any).operator1 === 'string' ? (pc as any).operator1 : '<'
-              const operator1 = ['None', '>', '<', '>=', '<=', '==', '!='].includes(op1) ? op1 : 'None'
-              const op2 = typeof (pc as any).operator2 === 'string' ? (pc as any).operator2 : 'None'
-              const operator2 = ['None', '>', '<', '>=', '<=', '==', '!='].includes(op2) ? op2 : 'None'
-              
-              validatedPassCriteria[catName] = {
-                signal: typeof (pc as any).signal === 'string' ? (pc as any).signal : 'SoundPressure',
-                value1: typeof (pc as any).value1 === 'number' ? (pc as any).value1 : 3.0,
-                operator1: operator1 as any,
-                value2: typeof (pc as any).value2 === 'number' ? (pc as any).value2 : 0.0,
-                operator2: operator2 as any,
-                mask: typeof (pc as any).mask === 'number' ? (pc as any).mask : 6.0
-              }
-            }
-          }
-        }
-        const mergedPassCriteria = { ...DEFAULT_PASS_CRITERIA, ...validatedPassCriteria }
-
-        // 4. Validate and sanitize gauge_rules
-        const validatedGaugeRules: Record<string, GaugeConfig> = {}
-        if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
-          for (const [catName, gr] of Object.entries(parsed.gauge_rules)) {
-            if (gr && typeof gr === 'object') {
-              validatedGaugeRules[catName] = {
-                min: typeof (gr as any).min === 'number' ? (gr as any).min : 0,
-                max: typeof (gr as any).max === 'number' ? (gr as any).max : 10,
-                green_min: typeof (gr as any).green_min === 'number' ? (gr as any).green_min : 0,
-                green_max: typeof (gr as any).green_max === 'number' ? (gr as any).green_max : 3
-              }
-            }
-          }
-        }
-        const mergedGaugeRules = { ...DEFAULT_GAUGE_RULES, ...validatedGaugeRules }
-
-        // Update states
-        setProtocol(validatedProtocol)
-        setPassCriteria(mergedPassCriteria)
-        setGaugeRules(mergedGaugeRules)
-
-        let resultsData = analysisResults
-        if (!analysisSourcePath) {
-          let targetPath = parsed.analysis_source_path || ''
-
-          if (targetPath) {
-            const toastId = toast.loading(`Scanning path from config: ${targetPath}`)
-            try {
-              const res = await fetch('/api/analysis/scan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ source_dir: targetPath }),
-              })
-              const data = await res.json()
-              if (data.results && data.results.length > 0) {
-                setAnalysisSourcePath(targetPath)
-                setAnalysisResults(data.results)
-                setAnalysisAvailableCameras(data.available_cameras || [])
-                setAllAnalysisFiles(true)
-                resultsData = data.results
-                toast.success("Path found and loaded successfully.")
-              } else {
-                toast.error(`The folder from configuration could not be loaded: "${targetPath}". Please select the folder using the directory picker.`)
-              }
-            } catch (err) {
-              console.error("Error scanning path:", err)
-              toast.error("Failed to scan configuration path.")
-            } finally {
-              toast.dismiss(toastId)
-            }
-          } else {
-            toast.error("No analysis source path found in the imported configuration. Please select a folder.")
-          }
-        }
-
-        // Autoload channels & merge with the imported categories configuration
-        await autoLoadChannelsAndMerge(mergedCategories, validatedProtocol, resultsData)
-
-        setImportedConfigName(file.name)
-        toast.success("Configuration imported successfully")
-      } catch (err) {
-        console.error("Import error:", err)
-        toast.error("Failed to parse JSON file")
-      }
+      const fileContent = event.target?.result as string
+      await importConfigJSON(fileContent, file.name)
     }
     reader.readAsText(file)
   }
 
-  const handleUnmountConfig = () => {
-    setSignalsConfig(DEFAULT_SIGNAL_LISTS)
-    setPassCriteria(DEFAULT_PASS_CRITERIA)
-    setGaugeRules(DEFAULT_GAUGE_RULES)
-    setProtocol('Euro NCAP')
-    setLoadedFiles({})
-    setImportedConfigName(null)
-    toast.success("Configuration unmounted. Defaults restored.")
-  }
-
-  const handleAutoLoadData = async () => {
-    await autoLoadChannelsAndMerge()
-  }
-
   const fetchSignalValues = async (filePath: string, signalName: string) => {
     const cacheKey = `${filePath}::${signalName}`
-    if (fetchingValuesRef.current.has(cacheKey)) return
-    fetchingValuesRef.current.add(cacheKey)
+    if (fetchingValues.has(cacheKey)) return
+    fetchingValues.add(cacheKey)
     try {
       const res = await fetch('/api/analysis/signal_unique_values', {
         method: 'POST',
@@ -707,7 +247,7 @@ export function GazeLogicTab() {
         setSignalValuesCache(prev => ({ ...prev, [cacheKey]: data.values }))
       }
     } catch {
-      fetchingValuesRef.current.delete(cacheKey)
+      fetchingValues.delete(cacheKey)
     }
   }
 
@@ -720,7 +260,7 @@ export function GazeLogicTab() {
     categorySignals.forEach(sig => {
       if (sig && sig.name !== 'SoundPressure') {
         const cacheKey = `${activeFile}::${sig.name}`
-        if (!signalValuesCache[cacheKey] && !fetchingValuesRef.current.has(cacheKey)) {
+        if (!signalValuesCache[cacheKey] && !fetchingValues.has(cacheKey)) {
           fetchSignalValues(activeFile, sig.name)
         }
       }
@@ -777,7 +317,7 @@ export function GazeLogicTab() {
           }
         }
 
-        setSignalsConfig(prev => ({ ...prev, [activeCategory]: uniqueRebuiltList }))
+        setSignalsConfig({ ...signalsConfig, [activeCategory]: uniqueRebuiltList })
         setLoadedFiles(prev => ({ ...prev, [activeCategory]: filePath }))
         toast.dismiss(toastId)
         toast.success(`Loaded channels for ${activeCategory}.`)
@@ -798,36 +338,34 @@ export function GazeLogicTab() {
 
   // Update logic configuration for category signals (using unique name lookup for safe filtering update)
   const updateSignalField = (category: string, name: string, field: keyof SignalConfig, value: any) => {
-    setSignalsConfig(prev => {
-      const list = [...(prev[category] || [])]
-      const index = list.findIndex(s => s.name === name)
-      if (index !== -1) {
-        list[index] = { ...list[index], [field]: value }
-      }
-      return { ...prev, [category]: list }
-    })
+    const list = [...(signalsConfig[category] || [])]
+    const index = list.findIndex(s => s.name === name)
+    if (index !== -1) {
+      list[index] = { ...list[index], [field]: value }
+    }
+    setSignalsConfig({ ...signalsConfig, [category]: list })
   }
 
   // PASS Criteria Configuration Updates
   const updatePassCriteriaField = (category: string, field: keyof PassConfig, value: any) => {
-    setPassCriteria(prev => ({
-      ...prev,
+    setPassCriteria({
+      ...passCriteria,
       [category]: {
-        ...(prev[category] || { signal: 'SoundPressure', value1: 3.0, operator1: '<', value2: 0, operator2: 'None', mask: 6.0 }),
+        ...(passCriteria[category] || { signal: 'SoundPressure', value1: 3.0, operator1: '<', value2: 0.0, operator2: 'None', mask: 6.0 }),
         [field]: value
       }
-    }))
+    })
   }
 
   // Gauge Rules Updates
   const updateGaugeRuleField = (category: string, field: keyof GaugeConfig, value: number) => {
-    setGaugeRules(prev => ({
-      ...prev,
+    setGaugeRules({
+      ...gaugeRules,
       [category]: {
-        ...(prev[category] || { min: 0, max: 10, green_min: 0, green_max: 3 }),
+        ...(gaugeRules[category] || { min: 0, max: 10, green_min: 0, green_max: 3 }),
         [field]: value
       }
-    }))
+    })
   }
 
   // Helper to map UI structures to the flat format the backend expects
@@ -894,9 +432,10 @@ export function GazeLogicTab() {
       } else {
         toast.error(res.data?.message || "Failed to generate preview report")
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      toast.error(err.response?.data?.message || "Error communicating with server")
+      const error = err as { response?: { data?: { message?: string } } }
+      toast.error(error.response?.data?.message || "Error communicating with server")
     } finally {
       setIsPreviewLoading(false)
     }
@@ -960,9 +499,10 @@ export function GazeLogicTab() {
         category_configs: backendConfigs,
         gauge_rules: gaugeRules
       })
-    } catch (err: any) {
+    } catch (err) {
       console.error(err)
-      toast.error(err.response?.data?.message || "Failed to start batch generation")
+      const error = err as { response?: { data?: { message?: string } } }
+      toast.error(error.response?.data?.message || "Failed to start batch generation")
       setBatchRunning(false)
       ws.close()
     }
@@ -974,13 +514,19 @@ export function GazeLogicTab() {
       toast.info("Stopping generation...")
       if (wsRef.current) wsRef.current.close()
       setBatchRunning(false)
-    } catch (err) {
+    } catch {
       toast.error("Failed to request stop")
     }
   }
 
   const currentSignalsList = signalsConfig[activeCategory] || []
   const currentPassCriteria = passCriteria[activeCategory] || { signal: 'SoundPressure', value1: 3.0, operator1: '<', value2: 0.0, operator2: 'None', mask: 6.0 }
+
+  // Preview activation: sidebar file selected, active category has an MF4 file loaded, and at least one signal is active
+  const isPreviewEnabled = !!analysisSelectedFile && !!loadedFiles[activeCategory] && currentSignalsList.some(s => s.checked) && !isPreviewLoading;
+
+  // Batch run activation: at least one checkbox active in sidebar tree, active category has an MF4 file loaded, and at least one signal is active
+  const isBatchEnabled = analysisCheckedFiles.length > 0 && !!loadedFiles[activeCategory] && currentSignalsList.some(s => s.checked);
 
   // Filter signals list by query string
   const filteredSignals = currentSignalsList.filter(sig => {
@@ -992,7 +538,7 @@ export function GazeLogicTab() {
   })
 
   return (
-    <div className="flex flex-col gap-6 p-6 animate-in fade-in duration-500 max-w-full w-full overflow-hidden">
+    <div className="flex flex-col gap-4 p-4 lg:p-6 animate-in fade-in duration-500 max-w-full w-full h-full min-h-0 overflow-hidden">
       <style>{`
         @keyframes marquee-path {
           0%   { transform: translateX(0); }
@@ -1003,13 +549,22 @@ export function GazeLogicTab() {
           white-space: nowrap;
           animation: marquee-path 14s linear infinite;
         }
+        .gaze-table-container {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          mask-image: linear-gradient(to bottom, black 0px, black 43px, transparent 43px, black 59px, black calc(100% - 16px), transparent 100%);
+          -webkit-mask-image: linear-gradient(to bottom, black 0px, black 43px, transparent 43px, black 59px, black calc(100% - 16px), transparent 100%);
+        }
+        .gaze-table-container::-webkit-scrollbar {
+          display: none;
+        }
         .gaze-table-container > div {
           overflow: visible !important;
         }
       `}</style>
 
       {/* MAIN CONFIGURATION CARD */}
-      <Card className="bg-surface-2/40 border-white/5 shadow-xl flex flex-col min-w-0 overflow-hidden">
+      <Card className="bg-surface-2/40 border-white/5 shadow-xl flex flex-col flex-1 min-h-0 overflow-hidden w-full">
         
         {/* MERGED CARD HEADER: Title, Scenario, Filter Bar, & Settings Dropdown */}
         <CardHeader className="pb-4 border-b border-white/5 bg-surface-3/95 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-t-3xl">
@@ -1029,7 +584,7 @@ export function GazeLogicTab() {
                     </DropdownMenuSubTrigger>
                     <DropdownMenuPortal>
                       <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl">
-                        <DropdownMenuRadioGroup value={protocol} onValueChange={(val: any) => setProtocol(val)}>
+                        <DropdownMenuRadioGroup value={protocol} onValueChange={(val) => setProtocol(val as 'Euro NCAP' | 'GSR ADDW')}>
                           <DropdownMenuRadioItem value="Euro NCAP" className="text-sm">Euro NCAP</DropdownMenuRadioItem>
                           <DropdownMenuRadioItem value="GSR ADDW" className="text-sm">GSR ADDW</DropdownMenuRadioItem>
                         </DropdownMenuRadioGroup>
@@ -1046,7 +601,7 @@ export function GazeLogicTab() {
                         <DropdownMenuItem onClick={() => document.getElementById('import-config-input')?.click()} className="text-sm gap-2 cursor-pointer">
                           <Download className="w-3.5 h-3.5" /> Import JSON
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleExportConfig} className="text-sm gap-2 cursor-pointer">
+                        <DropdownMenuItem onClick={exportConfig} className="text-sm gap-2 cursor-pointer">
                           <Save className="w-3.5 h-3.5" /> Save JSON
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleUnmountConfig} className="text-sm text-red-400 hover:text-red-300 focus:bg-red-500/20 focus:text-red-200 gap-2 cursor-pointer">
@@ -1058,7 +613,7 @@ export function GazeLogicTab() {
                   
                   <DropdownMenuSeparator className="bg-white/5" />
                   
-                  <DropdownMenuItem onClick={handleAutoLoadData} className="text-sm gap-2 cursor-pointer">
+                  <DropdownMenuItem onClick={() => autoLoadChannelsAndMerge()} className="text-sm gap-2 cursor-pointer">
                     <RefreshCw className="w-3.5 h-3.5" /> Auto-Load data
                   </DropdownMenuItem>
 
@@ -1087,14 +642,39 @@ export function GazeLogicTab() {
 
             {/* Active Configuration Name Badge */}
             <Badge variant="outline" className={cn(
-              "h-8 px-3 rounded-full flex items-center gap-1.5 shrink-0 text-xs font-semibold select-none border-white/5",
+              "h-9 px-3 bg-surface-3 text-sm font-semibold select-none inline-flex items-center justify-center border transition-colors",
               importedConfigName 
-                ? "bg-primary/10 text-primary border-primary/20"
-                : "bg-white/5 text-muted-foreground"
+                ? "text-primary border-primary/20"
+                : "text-muted-foreground border-white/10"
             )}>
-              <Sliders className="w-3.5 h-3.5" />
               Config: {importedConfigName || "Default"}
             </Badge>
+
+            {/* Loaded MF4 File Badge Indicator */}
+            <div className="flex items-center">
+              {loadedFiles[activeCategory] ? (
+                <Badge 
+                  variant="outline" 
+                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center justify-center"
+                  onClick={() => setFileSelectorOpen(true)}
+                  title={loadedFiles[activeCategory]}
+                >
+                  <span className="truncate max-w-[140px] leading-none flex items-center justify-center h-full">
+                    {loadedFiles[activeCategory].split(/[/\\]/).pop()}
+                  </span>
+                </Badge>
+              ) : (
+                <Badge 
+                  variant="outline" 
+                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-muted-foreground border-white/10 text-sm font-semibold cursor-pointer select-none inline-flex items-center justify-center"
+                  onClick={() => setFileSelectorOpen(true)}
+                >
+                  <span className="leading-none flex items-center justify-center h-full">
+                    No MF4 Loaded
+                  </span>
+                </Badge>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3.5 self-end lg:self-auto">
@@ -1117,29 +697,71 @@ export function GazeLogicTab() {
               )}
             </div>
 
-            {/* Loaded MF4 File Badge Indicator */}
-            <div className="flex items-center">
-              {loadedFiles[activeCategory] ? (
-                <Badge 
-                  variant="outline" 
-                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-primary border-primary/20 text-xs font-semibold cursor-pointer select-none inline-flex items-center justify-center"
-                  onClick={() => setFileSelectorOpen(true)}
-                  title={loadedFiles[activeCategory]}
-                >
-                  <span className="truncate max-w-[140px] leading-none flex items-center justify-center h-full">
-                    {loadedFiles[activeCategory].split(/[/\\]/).pop()}
-                  </span>
-                </Badge>
+            {/* Preview and Run Batch Button Group */}
+            <div className="flex flex-row h-9 bg-surface-3 border border-white/10 rounded-lg shadow-xl backdrop-blur-md overflow-hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={!isPreviewEnabled}
+                onClick={triggerPreview}
+                className="h-9 w-9 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
+                title="Preview Report"
+              >
+                {isPreviewLoading ? (
+                  <Clock className="w-5 h-5 text-primary animate-spin" />
+                ) : (
+                  <Eye className="w-5 h-5 text-primary" />
+                )}
+              </Button>
+              <div className="h-full w-[1px] bg-white/10" />
+              {batchRunning ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 p-0 rounded-none text-red-500 hover:bg-red-500/10 hover:text-red-400 border-none bg-transparent"
+                      title="Stop Batch"
+                    >
+                      <AlertCircle className="w-5 h-5 text-red-500 animate-pulse" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="sm:max-w-md bg-surface-2 border border-white/10 text-white rounded-2xl shadow-2xl p-6">
+                    <AlertDialogHeader className="gap-2">
+                      <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
+                        <AlertCircle className="w-6 h-6" />
+                      </div>
+                      <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+                        Stop Batch Generation?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="text-sm text-muted-foreground">
+                        This will stop the batch generation process. Any currently running report tasks will be aborted.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex-row items-center justify-end gap-3 mt-4">
+                      <AlertDialogCancel className="bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl py-2 px-4 text-xs font-bold"
+                        onClick={stopBatchGeneration}
+                      >
+                        Stop
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               ) : (
-                <Badge 
-                  variant="outline" 
-                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-muted-foreground border-white/10 text-xs font-semibold cursor-pointer select-none inline-flex items-center justify-center"
-                  onClick={() => setFileSelectorOpen(true)}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={!isBatchEnabled}
+                  onClick={triggerBatchGeneration}
+                  className="h-9 w-9 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
+                  title={`Run Batch (${analysisCheckedFiles.length})`}
                 >
-                  <span className="leading-none flex items-center justify-center h-full">
-                    No MF4 Loaded
-                  </span>
-                </Badge>
+                  <Play className="w-5 h-5 text-primary fill-primary ml-0.5" />
+                </Button>
               )}
             </div>
           </div>
@@ -1155,8 +777,19 @@ export function GazeLogicTab() {
         </CardHeader>
         
         <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
-          {/* Scrollable table with fixed height to prevent pushing buttons out of viewport */}
-          <div className="h-[320px] overflow-y-auto gaze-table-container">
+          {/* Scrollable table with height adjusted to utilize bottom space */}
+          <div className="flex-1 min-h-0 overflow-y-auto gaze-table-container relative" ref={tableContainerRef}>
+            {/* Scroll Indicator Wrapper (Sticky at top-0, zero height to prevent pushing layout) */}
+            <div className="sticky top-0 left-0 right-0 h-0 z-30 w-full overflow-visible">
+              <motion.div
+                id="scroll-indicator"
+                style={{
+                  scaleX: scrollYProgress,
+                  transformOrigin: "left",
+                }}
+                className="absolute top-10 left-0 right-0 h-[3px] bg-primary w-full"
+              />
+            </div>
             <Table>
               <TableHeader>
                 <TableRow className="border-white/5 hover:bg-transparent">
@@ -1214,7 +847,7 @@ export function GazeLogicTab() {
                           const currentVal = (sig.threshold !== null && sig.threshold !== undefined && String(sig.threshold).trim() !== '') ? sig.threshold : 0.0
                           
                           // Deduplicate values based on their string representation to prevent duplicate select keys/values
-                          const uniqueMap = new Map<string, any>()
+                          const uniqueMap = new Map<string, number | string>()
                           uniqueMap.set(String(currentVal), currentVal)
                           cleanCached.forEach(v => {
                             uniqueMap.set(String(v), v)
@@ -1288,10 +921,10 @@ export function GazeLogicTab() {
           </div>
 
           {/* BOTTOM SECTION: PASS CRITERIA CONFIG (Pass Criteria title & text-sm fields) */}
-          <div className="bg-surface-3/60 backdrop-blur-md border-t border-white/5 p-5 flex flex-col gap-4">
+          <div className="bg-surface-3/60 backdrop-blur-md border-t border-white/5 p-5 flex flex-col gap-4 rounded-b-3xl">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5 text-left">
-                <Activity className="w-4 h-4 text-primary" /> Pass Criteria
+              <span className="text-sm font-bold uppercase text-muted-foreground tracking-widest text-left">
+                Pass Criteria
               </span>
               <HelpCircle 
                 className="w-4 h-4 text-muted-foreground/60 hover:text-foreground cursor-help"
@@ -1416,63 +1049,6 @@ export function GazeLogicTab() {
             </div>
           </div>
 
-          {/* ACTION BUTTONS ROW (Enlarged fonts & spaced icons) */}
-          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-white/5 p-4 bg-surface-3/10 gap-4">
-            <div className="flex flex-col gap-1 align-start text-left w-full sm:w-auto">
-              <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Active Configuration targets</span>
-              <div className="flex items-center gap-2 flex-wrap text-xs text-foreground/90 font-semibold mt-0.5">
-                <span className="text-xs text-muted-foreground">Target Preview:</span>
-                {analysisSelectedFile ? (
-                  <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 max-w-[280px] truncate text-xs font-mono py-0.5 px-2 rounded-md">
-                    {analysisSelectedFile.split('\\').pop()}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground text-xs italic font-normal">None selected (select from sidebar tree)</span>
-                )}
-                <span className="text-muted-foreground/30">|</span>
-                <span className="text-xs text-muted-foreground">Batch count:</span>
-                <Badge variant="outline" className="bg-white/5 text-muted-foreground border-white/10 text-xs font-mono py-0.5 px-2 rounded-md">
-                  {analysisCheckedFiles.length} files
-                </Badge>
-              </div>
-            </div>
-            
-            <div className="flex gap-2.5 w-full sm:w-auto shrink-0 justify-end">
-              <Button
-                onClick={triggerPreview}
-                disabled={!analysisSelectedFile || isPreviewLoading}
-                variant="outline"
-                className="h-10 px-5 rounded-xl border-white/10 bg-surface-3 hover:bg-surface-4 text-foreground/90 hover:text-foreground font-bold uppercase text-xs tracking-widest gap-4 shadow-sm transition-all"
-              >
-                {isPreviewLoading ? (
-                  <Clock className="w-4 h-4 text-primary animate-spin" />
-                ) : (
-                  <Eye className="w-4 h-4 text-primary" />
-                )}
-                Preview Report
-              </Button>
-              
-              {batchRunning ? (
-                <Button
-                  onClick={stopBatchGeneration}
-                  variant="destructive"
-                  className="h-10 px-5 rounded-xl font-bold uppercase text-xs tracking-widest gap-4 shadow-lg shadow-red-500/20"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  Stop Batch
-                </Button>
-              ) : (
-                <Button
-                  onClick={triggerBatchGeneration}
-                  disabled={analysisCheckedFiles.length === 0}
-                  className="h-10 px-5 rounded-xl bg-primary hover:bg-primary/95 text-black font-bold uppercase text-xs tracking-widest gap-4 shadow-lg shadow-primary/20 disabled:opacity-50 transition-all"
-                >
-                  <PlayCircle className="w-4 h-4" />
-                  Run Batch ({analysisCheckedFiles.length})
-                </Button>
-              )}
-            </div>
-          </div>
         </CardContent>
       </Card>
 

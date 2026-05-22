@@ -118,7 +118,7 @@ export default function ClassificationTab() {
   return (
     <div className="flex h-full gap-6 p-1 overflow-hidden">
       <div className="w-96 flex flex-col gap-6 overflow-hidden">
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col gap-5">
           <div className="flex items-center gap-3">
             <Settings className="text-primary w-5 h-5" />
             <h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Protocol Config</h2>
@@ -126,53 +126,53 @@ export default function ClassificationTab() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Calendar className="w-3 h-3" /> Year</label>
-              <input type="text" maxLength={2} value={classifyYear} onChange={(e) => setClassifyYear(e.target.value.toUpperCase())} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none uppercase" />
+              <input type="text" maxLength={2} value={classifyYear} onChange={(e) => setClassifyYear(e.target.value.toUpperCase())} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none uppercase" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Building className="w-3 h-3" /> OEM</label>
-              <input type="text" maxLength={3} value={classifyOem} onChange={(e) => setClassifyOem(e.target.value.toUpperCase())} placeholder="Ex: BMW" className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none uppercase" />
+              <input type="text" maxLength={3} value={classifyOem} onChange={(e) => setClassifyOem(e.target.value.toUpperCase())} placeholder="Ex: BMW" className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none uppercase" />
             </div>
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Hash className="w-3 h-3" /> Reference</label>
-            <input type="text" maxLength={4} value={classifyRef} onChange={(e) => setClassifyRef(e.target.value)} placeholder="Ex: 1001" className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none" />
+            <input type="text" maxLength={4} value={classifyRef} onChange={(e) => setClassifyRef(e.target.value)} placeholder="Ex: 1001" className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Activity className="w-3 h-3" /> Protocol</label>
-            <select value={classifyProtocol} onChange={(e) => setClassifyProtocol(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none appearance-none">
+            <select value={classifyProtocol} onChange={(e) => setClassifyProtocol(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none appearance-none">
               <option value="DSM">EuroNCAP DSM</option>
               <option value="ADDW">EuroNCAP ADDW</option>
             </select>
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5"><FileText className="w-3 h-3" /> Report PDF</label>
-            <input type="text" value={classifyReportPdf} onChange={(e) => setClassifyReportPdf(e.target.value)} placeholder="Path to report PDF..." className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none" />
+            <input type="text" value={classifyReportPdf} onChange={(e) => setClassifyReportPdf(e.target.value)} placeholder="Path to report PDF..." className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none" />
           </div>
         </div>
 
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6 shadow-sm flex flex-col gap-4">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col gap-4">
           <div className="flex items-center gap-3"><FolderSearch className="text-primary w-5 h-5" /><h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Paths</h2></div>
           <div className="space-y-3">
-            <div className="space-y-1"><span className="text-[10px] text-muted-foreground font-bold">SOURCE</span><input type="text" value={classifySourcePath} onChange={(e) => setClassifySourcePath(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-md px-3 py-2 text-[10px] focus:outline-none" /></div>
-            <div className="space-y-1"><span className="text-[10px] text-muted-foreground font-bold">OUTPUT</span><input type="text" value={classifyOutputPath} onChange={(e) => setClassifyOutputPath(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-md px-3 py-2 text-[10px] focus:outline-none" /></div>
-            <button onClick={handleScan} className="w-full bg-surface-ink border border-border/50 text-foreground rounded-full py-2.5 font-bold text-xs hover:bg-surface-3 transition-all mt-2">REFRESH DIRECTORY</button>
+            <div className="space-y-1"><span className="text-[10px] text-muted-foreground font-bold">SOURCE</span><input type="text" value={classifySourcePath} onChange={(e) => setClassifySourcePath(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-3 py-2 text-[10px] focus:outline-none" /></div>
+            <div className="space-y-1"><span className="text-[10px] text-muted-foreground font-bold">OUTPUT</span><input type="text" value={classifyOutputPath} onChange={(e) => setClassifyOutputPath(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-3 py-2 text-[10px] focus:outline-none" /></div>
+            <button onClick={handleScan} className="w-full bg-surface-ink border border-border/50 text-foreground rounded-lg py-2.5 font-bold text-xs hover:bg-surface-3 transition-all mt-2">REFRESH DIRECTORY</button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 bg-card/50 border border-border/50 rounded-xl flex flex-col overflow-hidden shadow-sm relative">
+      <div className="flex-1 bg-card/50 border border-border/50 rounded-3xl flex flex-col overflow-hidden shadow-sm relative">
         <div className="p-6 border-b border-border/50 bg-surface-2/30 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="bg-primary/10 p-2 rounded-full"><Tags className="text-primary w-5 h-5" /></div>
             <div><h2 className="text-lg font-bold text-foreground">File Classification</h2><p className="text-xs text-muted-foreground">Map raw MF4 files to NCAP official naming conventions.</p></div>
           </div>
           {!classifyProcessing ? (
-            <button onClick={handleProcessAll} disabled={classifyGroups.length === 0} className="bg-primary text-background px-8 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/10 disabled:opacity-50">
+            <button onClick={handleProcessAll} disabled={classifyGroups.length === 0} className="bg-primary text-background px-8 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/10 disabled:opacity-50">
               <PlayCircle className="w-5 h-5" /> PROCESS ALL
             </button>
           ) : (
             <div className="flex items-center gap-3">
-              <button onClick={handleStop} className="bg-destructive text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-destructive/90 transition-all">
+              <button onClick={handleStop} className="bg-destructive text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-destructive/90 transition-all">
                 <Square className="w-4 h-4" /> STOP
               </button>
               <span className="text-xs text-primary font-semibold animate-pulse">{classifyStatus}</span>
@@ -182,7 +182,7 @@ export default function ClassificationTab() {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
           {classifyGroups.length > 0 ? classifyGroups.map((group: any, gIdx: number) => (
-            <div key={gIdx} className="bg-surface-ink/30 border border-border/30 rounded-2xl overflow-hidden">
+            <div key={gIdx} className="bg-surface-ink/30 border border-border/30 rounded-xl overflow-hidden">
               <div className="p-4 bg-surface-2/40 border-b border-border/30 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-foreground uppercase tracking-widest">{group.case_key || group.name}</span>

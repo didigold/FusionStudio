@@ -106,7 +106,7 @@ export default function FuseTab() {
       <div className="flex flex-col flex-1 gap-6 overflow-hidden">
         
         {/* Source Selection */}
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6 shadow-sm">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-6 shadow-sm">
           <div className="flex items-center gap-4 mb-4">
             <div className="bg-primary/10 p-2 rounded-full">
               <FolderOpen className="text-primary w-5 h-5" />
@@ -120,12 +120,12 @@ export default function FuseTab() {
               value={sourcePath}
               onChange={(e) => setSourcePath(e.target.value)}
               placeholder="Scan a root folder to find project..."
-              className="flex-1 bg-surface-3 border border-border/50 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="flex-1 bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
             <button 
               onClick={handleScan}
               disabled={scanning || !sourcePath}
-              className="bg-primary text-background px-6 py-2 rounded-full font-bold text-sm hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50"
+              className="bg-primary text-background px-6 py-2 rounded-lg font-bold text-sm hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50"
             >
               {scanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               Scan
@@ -134,7 +134,7 @@ export default function FuseTab() {
         </div>
 
         {/* Participants Table */}
-        <div className="bg-card/50 border border-border/50 rounded-xl flex-1 overflow-hidden flex flex-col shadow-sm">
+        <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
           <div className="p-4 border-b border-border/50 flex justify-between items-center bg-surface-2/30">
             <div className="flex items-center gap-2">
               <span className="font-bold text-foreground">Participants</span>
@@ -219,7 +219,7 @@ export default function FuseTab() {
       <div className="flex flex-col w-96 gap-6 overflow-hidden">
         
         {/* Signal Selection */}
-        <div className="bg-card/50 border border-border/50 rounded-xl flex-1 overflow-hidden flex flex-col shadow-sm">
+        <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
           <div className="p-6 border-b border-border/50">
             <div className="flex items-center gap-4 mb-4">
               <div className="bg-primary/10 p-2 rounded-full">
@@ -235,12 +235,12 @@ export default function FuseTab() {
                   value={masterFile}
                   onChange={(e) => setMasterFile(e.target.value)}
                   placeholder="Master MF4 path..."
-                  className="flex-1 bg-surface-3 border border-border/50 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="flex-1 bg-surface-3 border border-border/50 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <button 
                   onClick={handleLoadSignals}
                   disabled={loadingSignals || !masterFile}
-                  className="bg-surface-ink text-foreground border border-border/50 p-2 rounded-full hover:bg-surface-3 transition-colors disabled:opacity-50"
+                  className="bg-surface-ink text-foreground border border-border/50 p-2 rounded-lg hover:bg-surface-3 transition-colors disabled:opacity-50"
                 >
                   <RefreshCw className={`w-4 h-4 ${loadingSignals ? 'animate-spin' : ''}`} />
                 </button>
@@ -253,7 +253,7 @@ export default function FuseTab() {
                   placeholder="Filter signals..."
                   value={signalFilter}
                   onChange={(e) => setSignalFilter(e.target.value)}
-                  className="w-full bg-surface-3 border border-border/50 rounded-full pl-9 pr-4 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full bg-surface-3 border border-border/50 rounded-lg pl-9 pr-4 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
             </div>
@@ -286,7 +286,7 @@ export default function FuseTab() {
         </div>
 
         {/* Action Panel */}
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6 shadow-sm flex flex-col gap-4">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col gap-4">
           <div className="flex flex-col gap-3">
             <label className="flex items-center gap-3 cursor-pointer group">
               <div 
@@ -308,12 +308,12 @@ export default function FuseTab() {
               <span className="text-xs font-medium text-foreground">Overwrite Existing</span>
             </label>
           </div>
-
+ 
           <div className="pt-2">
             <button 
               onClick={handleRun}
               disabled={fusionState === 'running' || participants.filter(p => p.checked).length === 0}
-              className="w-full bg-primary text-background rounded-full py-4 font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/10 hover:shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale disabled:scale-100"
+              className="w-full bg-primary text-background rounded-lg py-4 font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/10 hover:shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale disabled:scale-100"
             >
               <Play className="w-5 h-5 fill-current" />
               START FUSION

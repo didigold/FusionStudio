@@ -1,4 +1,88 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
+
+export interface SignalConfig {
+  name: string
+  checked: boolean
+  operator: string
+  threshold: number | string
+  alias: string
+}
+
+export interface PassConfig {
+  signal: string
+  value1: number
+  operator1: string
+  value2: number
+  operator2: string
+  mask: number
+}
+
+export interface GaugeConfig {
+  min: number
+  max: number
+  green_min: number
+  green_max: number
+}
+
+const DEFAULT_SIGNAL_LISTS: Record<string, SignalConfig[]> = {
+  "Long Distraction (NDT)": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Long Distraction (DT)": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Short Distraction (NDT)": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Short Distraction (DT)": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Microsleep": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Sleep": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Drowsiness": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Unresponsive driver": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "High Speed": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Low Speed": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ]
+}
+
+const DEFAULT_PASS_CRITERIA: Record<string, PassConfig> = {
+  "Long Distraction (NDT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Long Distraction (DT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Short Distraction (NDT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Short Distraction (DT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Microsleep": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Sleep": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Drowsiness": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Unresponsive driver": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "High Speed": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Low Speed": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 }
+}
+
+const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
+  "Long Distraction (NDT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Long Distraction (DT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Short Distraction (NDT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Short Distraction (DT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Microsleep": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Sleep": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Drowsiness": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Unresponsive driver": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "High Speed": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Low Speed": { min: 0, max: 10, green_min: 0, green_max: 3 }
+}
 
 type Module = 'fuse' | 'analysis' | 'classification' | 'reporting' | 'om' | 'brain'
 
@@ -209,6 +293,33 @@ interface AppState {
   setBrainAnalysisVideo: (v: string) => void
   brainAnalysisMarkers: any[]
   setBrainAnalysisMarkers: (m: any[]) => void
+
+  // Config state
+  protocol: 'Euro NCAP' | 'GSR ADDW'
+  setProtocol: (p: 'Euro NCAP' | 'GSR ADDW') => void
+  signalsConfig: Record<string, SignalConfig[]>
+  setSignalsConfig: (c: Record<string, SignalConfig[]>) => void
+  passCriteria: Record<string, PassConfig>
+  setPassCriteria: (pc: Record<string, PassConfig>) => void
+  gaugeRules: Record<string, GaugeConfig>
+  setGaugeRules: (gr: Record<string, GaugeConfig>) => void
+  loadedFiles: Record<string, string>
+  setLoadedFiles: (lf: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void
+  importedConfigName: string | null
+  setImportedConfigName: (n: string | null) => void
+
+  // Prompt state
+  isPromptingForPath: boolean
+  setIsPromptingForPath: (v: boolean) => void
+  pendingConfig: any | null
+  setPendingConfig: (c: any | null) => void
+
+  // Config actions
+  autoLoadChannelsAndMerge: (importedCategories?: Record<string, SignalConfig[]>, targetProtocol?: 'Euro NCAP' | 'GSR ADDW', targetResults?: any[]) => Promise<void>
+  importConfigJSON: (fileContent: string, fileName: string) => Promise<void>
+  confirmPromptedPath: (path: string) => Promise<boolean>
+  exportConfig: () => Promise<void>
+  handleUnmountConfig: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -457,4 +568,554 @@ export const useAppStore = create<AppState>((set) => ({
   setBrainAnalysisVideo: (v) => set({ brainAnalysisVideo: v }),
   brainAnalysisMarkers: [],
   setBrainAnalysisMarkers: (m) => set({ brainAnalysisMarkers: m }),
+
+  // Config state init
+  protocol: 'Euro NCAP',
+  setProtocol: (p) => set({ protocol: p }),
+  signalsConfig: DEFAULT_SIGNAL_LISTS,
+  setSignalsConfig: (c) => set({ signalsConfig: c }),
+  passCriteria: DEFAULT_PASS_CRITERIA,
+  setPassCriteria: (pc) => set({ passCriteria: pc }),
+  gaugeRules: DEFAULT_GAUGE_RULES,
+  setGaugeRules: (gr) => set({ gaugeRules: gr }),
+  loadedFiles: {},
+  setLoadedFiles: (lf) => set((s) => ({ loadedFiles: typeof lf === 'function' ? lf(s.loadedFiles) : lf })),
+  importedConfigName: null,
+  setImportedConfigName: (n) => set({ importedConfigName: n }),
+
+  // Prompt state init
+  isPromptingForPath: false,
+  setIsPromptingForPath: (v) => set({ isPromptingForPath: v }),
+  pendingConfig: null,
+  setPendingConfig: (c) => set({ pendingConfig: c }),
+
+  // Config actions implementation
+  autoLoadChannelsAndMerge: async (importedCategories, targetProtocol, targetResults) => {
+    const state = useAppStore.getState()
+    const activeProtocol = targetProtocol || state.protocol
+    const targetCategoriesList = activeProtocol === 'Euro NCAP' 
+      ? [
+          "Long Distraction (NDT)",
+          "Long Distraction (DT)",
+          "Short Distraction (NDT)",
+          "Short Distraction (DT)",
+          "Microsleep",
+          "Sleep",
+          "Drowsiness",
+          "Unresponsive driver"
+        ]
+      : [
+          "High Speed",
+          "Low Speed"
+        ]
+
+    const activeResults = targetResults || state.analysisResults
+
+    if (!activeResults || activeResults.length === 0) {
+      if (importedCategories) {
+        set({ signalsConfig: importedCategories })
+      }
+      return
+    }
+
+    const firstParticipant = activeResults.find((r: any) => r.type === 'participant')
+    if (!firstParticipant) {
+      if (importedCategories) {
+        set({ signalsConfig: importedCategories })
+      }
+      return
+    }
+
+    const getMf4Files = (node: any): string[] => {
+      let files: string[] = []
+      if (node.type === 'file' && node.path.toLowerCase().endsWith('.mf4') && !node.path.toLowerCase().includes('tracking')) {
+        files.push(node.path)
+      }
+      if (node.children) {
+        for (const child of node.children) {
+          files = files.concat(getMf4Files(child))
+        }
+      }
+      return files
+    }
+
+    const mdfFiles = getMf4Files(firstParticipant)
+    if (mdfFiles.length === 0) {
+      if (importedCategories) {
+        set({ signalsConfig: importedCategories })
+      }
+      return
+    }
+
+    const determineCategoryFromFilename = (filename: string): string | null => {
+      const cleanName = filename.split(/[/\\]/).pop() || ''
+      const basename = cleanName.substring(0, cleanName.lastIndexOf('.')) || cleanName
+      
+      if (basename.toUpperCase().includes('ADDW')) {
+        const lowerPath = filename.toLowerCase()
+        if (lowerPath.includes('high speed')) {
+          return 'High Speed'
+        } else if (lowerPath.includes('low speed')) {
+          return 'Low Speed'
+        } else {
+          return 'High Speed'
+        }
+      }
+      
+      const dMatch = basename.match(/^D(\d+)/i)
+      if (dMatch) {
+        const num = parseInt(dMatch[1], 10)
+        if (num >= 1 && num <= 9) return 'Long Distraction (NDT)'
+        if (num >= 10 && num <= 15) return 'Long Distraction (DT)'
+        if ((num >= 16 && num <= 19) || num === 28 || (num >= 29 && num <= 42)) return 'Short Distraction (NDT)'
+        if (num >= 20 && num <= 27) return 'Short Distraction (DT)'
+      }
+      
+      const fMatch = basename.match(/^F(\d+)/i)
+      if (fMatch) {
+        const num = parseInt(fMatch[1], 10)
+        if (num === 1) return 'Microsleep'
+        if (num === 2) return 'Sleep'
+        if (num === 3) return 'Drowsiness'
+        if (num === 4 || num === 5) return 'Unresponsive driver'
+      }
+      
+      return null
+    }
+
+    let loadedCount = 0
+    const newConfigs = importedCategories ? { ...importedCategories } : { ...state.signalsConfig }
+    const newLoadedFiles = { ...state.loadedFiles }
+    const toastId = toast.loading("Auto-loading MF4 data...")
+
+    try {
+      for (const category of targetCategoriesList) {
+        const matchingFile = mdfFiles.find(f => determineCategoryFromFilename(f) === category)
+        if (matchingFile) {
+          const response = await fetch('/api/analysis/channels', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_path: matchingFile })
+          })
+          const data = await response.json()
+          if (data.channels && Array.isArray(data.channels)) {
+            const names = data.channels.map((ch: any) => ch.name).sort()
+            const filteredNames = names.filter((name: string) => name.toLowerCase() !== 't' && name.toLowerCase() !== 'time')
+            
+            const existingCategoryConfig = newConfigs[category] || []
+            const isConfigValid = existingCategoryConfig && Array.isArray(existingCategoryConfig)
+            
+            const rebuiltList: SignalConfig[] = [
+              isConfigValid
+                ? existingCategoryConfig.find(sig => sig && sig.name === 'SoundPressure') || { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+                : { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+            ]
+
+            for (const name of filteredNames) {
+              if (name === 'SoundPressure') continue
+              
+              const existingSig = isConfigValid ? existingCategoryConfig.find(sig => sig && sig.name === name) : undefined
+              if (existingSig) {
+                rebuiltList.push(existingSig)
+              } else {
+                rebuiltList.push({
+                  name,
+                  checked: false,
+                  operator: 'None',
+                  threshold: 0.0,
+                  alias: name
+                })
+              }
+            }
+
+            if (isConfigValid) {
+              for (const sig of existingCategoryConfig) {
+                if (sig && sig.name !== 'SoundPressure' && !filteredNames.includes(sig.name)) {
+                  rebuiltList.push(sig)
+                }
+              }
+            }
+
+            const seen = new Set<string>()
+            const uniqueRebuiltList: SignalConfig[] = []
+            for (const sig of rebuiltList) {
+              if (sig && sig.name && !seen.has(sig.name)) {
+                seen.add(sig.name)
+                uniqueRebuiltList.push(sig)
+              }
+            }
+
+            newConfigs[category] = uniqueRebuiltList
+            newLoadedFiles[category] = matchingFile
+            loadedCount++
+          }
+        }
+      }
+
+      set({ signalsConfig: newConfigs, loadedFiles: newLoadedFiles })
+      toast.dismiss(toastId)
+      if (loadedCount > 0) {
+        toast.success(`Auto-loaded & merged MF4 data for ${loadedCount} categories.`)
+      } else {
+        toast.warning("No matching MF4 files found in the source directory.")
+      }
+    } catch (error) {
+      toast.dismiss(toastId)
+      toast.error("Failed to auto-load signals from files.")
+      console.error(error)
+    }
+  },
+  importConfigJSON: async (fileContent, fileName) => {
+    try {
+      if (!fileContent) {
+        toast.error("The imported file is empty.")
+        return
+      }
+      const parsed = JSON.parse(fileContent)
+      if (!parsed || typeof parsed !== 'object') {
+        toast.error("Invalid configuration file format.")
+        return
+      }
+
+      if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
+        if ("Microsleep & Sleep" in parsed.categories && !("Microsleep" in parsed.categories) && !("Sleep" in parsed.categories)) {
+          parsed.categories["Microsleep"] = parsed.categories["Microsleep & Sleep"]
+          parsed.categories["Sleep"] = parsed.categories["Microsleep & Sleep"]
+        }
+      }
+      if (parsed.pass_criteria && typeof parsed.pass_criteria === 'object' && !Array.isArray(parsed.pass_criteria)) {
+        if ("Microsleep & Sleep" in parsed.pass_criteria && !("Microsleep" in parsed.pass_criteria) && !("Sleep" in parsed.pass_criteria)) {
+          parsed.pass_criteria["Microsleep"] = parsed.pass_criteria["Microsleep & Sleep"]
+          parsed.pass_criteria["Sleep"] = parsed.pass_criteria["Microsleep & Sleep"]
+        }
+      }
+      if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
+        if ("Microsleep & Sleep" in parsed.gauge_rules && !("Microsleep" in parsed.gauge_rules) && !("Sleep" in parsed.gauge_rules)) {
+          parsed.gauge_rules["Microsleep"] = parsed.gauge_rules["Microsleep & Sleep"]
+          parsed.gauge_rules["Sleep"] = parsed.gauge_rules["Microsleep & Sleep"]
+        }
+      }
+
+      let validatedProtocol: 'Euro NCAP' | 'GSR ADDW' = 'Euro NCAP'
+      if (parsed.protocol === 'GSR ADDW' || parsed.protocol === 'Euro NCAP') {
+        validatedProtocol = parsed.protocol
+      }
+
+      const validatedPassCriteria: Record<string, PassConfig> = {}
+      if (parsed.pass_criteria && typeof parsed.pass_criteria === 'object' && !Array.isArray(parsed.pass_criteria)) {
+        for (const [catName, pc] of Object.entries(parsed.pass_criteria)) {
+          if (pc && typeof pc === 'object') {
+            const op1 = typeof (pc as any).operator1 === 'string' ? (pc as any).operator1 : '<'
+            const operator1 = ['None', '>', '<', '>=', '<=', '==', '!='].includes(op1) ? op1 : 'None'
+            const op2 = typeof (pc as any).operator2 === 'string' ? (pc as any).operator2 : 'None'
+            const operator2 = ['None', '>', '<', '>=', '<=', '==', '!='].includes(op2) ? op2 : 'None'
+            
+            validatedPassCriteria[catName] = {
+              signal: typeof (pc as any).signal === 'string' ? (pc as any).signal : 'SoundPressure',
+              value1: typeof (pc as any).value1 === 'number' ? (pc as any).value1 : 3.0,
+              operator1: operator1 as any,
+              value2: typeof (pc as any).value2 === 'number' ? (pc as any).value2 : 0.0,
+              operator2: operator2 as any,
+              mask: typeof (pc as any).mask === 'number' ? (pc as any).mask : 6.0
+            }
+          }
+        }
+      }
+      const mergedPassCriteria = { ...DEFAULT_PASS_CRITERIA, ...validatedPassCriteria }
+
+      const validatedGaugeRules: Record<string, GaugeConfig> = {}
+      if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
+        for (const [catName, gr] of Object.entries(parsed.gauge_rules)) {
+          if (gr && typeof gr === 'object') {
+            validatedGaugeRules[catName] = {
+              min: typeof (gr as any).min === 'number' ? (gr as any).min : 0,
+              max: typeof (gr as any).max === 'number' ? (gr as any).max : 10,
+              green_min: typeof (gr as any).green_min === 'number' ? (gr as any).green_min : 0,
+              green_max: typeof (gr as any).green_max === 'number' ? (gr as any).green_max : 3
+            }
+          }
+        }
+      }
+      const mergedGaugeRules = { ...DEFAULT_GAUGE_RULES, ...validatedGaugeRules }
+
+      const state = useAppStore.getState()
+      let currentPath = state.analysisSourcePath
+      let resultsData = state.analysisResults
+
+      if (!currentPath) {
+        const configPath = parsed.analysis_source_path || ''
+        if (configPath) {
+          const toastId = toast.loading(`Scanning path from config: ${configPath}`)
+          try {
+            const res = await fetch('/api/analysis/scan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ source_dir: configPath }),
+            })
+            const data = await res.json()
+            if (data.results && data.results.length > 0) {
+              set({
+                analysisSourcePath: configPath,
+                analysisResults: data.results,
+                analysisAvailableCameras: data.available_cameras || [],
+                analysisCheckedFiles: []
+              })
+              
+              const allFiles: string[] = []
+              const collect = (nodes: any[]) => {
+                for (const n of nodes) {
+                  if (n.type === 'file') allFiles.push(n.path)
+                  if (n.children) collect(n.children)
+                }
+              }
+              collect(data.results)
+              set({ analysisCheckedFiles: allFiles })
+              
+              resultsData = data.results
+              currentPath = configPath
+              toast.success("Path found and loaded successfully from config.")
+            } else {
+              set({
+                protocol: validatedProtocol,
+                passCriteria: mergedPassCriteria,
+                gaugeRules: mergedGaugeRules,
+                pendingConfig: parsed,
+                isPromptingForPath: true
+              })
+              toast.warning(`Folder in config not found: "${configPath}". Please specify project folder.`)
+              return
+            }
+          } catch (err) {
+            console.error("Error scanning config path:", err)
+            set({
+              protocol: validatedProtocol,
+              passCriteria: mergedPassCriteria,
+              gaugeRules: mergedGaugeRules,
+              pendingConfig: parsed,
+              isPromptingForPath: true
+            })
+            toast.warning("Failed to load path from config. Please specify project folder.")
+            return
+          } finally {
+            toast.dismiss(toastId)
+          }
+        } else {
+          set({
+            protocol: validatedProtocol,
+            passCriteria: mergedPassCriteria,
+            gaugeRules: mergedGaugeRules,
+            pendingConfig: parsed,
+            isPromptingForPath: true
+          })
+          toast.info("Imported config has no project path. Please specify project folder.")
+          return
+        }
+      }
+
+      set({
+        protocol: validatedProtocol,
+        passCriteria: mergedPassCriteria,
+        gaugeRules: mergedGaugeRules,
+        importedConfigName: fileName
+      })
+
+      const validatedCategories: Record<string, SignalConfig[]> = {}
+      if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
+        for (const [catName, signalList] of Object.entries(parsed.categories)) {
+          if (Array.isArray(signalList)) {
+            const seen = new Set<string>()
+            const list: SignalConfig[] = []
+            for (const sig of signalList) {
+              if (!sig || typeof sig !== 'object') continue
+              const rawName = sig.name ?? sig.signal
+              if (typeof rawName !== 'string' || rawName.trim() === '') continue
+              const name = rawName.trim()
+              if (seen.has(name)) continue
+              seen.add(name)
+              const rawThreshold = sig.threshold ?? sig.value
+              let threshold: number | string = 0.0
+              if (typeof rawThreshold === 'number') {
+                threshold = rawThreshold
+              } else if (typeof rawThreshold === 'string') {
+                const stripped = rawThreshold.replace(/^b'(.*)'$/, '$1').replace(/^b"(.*)"$/, '$1')
+                const parsedFloat = parseFloat(stripped)
+                if (!isNaN(parsedFloat) && stripped.trim() !== '') {
+                  threshold = parsedFloat
+                } else {
+                  threshold = stripped
+                }
+              } else if (rawThreshold !== undefined && rawThreshold !== null) {
+                threshold = String(rawThreshold)
+              }
+              const alias = typeof sig.alias === 'string' ? sig.alias : name
+              const rawOp = sig.operator ?? 'None'
+              const operator = (typeof rawOp === 'string' && ['None', '>', '<', '>=', '<=', '==', '!='].includes(rawOp)) ? rawOp : 'None'
+              list.push({ name, checked: typeof sig.checked === 'boolean' ? sig.checked : false, operator, threshold, alias })
+            }
+            validatedCategories[catName] = list
+          }
+        }
+      }
+      const mergedCategories = { ...DEFAULT_SIGNAL_LISTS, ...validatedCategories }
+
+      await state.autoLoadChannelsAndMerge(mergedCategories, validatedProtocol, resultsData)
+      toast.success("Configuration imported successfully")
+    } catch (err) {
+      console.error("Import error:", err)
+      toast.error("Failed to parse JSON file")
+    }
+  },
+  confirmPromptedPath: async (path) => {
+    if (!path) return false
+    const state = useAppStore.getState()
+    const toastId = toast.loading(`Scanning path: ${path}`)
+    try {
+      const res = await fetch('/api/analysis/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_dir: path }),
+      })
+      const data = await res.json()
+      if (data.results && data.results.length > 0) {
+        set({
+          analysisSourcePath: path,
+          analysisResults: data.results,
+          analysisAvailableCameras: data.available_cameras || [],
+          analysisCheckedFiles: []
+        })
+        
+        const allFiles: string[] = []
+        const collect = (nodes: any[]) => {
+          for (const n of nodes) {
+            if (n.type === 'file') allFiles.push(n.path)
+            if (n.children) collect(n.children)
+          }
+        }
+        collect(data.results)
+        set({ analysisCheckedFiles: allFiles })
+
+        if (state.pendingConfig) {
+          const parsed = state.pendingConfig
+          set({
+            protocol: parsed.protocol || 'Euro NCAP',
+            passCriteria: { ...DEFAULT_PASS_CRITERIA, ...(parsed.pass_criteria || {}) },
+            gaugeRules: { ...DEFAULT_GAUGE_RULES, ...(parsed.gauge_rules || {}) },
+          })
+          
+          const validatedCategories: Record<string, SignalConfig[]> = {}
+          if (parsed.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
+            for (const [catName, signalList] of Object.entries(parsed.categories)) {
+              if (Array.isArray(signalList)) {
+                const seen = new Set<string>()
+                const list: SignalConfig[] = []
+                for (const sig of signalList) {
+                  if (!sig || typeof sig !== 'object') continue
+                  const rawName = sig.name ?? sig.signal
+                  if (typeof rawName !== 'string' || rawName.trim() === '') continue
+                  const name = rawName.trim()
+                  if (seen.has(name)) continue
+                  seen.add(name)
+                  const rawThreshold = sig.threshold ?? sig.value
+                  let threshold: number | string = 0.0
+                  if (typeof rawThreshold === 'number') {
+                    threshold = rawThreshold
+                  } else if (typeof rawThreshold === 'string') {
+                    const stripped = rawThreshold.replace(/^b'(.*)'$/, '$1').replace(/^b"(.*)"$/, '$1')
+                    const parsedFloat = parseFloat(stripped)
+                    if (!isNaN(parsedFloat) && stripped.trim() !== '') {
+                      threshold = parsedFloat
+                    } else {
+                      threshold = stripped
+                    }
+                  } else if (rawThreshold !== undefined && rawThreshold !== null) {
+                    threshold = String(rawThreshold)
+                  }
+                  const alias = typeof sig.alias === 'string' ? sig.alias : name
+                  const rawOp = sig.operator ?? 'None'
+                  const operator = (typeof rawOp === 'string' && ['None', '>', '<', '>=', '<=', '==', '!='].includes(rawOp)) ? rawOp : 'None'
+                  list.push({ name, checked: typeof sig.checked === 'boolean' ? sig.checked : false, operator, threshold, alias })
+                }
+                validatedCategories[catName] = list
+              }
+            }
+          }
+          const mergedCategories = { ...DEFAULT_SIGNAL_LISTS, ...validatedCategories }
+          
+          await state.autoLoadChannelsAndMerge(mergedCategories, parsed.protocol || 'Euro NCAP', data.results)
+        }
+
+        set({ isPromptingForPath: false, pendingConfig: null })
+        toast.success("Path loaded successfully and configuration applied.")
+        return true
+      } else {
+        toast.error(`The folder could not be loaded. Please verify the folder exists.`)
+        return false
+      }
+    } catch (err) {
+      console.error("Error scanning path:", err)
+      toast.error("Failed to scan project path.")
+      return false
+    } finally {
+      toast.dismiss(toastId)
+    }
+  },
+  exportConfig: async () => {
+    const state = useAppStore.getState()
+    const configObj = {
+      version: 1,
+      protocol: state.protocol,
+      analysis_source_path: state.analysisSourcePath,
+      categories: state.signalsConfig,
+      pass_criteria: state.passCriteria,
+      gauge_rules: state.gaugeRules
+    }
+    
+    const suggestedName = `gaze_logic_config_${state.protocol.replace(/\s+/g, '_').toLowerCase()}.json`
+    
+    if ('showSaveFilePicker' in window) {
+      try {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName,
+          types: [{
+            description: 'JSON Files',
+            accept: {
+              'application/json': ['.json'],
+            },
+          }],
+        })
+        const writable = await handle.createWritable()
+        await writable.write(JSON.stringify(configObj, null, 2))
+        await writable.close()
+        toast.success("Configuration saved successfully")
+        return
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          return
+        }
+        console.warn("showSaveFilePicker error, falling back to download anchor", err)
+      }
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(
+      JSON.stringify(configObj, null, 2)
+    )
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", dataStr)
+    downloadAnchor.setAttribute("download", suggestedName)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+    toast.success("Configuration exported successfully")
+  },
+  handleUnmountConfig: () => {
+    set({
+      signalsConfig: DEFAULT_SIGNAL_LISTS,
+      passCriteria: DEFAULT_PASS_CRITERIA,
+      gaugeRules: DEFAULT_GAUGE_RULES,
+      protocol: 'Euro NCAP',
+      loadedFiles: {},
+      importedConfigName: null
+    })
+    toast.success("Configuration unmounted. Defaults restored.")
+  }
 }))

@@ -25,9 +25,9 @@ export default function App() {
         <TopNav />
         <Toaster />
 
-        {/* Main Content Area (padded top to account for the floating nav) */}
-        <div className="flex flex-1 overflow-hidden pt-28 px-12 pb-12">
-          <main className="flex-1 overflow-hidden rounded-[40px] shadow-sm relative">
+        {/* Main Content Area (padded top to account for the new header) */}
+        <div className="flex flex-1 overflow-hidden pt-6 px-12 pb-12">
+          <main className="flex-1 relative">
             <Routes>
               <Route path="/" element={<AnalysisTab />} />
               <Route path="/analysis" element={<AnalysisTab />} />

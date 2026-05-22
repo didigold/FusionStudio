@@ -100,39 +100,39 @@ export default function ReportingTab() {
   return (
     <div className="flex h-full gap-6 p-1 overflow-hidden">
       <div className="w-80 flex flex-col gap-6 overflow-hidden">
-        <div className="bg-card/50 border border-border/50 rounded-xl p-5 shadow-sm flex flex-col gap-5">
+        <div className="bg-card/50 border border-border/50 rounded-3xl p-5 shadow-sm flex flex-col gap-5">
           <div className="flex items-center gap-3"><Settings2 className="text-primary w-5 h-5" /><h2 className="text-sm font-bold text-foreground uppercase tracking-widest">Report Config</h2></div>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase">Template</label>
               <div className="flex gap-2">
-                <select value={reportingTemplate} onChange={(e) => { setReportingTemplate(e.target.value); const tpl = reportingTemplates.find((t: any) => t.name === e.target.value); if (tpl?.options) tpl.options.forEach((o: any) => setReportingOption(o.label || o, o.default !== false)) }} className="flex-1 bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-[11px] focus:outline-none appearance-none">
+                <select value={reportingTemplate} onChange={(e) => { setReportingTemplate(e.target.value); const tpl = reportingTemplates.find((t: any) => t.name === e.target.value); if (tpl?.options) tpl.options.forEach((o: any) => setReportingOption(o.label || o, o.default !== false)) }} className="flex-1 bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-[11px] focus:outline-none appearance-none">
                   {reportingTemplates.length === 0 && !loadingTemplates && <option value="">Loading...</option>}
                   {reportingTemplates.map((t: any) => <option key={t.name || t} value={t.name || t}>{t.name || t}</option>)}
                 </select>
                 <button onClick={() => {
                   fetch('/api/reporting/templates').then(r => r.json()).then(d => setReportingTemplates((d.templates || []).map((t: any) => typeof t === 'string' ? { name: t, path: t, options: [] } : t)))
-                }} className="p-2 bg-surface-ink rounded-full border border-border/50">
+                }} className="p-2 bg-surface-ink rounded-lg border border-border/50">
                   <RefreshCw className={`w-3.5 h-3.5 ${loadingTemplates ? 'animate-spin' : ''}`} />
                 </button>
               </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase">Root Folder</label>
-              <input type="text" value={reportingRootFolder} onChange={(e) => setReportingRootFolder(e.target.value)} placeholder="Root with P01, P02..." className="w-full bg-surface-3 border border-border/50 rounded-md px-3 py-2 text-[11px] focus:outline-none" />
+              <input type="text" value={reportingRootFolder} onChange={(e) => setReportingRootFolder(e.target.value)} placeholder="Root with P01, P02..." className="w-full bg-surface-3 border border-border/50 rounded-lg px-3 py-2 text-[11px] focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase">Output Folder</label>
-              <input type="text" value={reportingOutputFolder} onChange={(e) => setReportingOutputFolder(e.target.value)} placeholder="Destination folder..." className="w-full bg-surface-3 border border-border/50 rounded-md px-3 py-2 text-[11px] focus:outline-none" />
+              <input type="text" value={reportingOutputFolder} onChange={(e) => setReportingOutputFolder(e.target.value)} placeholder="Destination folder..." className="w-full bg-surface-3 border border-border/50 rounded-lg px-3 py-2 text-[11px] focus:outline-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-muted-foreground uppercase">Output Filename</label>
-              <input type="text" value={reportingFilename} onChange={(e) => setReportingFilename(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-[11px] focus:outline-none" />
+              <input type="text" value={reportingFilename} onChange={(e) => setReportingFilename(e.target.value)} className="w-full bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-[11px] focus:outline-none" />
             </div>
           </div>
         </div>
 
-        <div className="bg-card/50 border border-border/50 rounded-xl flex-1 overflow-hidden flex flex-col shadow-sm">
+        <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
           <div className="p-4 border-b border-border/50 bg-surface-2/30 flex items-center justify-between">
             <span className="text-[10px] font-bold text-foreground uppercase tracking-widest">Processing Options</span>
           </div>
@@ -150,7 +150,7 @@ export default function ReportingTab() {
         </div>
       </div>
 
-      <div className="flex-1 bg-card/50 border border-border/50 rounded-xl flex flex-col overflow-hidden shadow-sm">
+      <div className="flex-1 bg-card/50 border border-border/50 rounded-3xl flex flex-col overflow-hidden shadow-sm">
         <div className="p-6 border-b border-border/50 bg-surface-2/30 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="bg-primary/10 p-2 rounded-full"><FileText className="text-primary w-5 h-5" /></div>
@@ -158,11 +158,11 @@ export default function ReportingTab() {
           </div>
           <div className="flex items-center gap-3">
             {!reportingProcessing ? (
-              <button onClick={handleGenerate} disabled={!reportingTemplate} className="bg-primary text-background px-8 py-3 rounded-full font-bold flex items-center gap-3 hover:bg-primary/90 transition-all shadow-lg disabled:opacity-50">
+              <button onClick={handleGenerate} disabled={!reportingTemplate} className="bg-primary text-background px-8 py-3 rounded-lg font-bold flex items-center gap-3 hover:bg-primary/90 transition-all shadow-lg disabled:opacity-50">
                 <PlayCircle className="w-5 h-5" /> GENERATE REPORT
               </button>
             ) : (
-              <button onClick={handleStop} className="bg-destructive text-white px-6 py-3 rounded-full font-bold flex items-center gap-3 hover:bg-destructive/90 transition-all">
+              <button onClick={handleStop} className="bg-destructive text-white px-6 py-3 rounded-lg font-bold flex items-center gap-3 hover:bg-destructive/90 transition-all">
                 <Square className="w-4 h-4" /> STOP
               </button>
             )}
@@ -205,8 +205,8 @@ export default function ReportingTab() {
               <div className="relative"><FileSpreadsheet className="w-24 h-24 opacity-10" /><Search className="absolute -bottom-2 -right-2 w-10 h-10 text-primary opacity-20" /></div>
               <div className="text-center space-y-2"><p className="text-lg font-bold">Template Preview</p><p className="max-w-md text-sm opacity-50">Generate a report or enter a path above to preview results.</p></div>
               <div className="flex items-center gap-2 mt-4">
-                <input type="text" value={previewSheet} onChange={(e) => setPreviewSheet(e.target.value)} placeholder="Sheet name" className="bg-surface-3 border border-border/50 rounded-full px-4 py-2 text-xs focus:outline-none w-40" />
-                <button onClick={handlePreview} disabled={previewLoading || !reportingOutputPath} className="bg-surface-ink border border-border/50 text-foreground px-4 py-2 rounded-full text-xs font-bold hover:bg-surface-3 disabled:opacity-50 flex items-center gap-1.5">
+                <input type="text" value={previewSheet} onChange={(e) => setPreviewSheet(e.target.value)} placeholder="Sheet name" className="bg-surface-3 border border-border/50 rounded-lg px-4 py-2 text-xs focus:outline-none w-40" />
+                <button onClick={handlePreview} disabled={previewLoading || !reportingOutputPath} className="bg-surface-ink border border-border/50 text-foreground px-4 py-2 rounded-lg text-xs font-bold hover:bg-surface-3 disabled:opacity-50 flex items-center gap-1.5">
                   {previewLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />} Preview
                 </button>
               </div>

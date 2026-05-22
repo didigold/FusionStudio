@@ -760,8 +760,16 @@ def get_media(path: str):
                 if os.name == 'nt':
                     creationflags = 0x08000000  # CREATE_NO_WINDOW
                 
+                # Resolve ffmpeg executable location using imageio-ffmpeg if available
+                ffmpeg_exe = "ffmpeg"
+                try:
+                    import imageio_ffmpeg
+                    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                except ImportError:
+                    pass
+                
                 cmd = [
-                    "ffmpeg", "-y", "-i", path,
+                    ffmpeg_exe, "-y", "-i", path,
                     "-c:v", "libx264", "-pix_fmt", "yuv420p",
                     "-c:a", "aac", "-movflags", "faststart",
                     mp4_path

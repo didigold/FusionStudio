@@ -896,8 +896,19 @@ export function GazeTimeTab() {
                              onLoadStart={() => { setVideoLoading(true); setVideoError(null); }}
                              onWaiting={() => setVideoLoading(true)}
                              onCanPlay={() => setVideoLoading(false)}
-                             onError={() => {
+                             onError={async () => {
                                  setVideoLoading(false);
+                                 if (videoUrl) {
+                                     try {
+                                         const res = await fetch(videoUrl, { method: 'HEAD' });
+                                         if (res.status === 404) {
+                                             setVideoError('Video file not found');
+                                             return;
+                                         }
+                                     } catch (err) {
+                                         console.error('Error fetching video URL details:', err);
+                                     }
+                                 }
                                  setVideoError('Failed to decode video format');
                              }}
                          />
@@ -920,10 +931,24 @@ export function GazeTimeTab() {
                             </div>
                         )}
                         {videoError && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/90 z-20 text-red-500">
-                                <Video className="w-12 h-12 opacity-60" />
-                                <span className="text-xs font-bold uppercase tracking-widest">{videoError}</span>
-                                <span className="text-[9px] opacity-40">Please verify AVI file exists or FFMPEG is installed</span>
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20 p-6">
+                                <div className="bg-black/90 backdrop-blur-md rounded-2xl border border-red-500/10 p-6 max-w-md shadow-2xl flex flex-col items-center text-center">
+                                    <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-4 border border-red-500/20">
+                                        <Video className="w-6 h-6" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white uppercase tracking-wider">
+                                        {videoError === 'Video file not found' ? 'Video File Not Found' : 'Transcoding Error'}
+                                    </h3>
+                                    {videoError === 'Video file not found' ? (
+                                        <p className="text-sm text-neutral-400 mt-2 leading-relaxed">
+                                            The requested AVI video file could not be located in the current project source directory. Please verify that the file exists.
+                                        </p>
+                                    ) : (
+                                        <p className="text-sm text-neutral-400 mt-2 leading-relaxed">
+                                            Failed to decode the video format. FusionStudio packages FFMPEG automatically via <code>imageio-ffmpeg</code>, so no manual installation is required. This failure may be due to an unsupported codec or a backend transcoding issue.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </>
