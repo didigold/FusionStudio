@@ -103,7 +103,7 @@ export function TopNav() {
 
   return (
     <>
-      <header className="w-full h-16 border-b border-white/5 bg-[#121110] flex items-center justify-between px-8 z-40 sticky top-0">
+      <header className="relative w-full h-16 border-b border-white/5 bg-[#121110] flex items-center justify-between px-8 z-40 sticky top-0">
         
         {/* Left Side: Brand Logo and Text */}
         <div className="flex items-center gap-2.5 shrink-0">
@@ -117,10 +117,10 @@ export function TopNav() {
           </div>
         </div>
 
-        {/* Center: Data Source Input Area */}
-        <div className="flex items-center justify-center flex-1 max-w-xl mx-4 gap-2">
+        {/* Center: Data Source Input Area (Fixed Position) */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
           <div className={cn(
-            "relative flex-1 h-9 flex items-center bg-[#1e1d1c] border rounded-lg px-2 transition-all shadow-inner",
+            "relative w-[600px] h-9 flex items-center bg-[#1e1d1c] border rounded-lg px-2 transition-all shadow-inner",
             !analysisSourcePath ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]" : "border-white/5"
           )}>
             <input
@@ -157,6 +157,7 @@ export function TopNav() {
             )}
           </div>
           
+          {/* Browse button */}
           <Button
             type="button"
             onClick={() => setBrowseOpen(true)}
@@ -173,39 +174,40 @@ export function TopNav() {
           </Button>
         </div>
 
-        {/* Right Side: Global Config Buttons, SystemBadge, and User Profile */}
-        <div className="flex items-center gap-4 shrink-0 justify-end">
+        {/* Right Side: Active Config, SystemBadge, and User Profile */}
+        <div className="flex items-center gap-2 shrink-0 justify-end ml-auto">
           
-          {/* Global Config Actions */}
-          <div className="flex items-center gap-1.5">
-            {importedConfigName ? (
-              <div className="flex items-center bg-[#1e1d1c] border border-primary/20 rounded-lg p-0.5 pr-2 gap-1.5 h-9">
-                <span className="text-[9px] uppercase font-extrabold text-primary px-1.5 py-0.5 bg-primary/10 rounded">
-                  Config
-                </span>
-                <span className="text-xs text-white max-w-[100px] truncate font-medium" title={importedConfigName}>
-                  {importedConfigName}
-                </span>
-                <button 
-                  onClick={handleUnmountConfig}
-                  className="text-zinc-500 hover:text-white transition-colors p-0.5 hover:bg-white/5 rounded"
-                  title="Unmount Configuration"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ) : null}
+          {/* Active Config Label (if present) */}
+          {importedConfigName ? (
+            <div className="flex items-center bg-[#1e1d1c] border border-primary/20 rounded-lg p-0.5 pr-2 gap-1.5 h-9">
+              <span className="text-[9px] uppercase font-extrabold text-primary px-1.5 py-0.5 bg-primary/10 rounded">
+                Config
+              </span>
+              <span className="text-xs text-white max-w-[100px] truncate font-medium" title={importedConfigName}>
+                {importedConfigName}
+              </span>
+              <button 
+                onClick={handleUnmountConfig}
+                className="text-zinc-500 hover:text-white transition-colors p-0.5 hover:bg-white/5 rounded"
+                title="Unmount Configuration"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : null}
 
+          {/* Import / Save Config buttons on the right (left of CPU divider) */}
+          <div className="flex items-center gap-1.5">
             {/* Import Config */}
             <Button
-              variant="ghost"
-              size="sm"
+              type="button"
               onClick={() => document.getElementById('global-import-config-input')?.click()}
-              className="h-9 px-3 rounded-lg text-zinc-400 hover:bg-white/5 hover:text-white transition-all text-xs font-semibold gap-1.5"
+              variant="outline"
+              size="icon"
+              className="w-9 h-9 rounded-lg border border-white/5 bg-[#1e1d1c] text-white hover:bg-white/5 hover:border-white/10 transition-all shrink-0"
               title="Import Configuration JSON"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Import Config</span>
+              <Download className="w-3.5 h-3.5 text-zinc-400" />
             </Button>
             <input 
               type="file" 
@@ -227,21 +229,21 @@ export function TopNav() {
 
             {/* Save Config */}
             <Button
-              variant="ghost"
-              size="sm"
+              type="button"
               onClick={exportConfig}
-              className="h-9 px-3 rounded-lg text-zinc-400 hover:bg-white/5 hover:text-white transition-all text-xs font-semibold gap-1.5"
+              variant="outline"
+              size="icon"
+              className="w-9 h-9 rounded-lg border border-white/5 bg-[#1e1d1c] text-white hover:bg-white/5 hover:border-white/10 transition-all shrink-0"
               title="Save Configuration JSON"
             >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save Config</span>
+              <Save className="w-3.5 h-3.5 text-zinc-400" />
             </Button>
           </div>
 
           <div className="h-6 w-[1px] bg-white/10" />
 
           {/* System status and user profile */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <SystemBadge />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

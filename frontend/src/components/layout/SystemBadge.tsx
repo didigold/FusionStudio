@@ -16,15 +16,19 @@ export function SystemBadge() {
 
   const cpuColor = stats.cpu > 80 ? 'text-destructive' : stats.cpu > 50 ? 'text-warning' : 'text-success'
 
+  // Pad the entire label and value string on the left to maintain constant monospace length
+  const cpuText = `CPU ${stats.cpu.toFixed(0)}%`.padStart(8, '\u00A0')
+  const ramText = `RAM ${stats.ram_mb.toFixed(0)} MB`.padStart(14, '\u00A0')
+
   return (
-    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-      <span className={cpuColor}>CPU {stats.cpu.toFixed(0)}%</span>
-      <span>RAM {stats.ram_mb} MB</span>
+    <div className="flex items-center gap-2 text-xs text-muted-foreground select-none font-mono">
+      <span className={cpuColor}>{cpuText}</span>
+      <span>{ramText}</span>
       {stats.gpu_util > 0 && (
         <>
-          <span>GPU {stats.gpu_util}%</span>
-          <span>VRAM {stats.gpu_vram_mb} MB</span>
-          <span>{stats.gpu_temp}°C</span>
+          <span>{`GPU ${stats.gpu_util.toFixed(0)}%`.padStart(8, '\u00A0')}</span>
+          <span>{`VRAM ${stats.gpu_vram_mb.toFixed(0)} MB`.padStart(15, '\u00A0')}</span>
+          <span>{`${stats.gpu_temp.toFixed(0)}°C`.padStart(5, '\u00A0')}</span>
         </>
       )}
     </div>
