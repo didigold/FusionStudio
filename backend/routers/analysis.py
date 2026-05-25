@@ -67,6 +67,9 @@ class SignalUniqueValuesRequest(BaseModel):
 
 class BrowseRequest(BaseModel):
     path: str = ""
+    show_files: bool = False
+    file_extension: str | None = None
+
 
 
 class MarksRequest(BaseModel):
@@ -266,7 +269,7 @@ async def scan_analysis(req: ScanRequest):
     return {"results": results, "available_cameras": available_cameras}
 
 
-def _list_directory(path: str) -> dict:
+def _list_directory(path: str, show_files: bool = False, file_extension: str | None = None) -> dict:
     import platform
 
     if not path or not os.path.exists(path):
@@ -298,6 +301,9 @@ def _list_directory(path: str) -> dict:
             for entry in sorted_entries:
                 if entry.is_dir():
                     entries.append({"name": entry.name, "is_dir": True})
+                elif show_files:
+                    if not file_extension or entry.name.lower().endswith(file_extension.lower()):
+                        entries.append({"name": entry.name, "is_dir": False})
         return {"path": path, "entries": entries}
     except PermissionError:
         return {"path": path, "entries": [], "error": "Permission denied"}
@@ -308,7 +314,7 @@ def _list_directory(path: str) -> dict:
 @router.post("/browse")
 async def browse_directory(req: BrowseRequest):
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, _list_directory, req.path)
+    result = await loop.run_in_executor(None, _list_directory, req.path, req.show_files, req.file_extension)
     return result
 
 

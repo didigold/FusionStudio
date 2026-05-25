@@ -24,6 +24,7 @@ import {
   DropdownMenuPortal
 } from "@/components/ui/dropdown-menu"
 import { SearchableSelect } from "@/components/analysis/SearchableSelect"
+import { FolderBrowser } from "@/components/analysis/FolderBrowser"
 import { 
   Save, 
   Download, 
@@ -38,7 +39,15 @@ import {
   Menu,
   Filter,
   RefreshCw,
-  X
+  X,
+  Gauge,
+  Plus,
+  Trash2,
+  FolderOpen,
+  ChevronLeft,
+  Lock,
+  Settings,
+  Box
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAppStore } from '@/store/useAppStore'
@@ -105,6 +114,7 @@ export function GazeLogicTab() {
     analysisTrack,
     analysisEngineer,
     analysisAnalyst,
+    analysisSourcePath,
 
     // Store states
     protocol,
@@ -118,6 +128,10 @@ export function GazeLogicTab() {
     loadedFiles,
     setLoadedFiles,
     importedConfigName,
+    gaugeRulesPath,
+    setGaugeRulesPath,
+    knownGaugeRulesPaths,
+    setKnownGaugeRulesPaths,
 
     // Store actions
     autoLoadChannelsAndMerge,
@@ -165,6 +179,445 @@ export function GazeLogicTab() {
 
   // Modals / Dropdowns
   const [gaugeRulesModalOpen, setGaugeRulesModalOpen] = useState(false)
+
+  // Gauge Config Item definition for the list
+  interface ConfigItem {
+    id: string
+    name: string
+    path: string
+    rules: Record<string, any>
+    isDefault: boolean
+  }
+
+  const [modalConfigs, setModalConfigs] = useState<ConfigItem[]>([])
+  const [selectedConfigId, setSelectedConfigId] = useState<string>('default')
+  const [editingRules, setEditingRules] = useState<Record<string, any>>({})
+  const [isModified, setIsModified] = useState(false)
+  const [showConfirmSwitch, setShowConfirmSwitch] = useState<string | null>(null)
+  
+  const [newConfigName, setNewConfigName] = useState('')
+  const [showNewConfigPrompt, setShowNewConfigPrompt] = useState(false)
+  const [newConfigProjectBrowserOpen, setNewConfigProjectBrowserOpen] = useState(false)
+  const [tempProjectPath, setTempProjectPath] = useState('')
+  const [resetConfirmType, setResetConfirmType] = useState<'config' | 'gauge' | 'case' | null>(null)
+
+  // Load configs in the modal
+  const loadModalConfigs = async () => {
+    const list: ConfigItem[] = [
+      {
+        id: 'default',
+        name: 'Default',
+        path: 'config/gauge_rules.json',
+        rules: DEFAULT_GAUGE_RULES,
+        isDefault: true
+      }
+    ]
+
+    for (const path of knownGaugeRulesPaths) {
+      try {
+        const res = await fetch('/api/reporting/gauge_rules/read_file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: path })
+        })
+        const data = await res.json()
+        if (data.rules) {
+          list.push({
+            id: path,
+            name: path.split(/[/\\]/).pop() || path,
+            path: path,
+            rules: data.rules,
+            isDefault: false
+          })
+        }
+      } catch (err) {
+        console.error(`Failed to load config at ${path}:`, err)
+      }
+    }
+
+    setModalConfigs(list)
+    
+    // Select the currently active one
+    const activeId = gaugeRulesPath || 'default'
+    setSelectedConfigId(activeId)
+    
+    const activeConfig = list.find(c => c.id === activeId)
+    if (activeConfig) {
+      const initializedRules = JSON.parse(JSON.stringify(activeConfig.rules))
+      for (const [cat, rule] of Object.entries(initializedRules)) {
+        if (rule && typeof rule === 'object') {
+          const r = rule as any
+          if (r.ticks_count === undefined) {
+            if (Array.isArray(r.ticks)) {
+              r.ticks_count = Math.max(0, r.ticks.length - 2)
+            } else {
+              const minVal = parseFloat(r.min) || 0
+              const maxVal = parseFloat(r.max) || 10
+              const diff = maxVal - minVal
+              r.ticks_count = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4
+            }
+          }
+        }
+      }
+      setEditingRules(initializedRules)
+    } else {
+      const initializedDefaultRules = JSON.parse(JSON.stringify(DEFAULT_GAUGE_RULES))
+      for (const [cat, rule] of Object.entries(initializedDefaultRules)) {
+        const minVal = rule.min ?? 0
+        const maxVal = rule.max ?? 10
+        const diff = maxVal - minVal
+        rule.ticks_count = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4
+      }
+      setEditingRules(initializedDefaultRules)
+    }
+    setIsModified(false)
+  }
+
+  // Reload when modal opens or path states change
+  useEffect(() => {
+    if (gaugeRulesModalOpen) {
+      loadModalConfigs()
+    }
+  }, [gaugeRulesModalOpen, knownGaugeRulesPaths, gaugeRulesPath])
+
+  const handleSelectConfig = (configId: string) => {
+    if (configId === selectedConfigId) return
+    if (isModified) {
+      setShowConfirmSwitch(configId)
+    } else {
+      performSwitch(configId)
+    }
+  }
+
+  const performSwitch = (configId: string) => {
+    setSelectedConfigId(configId)
+    const config = modalConfigs.find(c => c.id === configId)
+    if (config) {
+      const initializedRules = JSON.parse(JSON.stringify(config.rules))
+      for (const [cat, rule] of Object.entries(initializedRules)) {
+        if (rule && typeof rule === 'object') {
+          const r = rule as any
+          if (r.ticks_count === undefined) {
+            if (Array.isArray(r.ticks)) {
+              r.ticks_count = Math.max(0, r.ticks.length - 2)
+            } else {
+              const minVal = parseFloat(r.min) || 0
+              const maxVal = parseFloat(r.max) || 10
+              const diff = maxVal - minVal
+              r.ticks_count = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4
+            }
+          }
+        }
+      }
+      setEditingRules(initializedRules)
+    }
+    setIsModified(false)
+    setShowConfirmSwitch(null)
+  }
+
+  const handleFieldChange = (cat: string, field: string, val: any) => {
+    const updated = { ...editingRules }
+    if (!updated[cat]) {
+      updated[cat] = { min: 0, max: 10, green_min: 0, green_max: 3 }
+    }
+    updated[cat] = { ...updated[cat], [field]: val }
+    setEditingRules(updated)
+    setIsModified(true)
+  }
+
+  const buildCleanRules = (rulesToClean: Record<string, any>) => {
+    const cleanRules: Record<string, any> = {}
+    for (const [cat, rule] of Object.entries(rulesToClean)) {
+      const minVal = parseFloat(rule.min) || 0
+      const maxVal = parseFloat(rule.max) || 10
+      
+      let gMin = rule.green_min
+      let gMax = rule.green_max
+      if (rule.green_range && Array.isArray(rule.green_range)) {
+        if (gMin === undefined) gMin = rule.green_range[0]
+        if (gMax === undefined) gMax = rule.green_range[1]
+      }
+      if (gMin === undefined) gMin = 0
+      if (gMax === undefined) gMax = 3
+
+      // Calculate Ticks Count
+      let ticksCount = rule.ticks_count
+      if (ticksCount === undefined) {
+        if (Array.isArray(rule.ticks)) {
+          ticksCount = Math.max(0, rule.ticks.length - 2)
+        } else {
+          const diff = maxVal - minVal
+          ticksCount = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4
+        }
+      }
+
+      // Generate ticks array
+      const generatedTicks = [minVal]
+      const step = (maxVal - minVal) / (ticksCount + 1)
+      for (let i = 1; i <= ticksCount; i++) {
+        generatedTicks.push(parseFloat((minVal + step * i).toFixed(4)))
+      }
+      generatedTicks.push(maxVal)
+
+      cleanRules[cat] = {
+        min: minVal,
+        max: maxVal,
+        green_range: [parseFloat(gMin) || 0, parseFloat(gMax) || 0],
+        ticks: generatedTicks
+      }
+    }
+    return cleanRules
+  }
+
+  const handleResetRowToDefault = (cat: string) => {
+    const defaults = DEFAULT_GAUGE_RULES[cat] || { min: 0, max: 10, green_min: 0, green_max: 3 }
+    const updated = { ...editingRules }
+    
+    const minVal = defaults.min
+    const maxVal = defaults.max
+    const diff = maxVal - minVal
+    const ticksCount = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4
+    
+    updated[cat] = {
+      min: minVal,
+      max: maxVal,
+      green_min: defaults.green_min,
+      green_max: defaults.green_max,
+      green_range: [defaults.green_min, defaults.green_max],
+      ticks_count: ticksCount
+    }
+    setEditingRules(updated)
+    setIsModified(true)
+    toast.info(`Reset ${cat} values to template defaults.`)
+  }
+
+  const handleSaveActiveConfig = async () => {
+    if (selectedConfigId === 'default') return
+    
+    const toastId = toast.loading("Saving configuration to file...")
+    try {
+      const cleanRules = buildCleanRules(editingRules)
+      
+      const res = await fetch('/api/reporting/gauge_rules/write_file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: selectedConfigId, rules: cleanRules })
+      })
+      const data = await res.json()
+      
+      if (data.status === 'success') {
+        toast.dismiss(toastId)
+        toast.success("Configuration saved successfully!")
+        setIsModified(false)
+        
+        setModalConfigs(prev => prev.map(c => c.id === selectedConfigId ? { ...c, rules: cleanRules } : c))
+      } else {
+        toast.dismiss(toastId)
+        toast.error(`Error saving file: ${data.error}`)
+      }
+    } catch (err) {
+      toast.dismiss(toastId)
+      toast.error("Failed to save configuration.")
+      console.error(err)
+    }
+  }
+
+  const handleRevertConfig = () => {
+    setEditingRules(JSON.parse(JSON.stringify(DEFAULT_GAUGE_RULES)))
+    setIsModified(true)
+    toast.info("Reverted table values to default template. Save to persist.")
+  }
+
+  const handleExportGaugeConfig = async () => {
+    const suggestedName = selectedConfigId === 'default' 
+      ? `gauge_rules_default.json` 
+      : selectedConfigId.split(/[/\\]/).pop() || `gauge_rules.json`
+      
+    const cleanRules = buildCleanRules(editingRules)
+    
+    if ('showSaveFilePicker' in window) {
+      try {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName,
+          types: [{
+            description: 'JSON Files',
+            accept: { 'application/json': ['.json'] },
+          }],
+        })
+        const writable = await handle.createWritable()
+        await writable.write(JSON.stringify(cleanRules, null, 2))
+        await writable.close()
+        toast.success("Configuration exported successfully")
+        return
+      } catch (err: any) {
+        if (err.name === 'AbortError') return
+      }
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanRules, null, 2))
+    const downloadAnchor = document.createElement('a')
+    downloadAnchor.setAttribute("href", dataStr)
+    downloadAnchor.setAttribute("download", suggestedName)
+    document.body.appendChild(downloadAnchor)
+    downloadAnchor.click()
+    downloadAnchor.remove()
+    toast.success("Configuration exported successfully")
+  }
+
+  const handleDeleteConfig = (path: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newPaths = knownGaugeRulesPaths.filter(p => p !== path)
+    setKnownGaugeRulesPaths(newPaths)
+    
+    if (selectedConfigId === path) {
+      setSelectedConfigId('default')
+      setEditingRules(JSON.parse(JSON.stringify(DEFAULT_GAUGE_RULES)))
+      setIsModified(false)
+    }
+    setModalConfigs(prev => prev.filter(c => c.id !== path))
+    toast.success("Configuration removed from list.")
+  }
+
+  const handleApplyLimits = () => {
+    const selected = modalConfigs.find(c => c.id === selectedConfigId)
+    if (selected) {
+      const activeRules = buildCleanRules(editingRules)
+      
+      setGaugeRules(activeRules)
+      setGaugeRulesPath(selectedConfigId === 'default' ? null : selectedConfigId)
+      setGaugeRulesModalOpen(false)
+      toast.success(`Applied gauge limits: ${selected.name}`)
+    }
+  }
+
+  const handleCloseModal = () => {
+    if (isModified) {
+      setShowConfirmSwitch('close_modal')
+    } else {
+      setGaugeRulesModalOpen(false)
+    }
+  }
+
+  const handleImportGaugeConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      const content = event.target?.result as string
+      try {
+        const parsed = JSON.parse(content)
+        if (typeof parsed !== 'object') {
+          toast.error("Invalid gauge rules format.")
+          return
+        }
+        
+        const projectDir = useAppStore.getState().analysisSourcePath
+        const destPath = projectDir 
+          ? `${projectDir}/${file.name}` 
+          : `config/${file.name}`
+          
+        const writeRes = await fetch('/api/reporting/gauge_rules/write_file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: destPath, rules: parsed })
+        })
+        const writeData = await writeRes.json()
+        if (writeData.status === 'success') {
+          const currentPaths = [...knownGaugeRulesPaths]
+          if (!currentPaths.includes(destPath)) {
+            const newPaths = [...currentPaths, destPath]
+            setKnownGaugeRulesPaths(newPaths)
+            toast.success(`Imported and saved to: ${destPath}`)
+          } else {
+            toast.success(`Updated config at: ${destPath}`)
+          }
+          await loadModalConfigs()
+          setSelectedConfigId(destPath)
+          setEditingRules(parsed)
+          setIsModified(false)
+        } else {
+          toast.error(`Failed to write file to disk: ${writeData.error}`)
+        }
+      } catch (err) {
+        toast.error("Failed to parse JSON file.")
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  const handleCreateNewConfig = async () => {
+    if (!newConfigName.trim()) {
+      toast.error("Please enter a name.")
+      return
+    }
+
+    const state = useAppStore.getState()
+    let targetDir = state.analysisSourcePath
+
+    if (!targetDir) {
+      if (!tempProjectPath.trim()) {
+        toast.error("A project folder is required. Please select the project directory (e.g. the folder containing P01, P02, etc.).")
+        setNewConfigProjectBrowserOpen(true)
+        return
+      }
+      
+      const success = await state.confirmPromptedPath(tempProjectPath)
+      if (!success) {
+        toast.error("Failed to load the selected project folder. Make sure it is a valid project directory.")
+        return
+      }
+      targetDir = tempProjectPath
+    }
+    
+    let filename = newConfigName.trim()
+    if (!filename.toLowerCase().endsWith('.json')) {
+      filename += '.json'
+    }
+    
+    const destPath = `${targetDir}/${filename}`
+      
+    try {
+      const existRes = await fetch('/api/reporting/gauge_rules/exists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: destPath })
+      })
+      const existData = await existRes.json()
+      if (existData.exists) {
+        toast.error("A configuration file with this name already exists in the destination folder.")
+        return
+      }
+      
+      const writeRes = await fetch('/api/reporting/gauge_rules/write_file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: destPath, rules: DEFAULT_GAUGE_RULES })
+      })
+      const writeData = await writeRes.json()
+      if (writeData.status === 'success') {
+        const currentPaths = [...knownGaugeRulesPaths]
+        if (!currentPaths.includes(destPath)) {
+          setKnownGaugeRulesPaths([...currentPaths, destPath])
+        }
+        
+        toast.success(`Created new configuration: ${destPath}`)
+        setShowNewConfigPrompt(false)
+        setNewConfigName('')
+        setTempProjectPath('')
+        
+        await loadModalConfigs()
+        setSelectedConfigId(destPath)
+        setEditingRules(JSON.parse(JSON.stringify(DEFAULT_GAUGE_RULES)))
+        setIsModified(false)
+      } else {
+        toast.error(`Failed to create config: ${writeData.error}`)
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to create configuration file.")
+    }
+  }
 
   // File selector states
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false)
@@ -561,6 +1014,27 @@ export function GazeLogicTab() {
         .gaze-table-container > div {
           overflow: visible !important;
         }
+        .pill-text {
+          transition: padding-right 0.2s ease, mask-image 0.2s ease, -webkit-mask-image 0.2s ease;
+        }
+        .group:hover .pill-text.has-clear {
+          padding-right: 18px;
+          mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
+          -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
+        }
+        .pill-clear-btn {
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease;
+        }
+        .group:hover .pill-clear-btn {
+          opacity: 1;
+          pointer-events: auto;
+        }
       `}</style>
 
       {/* MAIN CONFIGURATION CARD */}
@@ -618,7 +1092,7 @@ export function GazeLogicTab() {
                   </DropdownMenuItem>
 
                   <DropdownMenuItem onClick={() => setGaugeRulesModalOpen(true)} className="text-sm gap-2 cursor-pointer">
-                    <Sliders className="w-3.5 h-3.5" /> Edit Gauge Limits
+                    <Gauge className="w-3.5 h-3.5" /> Edit Gauge Limits
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -629,7 +1103,7 @@ export function GazeLogicTab() {
             {/* Scenario selector Combobox with Radio buttons */}
             <div className="flex items-center gap-2.5">
               <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Scenario:</span>
-              <div className="w-64">
+              <div className="w-[200px]">
                 <SearchableSelect
                   value={activeCategory}
                   onChange={setActiveCategory}
@@ -641,13 +1115,66 @@ export function GazeLogicTab() {
             </div>
 
             {/* Active Configuration Name Badge */}
-            <Badge variant="outline" className={cn(
-              "h-9 px-3 bg-surface-3 text-sm font-semibold select-none inline-flex items-center justify-center border transition-colors",
-              importedConfigName 
-                ? "text-primary border-primary/20"
-                : "text-muted-foreground border-white/10"
-            )}>
-              Config: {importedConfigName || "Default"}
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center border transition-colors group text-primary border-primary/20"
+              )}
+              onClick={() => document.getElementById('import-config-input')?.click()}
+            >
+              <Settings className="w-3.5 h-3.5 shrink-0" />
+              <div className="relative flex items-center justify-center min-w-0">
+                <span className={cn(
+                  "pill-text transition-all duration-200 truncate",
+                  importedConfigName && "has-clear"
+                )}>
+                  {importedConfigName || "Default"}
+                </span>
+                {importedConfigName && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setResetConfirmType('config');
+                    }}
+                    className="pill-clear-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
+                    title="Unmount configuration and revert to default"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </Badge>
+
+            {/* Active Gauge Limits Badge */}
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center border transition-colors group text-primary border-primary/20"
+              )}
+              onClick={() => setGaugeRulesModalOpen(true)}
+              title={gaugeRulesPath || "Default Gauge Limits"}
+            >
+              <Gauge className="w-3.5 h-3.5 shrink-0" />
+              <div className="relative flex items-center justify-center min-w-0">
+                <span className={cn(
+                  "pill-text transition-all duration-200 truncate",
+                  gaugeRulesPath && "has-clear"
+                )}>
+                  {gaugeRulesPath ? (gaugeRulesPath.split(/[/\\]/).pop() || gaugeRulesPath) : "Default"}
+                </span>
+                {gaugeRulesPath && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setResetConfirmType('gauge');
+                    }}
+                    className="pill-clear-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
+                    title="Reset gauge limits to default"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </Badge>
 
             {/* Loaded MF4 File Badge Indicator */}
@@ -655,20 +1182,37 @@ export function GazeLogicTab() {
               {loadedFiles[activeCategory] ? (
                 <Badge 
                   variant="outline" 
-                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center justify-center"
+                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center group"
                   onClick={() => setFileSelectorOpen(true)}
                   title={loadedFiles[activeCategory]}
                 >
-                  <span className="truncate max-w-[140px] leading-none flex items-center justify-center h-full">
-                    {loadedFiles[activeCategory].split(/[/\\]/).pop()}
-                  </span>
+                  <Box className="w-3.5 h-3.5 shrink-0" />
+                  <div className="relative flex items-center justify-center min-w-0">
+                    <span className={cn(
+                      "pill-text truncate max-w-[140px] leading-none flex items-center justify-center h-full transition-all duration-200",
+                      "has-clear"
+                    )}>
+                      {loadedFiles[activeCategory].split(/[/\\]/).pop()}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setResetConfirmType('case');
+                      }}
+                      className="pill-clear-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
+                      title="Unload case file"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </Badge>
               ) : (
                 <Badge 
                   variant="outline" 
-                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-muted-foreground border-white/10 text-sm font-semibold cursor-pointer select-none inline-flex items-center justify-center"
+                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center"
                   onClick={() => setFileSelectorOpen(true)}
                 >
+                  <Box className="w-3.5 h-3.5 shrink-0" />
                   <span className="leading-none flex items-center justify-center h-full">
                     No MF4 Loaded
                   </span>
@@ -1091,74 +1635,450 @@ export function GazeLogicTab() {
         </Card>
       )}
 
-      {/* EDIT GLOBAL GAUGE RULES DIALOG MODAL */}
-      <Dialog open={gaugeRulesModalOpen} onOpenChange={setGaugeRulesModalOpen}>
-        <DialogContent className="bg-surface-2 border-white/10 text-foreground w-[480px] max-w-[95vw] max-h-[85vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl p-0">
-          <DialogHeader className="p-5 pb-3 border-b border-white/5 bg-surface-3/30">
-            <DialogTitle className="text-sm font-bold uppercase text-foreground/90 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-primary" /> Edit Gauge Rules (Matplotlib reports)
+      <Dialog open={gaugeRulesModalOpen} onOpenChange={(open) => {
+        if (!open && isModified) {
+          setShowConfirmSwitch('close_modal')
+        } else {
+          setGaugeRulesModalOpen(open)
+        }
+      }}>
+        <DialogContent className="bg-surface-2 border-white/10 text-foreground w-[1100px] max-w-[95vw] max-h-[85vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl p-0">
+          <DialogHeader className="p-5 pb-3 border-b border-white/5 bg-surface-3/30 flex flex-row items-center gap-3">
+            <DialogTitle className="text-lg font-bold uppercase text-foreground flex items-center gap-2 flex-1">
+              <Gauge className="w-5 h-5 text-primary animate-pulse" /> Edit Gauge Rules (Matplotlib reports)
             </DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCloseModal}
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-white hover:bg-white/5 rounded-full transition-colors"
+              title="Close Dialog"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 p-5 max-h-[50vh]">
-            <div className="flex flex-col gap-4">
-              {categoriesList.map((cat) => {
-                const rule = gaugeRules[cat] || { min: 0, max: 10, green_min: 0, green_max: 3 }
-                return (
-                  <div key={cat} className="flex flex-col gap-2.5 p-3.5 bg-surface-3/20 border border-white/5 rounded-xl">
-                    <span className="text-sm font-bold text-foreground/90 uppercase truncate text-left">{cat}</span>
-                    <div className="grid grid-cols-4 gap-2.5">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground text-left">Min (s)</label>
-                        <Input 
-                          type="number" 
-                          value={rule.min} 
-                          onChange={(e) => updateGaugeRuleField(cat, 'min', parseFloat(e.target.value) || 0)}
-                          className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-1.5"
-                        />
+          {/* SPLIT PANE CONTAINER */}
+          <div className="flex flex-row flex-1 min-h-0 w-full">
+            
+            {/* LEFT COLUMN: SIDEBAR CONFIG SELECTION */}
+            <div className="w-[320px] border-r border-white/5 bg-surface-3/20 flex flex-col p-4 gap-4 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold uppercase text-muted-foreground/80 tracking-wider mr-auto">Profiles</span>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => setShowNewConfigPrompt(true)}
+                  className="h-8 w-8 p-0 bg-black/30 border-white/5 rounded-md hover:bg-primary hover:text-black transition-colors"
+                  title="New Configuration"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => document.getElementById('import-gauge-input')?.click()}
+                  className="h-8 w-8 p-0 bg-black/30 border-white/5 rounded-md hover:bg-primary hover:text-black transition-colors"
+                  title="Import JSON Rules File"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                <div className="flex flex-col gap-1.5 px-1 py-0.5">
+                  {modalConfigs.map((config) => {
+                    const isSelected = selectedConfigId === config.id
+                    const isActive = (gaugeRulesPath === null && config.id === 'default') || (gaugeRulesPath === config.id)
+                    return (
+                      <div
+                        key={config.id}
+                        onClick={() => handleSelectConfig(config.id)}
+                        className={cn(
+                          "w-full min-w-0 text-left p-3.5 rounded-xl border text-sm cursor-pointer transition-all flex flex-col gap-1 relative overflow-hidden group select-none",
+                          isSelected
+                            ? "bg-primary/10 border-primary/40 text-primary font-bold shadow-lg"
+                            : "bg-surface-3/15 border-white/5 hover:border-white/10 hover:bg-surface-3/30 text-foreground/80"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5 w-full">
+                          <span className="font-bold truncate max-w-[190px] text-base">{config.name}</span>
+                          {isActive && (
+                            <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-primary/20 border-primary/30 text-primary font-black uppercase tracking-widest scale-90">
+                              Active
+                            </Badge>
+                          )}
+                          {config.isDefault && (
+                            <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-white/5 border-white/10 text-muted-foreground scale-90">
+                              Default
+                            </Badge>
+                          )}
+                          
+                          {/* DELETE BUTTON FOR CUSTOM CONFIGS */}
+                          {!config.isDefault && (
+                            <button
+                              onClick={(e) => handleDeleteConfig(config.id, e)}
+                              className="ml-auto opacity-0 group-hover:opacity-100 hover:text-red-400 p-0.5 rounded transition-opacity duration-150"
+                              title="Delete config from list"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        <div 
+                          className="overflow-hidden w-full min-w-0 mt-0.5"
+                          style={{
+                            WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)',
+                            maskImage: 'linear-gradient(to right, black 85%, transparent 100%)'
+                          }}
+                        >
+                          <span 
+                            className="animate-marquee-path text-xs font-mono text-muted-foreground/75"
+                            title={config.path}
+                            style={{ animationDuration: `${Math.max(4, config.path.length * 0.15)}s` }}
+                          >
+                            {config.path}&ensp;&ensp;&ensp;&ensp;{config.path}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground text-left">Max (s)</label>
-                        <Input 
-                          type="number" 
-                          value={rule.max} 
-                          onChange={(e) => updateGaugeRuleField(cat, 'max', parseFloat(e.target.value) || 0)}
-                          className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-1.5"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground text-left">Pass Min (s)</label>
-                        <Input 
-                          type="number" 
-                          value={rule.green_min} 
-                          onChange={(e) => updateGaugeRuleField(cat, 'green_min', parseFloat(e.target.value) || 0)}
-                          className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-1.5"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground text-left">Pass Max (s)</label>
-                        <Input 
-                          type="number" 
-                          value={rule.green_max} 
-                          onChange={(e) => updateGaugeRuleField(cat, 'green_max', parseFloat(e.target.value) || 0)}
-                          className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-1.5"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+                    )
+                  })}
+                </div>
+              </div>
             </div>
-          </ScrollArea>
-          
-          <div className="p-5 pt-3 border-t border-white/5 bg-surface-3/30 flex items-center justify-end">
-            <Button 
-              onClick={() => setGaugeRulesModalOpen(false)}
-              className="h-8 bg-primary hover:bg-primary/95 text-black font-black uppercase text-[10px] tracking-widest rounded-lg px-4"
-            >
-              Apply Limits
-            </Button>
+
+            {/* RIGHT COLUMN: RULES TABLE EDITOR */}
+            <div className="flex-1 flex flex-col p-5 gap-4 min-h-0 overflow-hidden relative">
+              <div className="flex items-center justify-between pb-1.5 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold uppercase text-foreground">
+                    {selectedConfigId === 'default' ? 'Viewing: Default' : `Editing: ${modalConfigs.find(c => c.id === selectedConfigId)?.name || ''}`}
+                  </span>
+                  {selectedConfigId === 'default' && (
+                    <Badge variant="outline" className="text-xs py-0.5 px-2 bg-red-500/10 border-red-500/20 text-red-400 gap-1 font-semibold uppercase tracking-wider flex items-center">
+                      <Lock className="w-3 h-3" /> Read-Only
+                    </Badge>
+                  )}
+                  {isModified && (
+                    <Badge variant="outline" className="text-xs py-0.5 px-2 bg-orange-500/10 border-orange-500/20 text-orange-400 font-semibold uppercase tracking-wider">
+                      Unsaved Changes
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <ScrollArea className="flex-1 min-h-0">
+                <div className="pb-6">
+                  <Table className="w-full">
+                  <TableHeader>
+                    <TableRow className="border-white/5 hover:bg-transparent">
+                      <TableHead className="text-sm font-bold uppercase text-muted-foreground/80 tracking-wider w-[240px] text-left cursor-help" title="Scenario names evaluated in the gaze logic.">Category</TableHead>
+                      <TableHead className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help" title="Minimum value of the gauge display.">Min (s)</TableHead>
+                      <TableHead className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help" title="Maximum value of the gauge display.">Max (s)</TableHead>
+                      <TableHead className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help" title="Start value of the green range (Pass zone) for the gauge.">Pass Min</TableHead>
+                      <TableHead className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help" title="End value of the green range (Pass zone) for the gauge.">Pass Max</TableHead>
+                      <TableHead className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help" title="Number of intermediate ticks between the minimum and maximum values.">Ticks</TableHead>
+                      <TableHead className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-16 cursor-help" title="Reset changes for this category back to the template defaults.">Reset</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categoriesList.map((cat) => {
+                      const rule = editingRules[cat] || { min: 0, max: 10, green_min: 0, green_max: 3 }
+                      
+                      let gMin = rule.green_min
+                      let gMax = rule.green_max
+                      if (rule.green_range && Array.isArray(rule.green_range)) {
+                        gMin = rule.green_range[0]
+                        gMax = rule.green_range[1]
+                      }
+                      if (gMin === undefined) gMin = 0
+                      if (gMax === undefined) gMax = 3
+                      
+                      // Calculate Ticks Count
+                      let ticksCount = rule.ticks_count
+                      if (ticksCount === undefined) {
+                        if (Array.isArray(rule.ticks)) {
+                          ticksCount = Math.max(0, rule.ticks.length - 2)
+                        } else {
+                          const diff = (rule.max ?? 10) - (rule.min ?? 0)
+                          ticksCount = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4
+                        }
+                      }
+                      
+                      const isDisabled = selectedConfigId === 'default'
+                      
+                      return (
+                        <TableRow key={cat} className="border-white/5 hover:bg-white/[0.01]">
+                          <TableCell className="py-2.5 font-bold truncate text-left text-base text-foreground/90 max-w-[240px]" title={cat}>
+                            {cat}
+                          </TableCell>
+                          <TableCell className="py-2.5 text-center">
+                            <Input
+                              type="number"
+                              disabled={isDisabled}
+                              value={rule.min !== undefined ? rule.min : ''}
+                              onChange={(e) => handleFieldChange(cat, 'min', e.target.value)}
+                              className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
+                            />
+                          </TableCell>
+                          <TableCell className="py-2.5 text-center">
+                            <Input
+                              type="number"
+                              disabled={isDisabled}
+                              value={rule.max !== undefined ? rule.max : ''}
+                              onChange={(e) => handleFieldChange(cat, 'max', e.target.value)}
+                              className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
+                            />
+                          </TableCell>
+                          <TableCell className="py-2.5 text-center">
+                            <Input
+                              type="number"
+                              disabled={isDisabled}
+                              value={gMin !== undefined ? gMin : ''}
+                              onChange={(e) => handleFieldChange(cat, 'green_min', e.target.value)}
+                              className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
+                            />
+                          </TableCell>
+                          <TableCell className="py-2.5 text-center">
+                            <Input
+                              type="number"
+                              disabled={isDisabled}
+                              value={gMax !== undefined ? gMax : ''}
+                              onChange={(e) => handleFieldChange(cat, 'green_max', e.target.value)}
+                              className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
+                            />
+                          </TableCell>
+                          <TableCell className="py-2.5 text-center">
+                            <Input
+                              type="number"
+                              disabled={isDisabled}
+                              min="0"
+                              max="20"
+                              placeholder="e.g. 4"
+                              value={ticksCount !== undefined ? ticksCount : ''}
+                              onChange={(e) => handleFieldChange(cat, 'ticks_count', parseInt(e.target.value) || 0)}
+                              className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
+                            />
+                          </TableCell>
+                          <TableCell className="py-2.5 text-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={isDisabled}
+                              onClick={() => handleResetRowToDefault(cat)}
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-white/5 disabled:opacity-40 rounded-md transition-colors mx-auto"
+                              title="Reset this category to default values"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                  </Table>
+                </div>
+              </ScrollArea>
+
+              {/* EDITOR ACTION BUTTONS */}
+              <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-auto">
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleExportGaugeConfig}
+                    className="h-9 border-white/10 bg-black/20 hover:bg-white/5 text-sm font-bold px-3"
+                  >
+                    <Download className="w-4 h-4 mr-1.5" /> Export JSON
+                  </Button>
+                  {selectedConfigId !== 'default' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleRevertConfig}
+                      className="h-9 border-white/10 bg-black/20 hover:bg-white/5 text-sm font-bold px-3"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-1.5" /> Undo Changes
+                  </Button>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  {selectedConfigId !== 'default' && (
+                    <Button
+                      size="sm"
+                      disabled={!isModified}
+                      onClick={handleSaveActiveConfig}
+                      className={cn(
+                        "h-9 text-sm font-bold px-3",
+                        isModified ? "bg-primary text-black hover:bg-primary/90" : "bg-white/5 border border-white/10 text-muted-foreground"
+                      )}
+                    >
+                      <Save className="w-4 h-4 mr-1.5" /> Save File
+                    </Button>
+                  )}
+                  
+                  <div className="h-9 w-[1px] bg-white/10 mx-1" />
+                  
+                  <Button
+                    onClick={handleApplyLimits}
+                    className="h-9 bg-primary hover:bg-primary/95 text-black font-black uppercase text-xs tracking-wider rounded-lg px-5"
+                  >
+                    Apply Limits
+                  </Button>
+                </div>
+              </div>
+            </div>
+
           </div>
+
+          {/* HIDDEN INPUT FOR GAUGE RULES IMPORT */}
+          <input
+            type="file"
+            id="import-gauge-input"
+            className="hidden"
+            accept=".json"
+            onChange={handleImportGaugeConfig}
+          />
+
+          {/* NEW CONFIG DIALOG POPUP OVERLAY */}
+          {showNewConfigPrompt && (
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <Card className="bg-surface-2 border border-white/10 text-white w-full max-w-md rounded-xl shadow-2xl p-6">
+                <CardHeader className="p-0 pb-3 flex flex-col gap-1.5">
+                  <CardTitle className="text-lg font-bold uppercase text-foreground flex items-center gap-2 text-left">
+                    <Plus className="w-5 h-5 text-primary" /> Create New Configuration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex flex-col gap-4">
+                  
+                  {/* PROJECT FOLDER SELECTOR (SHOW IF NO ACTIVE PROJECT IN STORE) */}
+                  {!analysisSourcePath && (
+                    <div className="flex flex-col gap-1.5 text-left">
+                      <label className="text-sm font-bold uppercase text-muted-foreground/80">Project Folder (Required)</label>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Select project folder..."
+                          value={tempProjectPath}
+                          readOnly
+                          className="h-9 bg-surface-3 border-white/5 text-sm flex-1 truncate"
+                        />
+                        <Button 
+                          onClick={() => setNewConfigProjectBrowserOpen(true)}
+                          className="h-9 bg-primary/20 border border-primary/30 text-primary hover:bg-primary hover:text-black font-bold text-xs px-3"
+                        >
+                          Browse
+                        </Button>
+                      </div>
+                      <span className="text-xs text-muted-foreground/90 leading-normal italic font-medium">
+                        Tip: Choose the root folder containing the participant folders (P01, P02, P03, etc.).
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1.5 text-left">
+                    <label className="text-sm font-bold uppercase text-muted-foreground/80">Configuration Name</label>
+                    <Input
+                      placeholder="e.g. ncap_rules_2026"
+                      value={newConfigName}
+                      onChange={(e) => setNewConfigName(e.target.value)}
+                      className="h-9 bg-surface-3 border-white/5 text-base"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateNewConfig()
+                      }}
+                    />
+                    <span className="text-xs text-muted-foreground/90 leading-normal">
+                      The file will always be saved in your project directory (the folder with P01, P02, etc.) as a JSON file.
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-end gap-2.5 mt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowNewConfigPrompt(false)
+                        setNewConfigName('')
+                        setTempProjectPath('')
+                      }}
+                      className="h-9 border-white/10 hover:bg-white/5 text-xs font-bold py-0.5 px-4"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleCreateNewConfig}
+                      className="h-9 bg-primary hover:bg-primary/90 text-black text-xs font-black py-0.5 px-4 uppercase tracking-wider"
+                    >
+                      Create
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* CONFIRM SWITCH DIALOG POPUP OVERLAY */}
+          {showConfirmSwitch && (
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <Card className="bg-surface-2 border border-white/10 text-white w-full max-w-sm rounded-xl shadow-2xl p-6">
+                <CardHeader className="p-0 pb-3 flex flex-col gap-1.5">
+                  <CardTitle className="text-base font-extrabold uppercase text-foreground/90 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-primary" /> Unsaved Changes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex flex-col gap-4 text-left">
+                  <span className="text-sm text-muted-foreground/95 leading-relaxed">
+                    You have unsaved changes in the current configuration. Would you like to save them before switching?
+                  </span>
+                  <div className="flex justify-end gap-2 mt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowConfirmSwitch(null)}
+                      className="h-9 border-white/10 hover:bg-white/5 text-xs font-bold py-0.5 px-4"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        if (showConfirmSwitch === 'close_modal') {
+                          setIsModified(false)
+                          setGaugeRulesModalOpen(false)
+                        } else {
+                          performSwitch(showConfirmSwitch)
+                        }
+                        setShowConfirmSwitch(null)
+                      }}
+                      className="h-9 hover:bg-white/5 text-xs font-bold py-0.5 px-4 text-red-400 hover:text-red-300"
+                    >
+                      Discard
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        await handleSaveActiveConfig()
+                        if (showConfirmSwitch === 'close_modal') {
+                          setGaugeRulesModalOpen(false)
+                        } else {
+                          performSwitch(showConfirmSwitch)
+                        }
+                        setShowConfirmSwitch(null)
+                      }}
+                      className="h-9 bg-primary hover:bg-primary/90 text-black text-xs font-black py-0.5 px-4 uppercase tracking-wider"
+                    >
+                      Save & Switch
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* FOLDER BROWSER FOR SELECTING PROJECT DIRECTORY */}
+          <FolderBrowser 
+            open={newConfigProjectBrowserOpen} 
+            onOpenChange={setNewConfigProjectBrowserOpen} 
+            onSelect={(path) => setTempProjectPath(path)} 
+          />
+
         </DialogContent>
       </Dialog>
 
@@ -1254,6 +2174,55 @@ export function GazeLogicTab() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* RESET CONFIRMATION ALERT DIALOG */}
+      <AlertDialog open={resetConfirmType !== null} onOpenChange={(open) => { if (!open) setResetConfirmType(null) }}>
+        <AlertDialogContent className="max-w-[400px] border border-white/10 bg-surface-2/95 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <AlertDialogHeader className="items-center text-center gap-1.5">
+            <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+              {resetConfirmType === 'config' && "Reset Configuration?"}
+              {resetConfirmType === 'gauge' && "Reset Gauge Limits?"}
+              {resetConfirmType === 'case' && "Unload Case File?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-white/70 max-w-[340px] leading-relaxed">
+              {resetConfirmType === 'config' && "This will unmount the active configuration file. It affects multiple parts of the application, resetting all signals selection, pass criteria formulas, and custom gauge limits back to default system templates."}
+              {resetConfirmType === 'gauge' && "This will revert the active matplotlib report gauge display limits back to default templates."}
+              {resetConfirmType === 'case' && "This will unload the current case file and clear all of its loaded signals."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row items-center justify-center gap-3 w-full mt-2">
+            <AlertDialogCancel className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (resetConfirmType === 'config') {
+                  handleUnmountConfig()
+                  toast.success("Configuration unmounted. Reverted to defaults.")
+                } else if (resetConfirmType === 'gauge') {
+                  setGaugeRules(DEFAULT_GAUGE_RULES)
+                  setGaugeRulesPath(null)
+                  toast.success("Gauge rules reset to defaults.")
+                } else if (resetConfirmType === 'case') {
+                  setLoadedFiles(prev => {
+                    const next = { ...prev }
+                    delete next[activeCategory]
+                    return next
+                  })
+                  toast.success("Case file unloaded.")
+                }
+                setResetConfirmType(null)
+              }} 
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-lg"
+            >
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   )

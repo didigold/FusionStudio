@@ -712,3 +712,48 @@ async def gaze_generate(req: GazeGenerateRequest):
     _worker_thread.start()
 
     return {"status": "started"}
+
+
+class GaugeFileReadRequest(BaseModel):
+    file_path: str
+
+
+class GaugeFileWriteRequest(BaseModel):
+    file_path: str
+    rules: dict
+
+
+class GaugeFileExistsRequest(BaseModel):
+    file_path: str
+
+
+@router.post("/gauge_rules/read_file")
+async def read_gauge_rules_file(req: GaugeFileReadRequest):
+    if not os.path.exists(req.file_path):
+        return {"error": "File not found"}
+    try:
+        with open(req.file_path, "r", encoding="utf-8") as f:
+            content = json.load(f)
+            if isinstance(content, dict):
+                return {"rules": content}
+            return {"error": "Invalid format, must be a JSON object"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/gauge_rules/write_file")
+async def write_gauge_rules_file(req: GaugeFileWriteRequest):
+    try:
+        parent_dir = os.path.dirname(req.file_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        with open(req.file_path, "w", encoding="utf-8") as f:
+            json.dump(req.rules, f, indent=2)
+        return {"status": "success"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/gauge_rules/exists")
+async def check_gauge_rules_exists(req: GaugeFileExistsRequest):
+    return {"exists": os.path.exists(req.file_path) and os.path.isfile(req.file_path)}

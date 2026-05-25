@@ -174,7 +174,7 @@ export function GazeTimeTab() {
     let last = 0;
     const loop = () => {
       seekRAF.current = requestAnimationFrame(loop);
-      if (!isSyncedRef.current || isPlayingRef.current || panRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
+      if (!isSyncedRef.current || isPlayingRef.current || panRef.current || !videoRef.current || videoRef.current.readyState < 1) return;
       const h = hoverTimeRef.current;
       if (h == null) return;
       const now = performance.now();
@@ -352,6 +352,7 @@ export function GazeTimeTab() {
   }, []);
 
   useEffect(() => {
+    hoverTimeRef.current = null;
     if (targetFile) {
       analysisApi.channels(targetFile).then(res => {
         const available = res.data.channels || [];
@@ -805,8 +806,6 @@ export function GazeTimeTab() {
           animation: pulseSmoothSync 3s ease-in-out infinite;
         }
       `}</style>
-
-      <div className="flex justify-end shrink-0" />
 
       <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
         <div className="flex-[2] flex flex-col gap-2 bg-black/40 rounded-3xl border border-white/5 p-4 overflow-hidden shadow-inner h-full min-h-0 justify-center">

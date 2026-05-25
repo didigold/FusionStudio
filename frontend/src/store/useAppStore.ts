@@ -21,8 +21,11 @@ export interface PassConfig {
 export interface GaugeConfig {
   min: number
   max: number
-  green_min: number
-  green_max: number
+  green_min?: number
+  green_max?: number
+  green_range?: [number, number]
+  ticks?: number[]
+  ticks_count?: number
 }
 
 const DEFAULT_SIGNAL_LISTS: Record<string, SignalConfig[]> = {
@@ -307,6 +310,10 @@ interface AppState {
   setLoadedFiles: (lf: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void
   importedConfigName: string | null
   setImportedConfigName: (n: string | null) => void
+  gaugeRulesPath: string | null
+  setGaugeRulesPath: (path: string | null) => void
+  knownGaugeRulesPaths: string[]
+  setKnownGaugeRulesPaths: (paths: string[]) => void
 
   // Prompt state
   isPromptingForPath: boolean
@@ -582,6 +589,13 @@ export const useAppStore = create<AppState>((set) => ({
   setLoadedFiles: (lf) => set((s) => ({ loadedFiles: typeof lf === 'function' ? lf(s.loadedFiles) : lf })),
   importedConfigName: null,
   setImportedConfigName: (n) => set({ importedConfigName: n }),
+  gaugeRulesPath: null,
+  setGaugeRulesPath: (path) => set({ gaugeRulesPath: path }),
+  knownGaugeRulesPaths: JSON.parse(localStorage.getItem('knownGaugeRulesPaths') || '[]'),
+  setKnownGaugeRulesPaths: (paths) => {
+    localStorage.setItem('knownGaugeRulesPaths', JSON.stringify(paths))
+    set({ knownGaugeRulesPaths: paths })
+  },
 
   // Prompt state init
   isPromptingForPath: false,
@@ -796,6 +810,44 @@ export const useAppStore = create<AppState>((set) => ({
         }
       }
 
+      let validatedGaugeRulesPath: string | null = null
+      if (typeof parsed.gauge_rules_path === 'string') {
+        validatedGaugeRulesPath = parsed.gauge_rules_path
+      }
+
+      if (validatedGaugeRulesPath) {
+        try {
+          const checkRes = await fetch('/api/reporting/gauge_rules/exists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_path: validatedGaugeRulesPath })
+          })
+          const checkData = await checkRes.json()
+          if (!checkData.exists) {
+            toast.warning(`Warning: Gauge rules file not found at: ${validatedGaugeRulesPath}. Using default rules instead.`, { duration: 6000 })
+            validatedGaugeRulesPath = null
+          } else {
+            const readRes = await fetch('/api/reporting/gauge_rules/read_file', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ file_path: validatedGaugeRulesPath })
+            })
+            const readData = await readRes.json()
+            if (readData.rules) {
+              parsed.gauge_rules = readData.rules
+              const currentKnown = useAppStore.getState().knownGaugeRulesPaths
+              if (!currentKnown.includes(validatedGaugeRulesPath)) {
+                useAppStore.getState().setKnownGaugeRulesPaths([...currentKnown, validatedGaugeRulesPath])
+              }
+            } else if (readData.error) {
+              toast.error(`Error reading gauge rules file: ${readData.error}`)
+            }
+          }
+        } catch (err) {
+          console.error("Error loading gauge rules path:", err)
+        }
+      }
+
       let validatedProtocol: 'Euro NCAP' | 'GSR ADDW' = 'Euro NCAP'
       if (parsed.protocol === 'GSR ADDW' || parsed.protocol === 'Euro NCAP') {
         validatedProtocol = parsed.protocol
@@ -916,6 +968,7 @@ export const useAppStore = create<AppState>((set) => ({
         protocol: validatedProtocol,
         passCriteria: mergedPassCriteria,
         gaugeRules: mergedGaugeRules,
+        gaugeRulesPath: validatedGaugeRulesPath,
         importedConfigName: fileName
       })
 
@@ -996,10 +1049,15 @@ export const useAppStore = create<AppState>((set) => ({
 
         if (state.pendingConfig) {
           const parsed = state.pendingConfig
+          let validatedGaugeRulesPath: string | null = null
+          if (typeof parsed.gauge_rules_path === 'string') {
+            validatedGaugeRulesPath = parsed.gauge_rules_path
+          }
           set({
             protocol: parsed.protocol || 'Euro NCAP',
             passCriteria: { ...DEFAULT_PASS_CRITERIA, ...(parsed.pass_criteria || {}) },
             gaugeRules: { ...DEFAULT_GAUGE_RULES, ...(parsed.gauge_rules || {}) },
+            gaugeRulesPath: validatedGaugeRulesPath,
           })
           
           const validatedCategories: Record<string, SignalConfig[]> = {}
@@ -1067,7 +1125,8 @@ export const useAppStore = create<AppState>((set) => ({
       analysis_source_path: state.analysisSourcePath,
       categories: state.signalsConfig,
       pass_criteria: state.passCriteria,
-      gauge_rules: state.gaugeRules
+      gauge_rules: state.gaugeRules,
+      gauge_rules_path: state.gaugeRulesPath
     }
     
     const suggestedName = `gaze_logic_config_${state.protocol.replace(/\s+/g, '_').toLowerCase()}.json`
@@ -1112,6 +1171,7 @@ export const useAppStore = create<AppState>((set) => ({
       signalsConfig: DEFAULT_SIGNAL_LISTS,
       passCriteria: DEFAULT_PASS_CRITERIA,
       gaugeRules: DEFAULT_GAUGE_RULES,
+      gaugeRulesPath: null,
       protocol: 'Euro NCAP',
       loadedFiles: {},
       importedConfigName: null
