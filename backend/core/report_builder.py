@@ -80,12 +80,19 @@ class MatplotlibReportBuilder:
                                     dt = np.mean(np.diff(timestamps_np))
                                     fs = 1.0 / dt
                                     nyq = 0.5 * fs
-                                    low = min_f / nyq
-                                    high = max_f / nyq
-                                    if 0 < low < 1 and 0 < high < 1 and low < high:
-                                        from scipy.signal import butter, filtfilt
-                                        b, a = butter(4, [low, high], btype='band')
-                                        samples_numeric = list(filtfilt(b, a, samples_np))
+                                    
+                                    # Apply safety limits to normalized frequencies to avoid butterworth filter errors
+                                    low = max(1e-6, float(min_f) / nyq)
+                                    high = min(1.0 - 1e-6, float(max_f) / nyq)
+                                    if low >= high:
+                                        high = low + 0.1
+                                        if high >= 1.0:
+                                            low = 0.1
+                                            high = 0.9
+                                    
+                                    from scipy.signal import butter, filtfilt
+                                    b, a = butter(4, [low, high], btype='band')
+                                    samples_numeric = list(filtfilt(b, a, samples_np))
                                 except Exception:
                                     pass
                             
@@ -549,13 +556,18 @@ class MatplotlibReportBuilder:
              if minf > 0 or maxf > 0:
                  try:
                     nyq = 0.5 / np.mean(np.diff(tsn))
-                    lo, hi = minf / nyq, maxf / nyq
-                    if 0 < lo < 1 and 0 < hi < 1 and lo < hi:
-                        b, a = signal.butter(4, [lo, hi], btype='band')
-                        sn = signal.filtfilt(b, a, sn); suf = f" ({minf}-{maxf} Hz)"
+                    lo = max(1e-6, minf / nyq)
+                    hi = min(1.0 - 1e-6, maxf / nyq)
+                    if lo >= hi:
+                        hi = lo + 0.1
+                        if hi >= 1.0:
+                            lo = 0.1
+                            hi = 0.9
+                    b, a = signal.butter(4, [lo, hi], btype='band')
+                    sn = signal.filtfilt(b, a, sn); suf = f" ({minf}-{maxf} Hz)"
                  except Exception: pass
              ax.set_title(dn + suf, fontsize=8, fontweight='bold', color=self.COLORS['text'])
-             if self.config.get('show_thresholds', True) and th > 0: ax.axhline(y=th, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
+             if th > 0: ax.axhline(y=th, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
         ax.plot(tsn, sn, color=self.COLORS['primary'], linewidth=0.8)
         if self.config.get('om_plot_show_marks'):
             marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if isinstance(t, (int, float))])

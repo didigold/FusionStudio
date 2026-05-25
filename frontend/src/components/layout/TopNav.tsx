@@ -1,29 +1,37 @@
-import { useState, useEffect } from 'react'
-import { SystemBadge } from './SystemBadge'
-import {
-  FolderOpen,
-  Loader2,
-  X,
-  Download,
-  Save
-} from 'lucide-react'
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react";
+import { FolderOpen, Loader2, X, Download, Save } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useAppStore } from '@/store/useAppStore'
-import { FolderBrowser } from '@/components/analysis/FolderBrowser'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/dropdown-menu";
+import { useAppStore } from "@/store/useAppStore";
+import { FolderBrowser } from "@/components/analysis/FolderBrowser";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-declare const __USERNAME__: string | undefined
+declare const __USERNAME__: string | undefined;
 
-const userName = typeof __USERNAME__ !== 'undefined' ? __USERNAME__ : 'User'
+const userName = typeof __USERNAME__ !== "undefined" ? __USERNAME__ : "User";
 
 export function TopNav() {
   const {
@@ -43,112 +51,143 @@ export function TopNav() {
     isPromptingForPath,
     setIsPromptingForPath,
     pendingConfig,
-    confirmPromptedPath
-  } = useAppStore()
+    confirmPromptedPath,
+  } = useAppStore();
 
-  const [scanning, setScanning] = useState(false)
-  const [browseOpen, setBrowseOpen] = useState(false)
-  const [promptedPath, setPromptedPath] = useState('')
-  const [promptFolderBrowserOpen, setPromptFolderBrowserOpen] = useState(false)
+  const [scanning, setScanning] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [promptedPath, setPromptedPath] = useState("");
+  const [promptFolderBrowserOpen, setPromptFolderBrowserOpen] = useState(false);
+  const [localPath, setLocalPath] = useState(analysisSourcePath);
+  const [isFocused, setIsFocused] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
+  // Keep localPath in sync with store changes (e.g. folder browser or config loaded)
+  useEffect(() => {
+    setLocalPath(analysisSourcePath);
+  }, [analysisSourcePath]);
 
   // Pre-populate promptedPath when pendingConfig/analysisSourcePath changes
   useEffect(() => {
     if (isPromptingForPath) {
-      setPromptedPath(pendingConfig?.analysis_source_path || analysisSourcePath || '')
+      setPromptedPath(
+        pendingConfig?.analysis_source_path || analysisSourcePath || "",
+      );
     }
-  }, [isPromptingForPath, pendingConfig, analysisSourcePath])
+  }, [isPromptingForPath, pendingConfig, analysisSourcePath]);
 
   const triggerScanForPath = async (path: string) => {
-    if (!path) return
-    setScanning(true)
+    if (!path) return;
+    setScanning(true);
     try {
-      const res = await fetch('/api/analysis/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/analysis/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source_dir: path }),
-      })
-      const data = await res.json()
-      setAnalysisResults(data.results || [])
-      setAnalysisAvailableCameras(data.available_cameras || [])
-      setAllAnalysisFiles(true)
-      addLog(`Analysis scan found ${data.results?.length || 0} participants.`)
+      });
+      const data = await res.json();
+      setAnalysisResults(data.results || []);
+      setAnalysisAvailableCameras(data.available_cameras || []);
+      setAllAnalysisFiles(true);
+      addLog(`Analysis scan found ${data.results?.length || 0} participants.`);
     } catch (err) {
-      addLog(`Error scanning analysis dir: ${err}`)
+      addLog(`Error scanning analysis dir: ${err}`);
     } finally {
-      setScanning(false)
+      setScanning(false);
     }
-  }
+  };
 
   const handleFolderSelect = (path: string) => {
-    setAnalysisSourcePath(path)
-    triggerScanForPath(path)
-  }
+    setAnalysisSourcePath(path);
+    triggerScanForPath(path);
+  };
 
   const handleClearPath = () => {
-    setAnalysisSourcePath('')
-    setAnalysisResults([])
-    setAnalysisAvailableCameras([])
-    setAnalysisSelectedFile('')
-    setAllAnalysisFiles(false)
-    addLog('Analysis source path cleared.')
-  }
+    setAnalysisSourcePath("");
+    setLocalPath("");
+    setAnalysisResults([]);
+    setAnalysisAvailableCameras([]);
+    setAnalysisSelectedFile("");
+    setAllAnalysisFiles(false);
+    addLog("Analysis source path cleared.");
+  };
 
   const handleConfirmPromptedPath = async () => {
-    if (!promptedPath) return
-    const success = await confirmPromptedPath(promptedPath)
+    if (!promptedPath) return;
+    const success = await confirmPromptedPath(promptedPath);
     if (success) {
       // On success, isPromptingForPath is set to false in store
     }
-  }
+  };
 
   return (
     <>
       <header className="relative w-full h-16 border-b border-white/5 bg-[#121110] flex items-center justify-between px-8 z-40 sticky top-0">
-        
         {/* Left Side: Brand Logo and Text */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="21" viewBox="0 0 48 46" fill="none" className="text-white">
-            <path fill="currentColor" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="22"
+            height="21"
+            viewBox="0 0 48 46"
+            fill="none"
+            className="text-white"
+          >
+            <path
+              fill="currentColor"
+              d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"
+            />
           </svg>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-extrabold text-white tracking-wide">FusionStudio</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-extrabold text-white tracking-wide">
+              FusionStudio
+            </span>
             <span className="text-sm text-neutral-400 font-medium">|</span>
-            <span className="text-xs font-bold text-orange-500 tracking-wider">IDIADA</span>
+            <img
+              src="/assets/logos/APPLUS+IDIADA.png"
+              alt="Applus Idiada"
+              className="h-[36px] object-contain opacity-80"
+              style={{ filter: "brightness(0) invert(1)" }}
+            />
           </div>
         </div>
 
         {/* Center: Data Source Input Area (Fixed Position) */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
-          <div className={cn(
-            "relative w-[600px] h-9 flex items-center bg-[#1e1d1c] border rounded-lg px-2 transition-all shadow-inner",
-            !analysisSourcePath ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]" : "border-white/5"
-          )}>
+          <div
+            className={cn(
+              "relative w-[600px] h-9 flex items-center bg-[#1e1d1c] border rounded-lg px-2 transition-all shadow-inner",
+              isFocused
+                ? "border-orange-500 ring-1 ring-orange-500/20"
+                : !analysisSourcePath
+                  ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]"
+                  : "border-white/5",
+            )}
+          >
             <input
               type="text"
-              value={analysisSourcePath}
-              onChange={(e) => setAnalysisSourcePath(e.target.value)}
-              onPaste={(e) => {
-                const pastedText = e.clipboardData.getData('text')
-                if (pastedText) {
-                  setAnalysisSourcePath(pastedText)
-                  triggerScanForPath(pastedText)
-                }
-              }}
+              value={localPath}
+              onChange={(e) => setLocalPath(e.target.value)}
+              onFocus={() => setIsFocused(true)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  triggerScanForPath(analysisSourcePath)
+                if (e.key === "Enter") {
+                  setAnalysisSourcePath(localPath);
+                  triggerScanForPath(localPath);
                 }
               }}
               onBlur={() => {
-                triggerScanForPath(analysisSourcePath)
+                setIsFocused(false);
+                setAnalysisSourcePath(localPath);
+                triggerScanForPath(localPath);
               }}
               placeholder="Select project folder..."
-              className="bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 text-xs text-zinc-200 placeholder:text-zinc-500 w-full pl-2 pr-2"
+              style={{ outline: "none", border: "none", boxShadow: "none" }}
+              className="bg-transparent text-xs text-zinc-200 placeholder:text-zinc-500 w-full pl-2 pr-2"
             />
             {analysisSourcePath && (
               <button
                 type="button"
-                onClick={handleClearPath}
+                onClick={() => setClearConfirmOpen(true)}
                 className="p-1 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-md transition-all mr-1"
                 title="Clear Path"
               >
@@ -156,7 +195,7 @@ export function TopNav() {
               </button>
             )}
           </div>
-          
+
           {/* Browse button */}
           <Button
             type="button"
@@ -174,34 +213,16 @@ export function TopNav() {
           </Button>
         </div>
 
-        {/* Right Side: Active Config, SystemBadge, and User Profile */}
-        <div className="flex items-center gap-2 shrink-0 justify-end ml-auto">
-          
-          {/* Active Config Label (if present) */}
-          {importedConfigName ? (
-            <div className="flex items-center bg-[#1e1d1c] border border-primary/20 rounded-lg p-0.5 pr-2 gap-1.5 h-9">
-              <span className="text-[9px] uppercase font-extrabold text-primary px-1.5 py-0.5 bg-primary/10 rounded">
-                Config
-              </span>
-              <span className="text-xs text-white max-w-[100px] truncate font-medium" title={importedConfigName}>
-                {importedConfigName}
-              </span>
-              <button 
-                onClick={handleUnmountConfig}
-                className="text-zinc-500 hover:text-white transition-colors p-0.5 hover:bg-white/5 rounded"
-                title="Unmount Configuration"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ) : null}
-
-          {/* Import / Save Config buttons on the right (left of CPU divider) */}
+        {/* Right Side: Import/Save Config buttons and User Profile */}
+        <div className="flex items-center gap-3 shrink-0 justify-end ml-auto">
+          {/* Import / Save Config buttons */}
           <div className="flex items-center gap-1.5">
             {/* Import Config */}
             <Button
               type="button"
-              onClick={() => document.getElementById('global-import-config-input')?.click()}
+              onClick={() =>
+                document.getElementById("global-import-config-input")?.click()
+              }
               variant="outline"
               size="icon"
               className="w-9 h-9 rounded-lg border border-white/5 bg-[#1e1d1c] text-white hover:bg-white/5 hover:border-white/10 transition-all shrink-0"
@@ -209,22 +230,22 @@ export function TopNav() {
             >
               <Download className="w-3.5 h-3.5 text-zinc-400" />
             </Button>
-            <input 
-              type="file" 
-              id="global-import-config-input" 
-              className="hidden" 
+            <input
+              type="file"
+              id="global-import-config-input"
+              className="hidden"
               accept=".json"
               onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                const reader = new FileReader()
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
                 reader.onload = async (event) => {
-                  const fileContent = event.target?.result as string
-                  await importConfigJSON(fileContent, file.name)
-                }
-                reader.readAsText(file)
-                e.target.value = '' // Reset
-              }} 
+                  const fileContent = event.target?.result as string;
+                  await importConfigJSON(fileContent, file.name);
+                };
+                reader.readAsText(file);
+                e.target.value = ""; // Reset
+              }}
             />
 
             {/* Save Config */}
@@ -242,59 +263,95 @@ export function TopNav() {
 
           <div className="h-6 w-[1px] bg-white/10" />
 
-          {/* System status and user profile */}
-          <div className="flex items-center gap-2">
-            <SystemBadge />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 hover:bg-white/5">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs bg-zinc-800 text-white">{userName.charAt(0).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 bg-[#1e1d1c] border-white/5 text-white">
-                <div className="px-2 py-2 text-xs font-bold text-muted-foreground border-b border-white/5">
-                  {userName}
-                </div>
-                <DropdownMenuItem className="cursor-default text-zinc-400 text-xs hover:bg-transparent">
-                  Accredited user
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
+          {/* User profile */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full h-8 w-8 hover:bg-white/5"
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="text-xs bg-zinc-800 text-white">
+                    {userName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-44 bg-[#1e1d1c] border-white/5 text-white"
+            >
+              <div className="px-2 py-2 text-xs font-bold text-muted-foreground border-b border-white/5">
+                {userName}
+              </div>
+              <DropdownMenuItem className="cursor-default text-zinc-400 text-xs hover:bg-transparent">
+                Accredited user
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-
       </header>
+
+      {/* CLEAR PATH CONFIRM DIALOG */}
+      <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <AlertDialogContent className="bg-[#1e1d1c] border-white/10 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Are you sure you want to clear the project folder?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400 text-xs">
+              This action will clear the loaded project path and reset all
+              analysis results and cameras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-8 text-xs bg-zinc-800 border-white/5 text-white hover:bg-zinc-700 hover:text-white rounded-lg">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                handleClearPath();
+                setClearConfirmOpen(false);
+              }}
+              className="h-8 text-xs bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+            >
+              Clear Folder
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* FALLBACK PATH PROMPT DIALOG */}
       <Dialog open={isPromptingForPath} onOpenChange={setIsPromptingForPath}>
         <DialogContent className="bg-surface-2 border-white/10 text-foreground w-[520px] max-w-[95vw] rounded-2xl overflow-hidden shadow-2xl p-0">
           <DialogHeader className="p-5 pb-3 border-b border-white/5 bg-surface-3/30 text-left">
             <DialogTitle className="text-sm font-bold uppercase text-foreground/90 flex items-center gap-2">
-              <FolderOpen className="w-4 h-4 text-warning" /> Configure Project Path
+              <FolderOpen className="w-4 h-4 text-warning" /> Configure Project
+              Path
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="p-5 flex flex-col gap-4">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              The imported configuration requires a valid project source directory to automatically scan and load signals.
+              The imported configuration requires a valid project source
+              directory to automatically scan and load signals.
               {pendingConfig?.analysis_source_path && (
                 <span className="block mt-2 font-mono text-[10px] text-orange-400 bg-orange-500/5 border border-orange-500/10 p-2.5 rounded-lg break-all">
-                  Configured path not found: {pendingConfig.analysis_source_path}
+                  Configured path not found:{" "}
+                  {pendingConfig.analysis_source_path}
                 </span>
               )}
             </p>
-            
+
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 Select Project Directory
               </label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Input 
-                    placeholder="c:/path/to/project/folder..." 
+                  <Input
+                    placeholder="c:/path/to/project/folder..."
                     value={promptedPath}
                     onChange={(e) => setPromptedPath(e.target.value)}
                     className="h-9 bg-surface-3 border-white/10 text-xs rounded-lg placeholder:text-muted-foreground/40"
@@ -311,16 +368,16 @@ export function TopNav() {
               </div>
             </div>
           </div>
-          
+
           <div className="p-4 pt-2 border-t border-white/5 bg-surface-3/30 flex items-center justify-end gap-3">
-            <Button 
+            <Button
               variant="outline"
               onClick={() => setIsPromptingForPath(false)}
               className="h-8 border-white/10 hover:bg-white/5 text-foreground font-bold uppercase text-[10px] tracking-widest rounded-lg px-4"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               disabled={!promptedPath}
               onClick={handleConfirmPromptedPath}
               className="h-8 bg-primary hover:bg-primary/95 text-white font-bold uppercase text-[10px] tracking-widest rounded-lg px-4"
@@ -331,15 +388,19 @@ export function TopNav() {
         </DialogContent>
       </Dialog>
 
-      <FolderBrowser open={browseOpen} onOpenChange={setBrowseOpen} onSelect={handleFolderSelect} />
-      <FolderBrowser 
-        open={promptFolderBrowserOpen} 
-        onOpenChange={setPromptFolderBrowserOpen} 
+      <FolderBrowser
+        open={browseOpen}
+        onOpenChange={setBrowseOpen}
+        onSelect={handleFolderSelect}
+      />
+      <FolderBrowser
+        open={promptFolderBrowserOpen}
+        onOpenChange={setPromptFolderBrowserOpen}
         onSelect={(path) => {
-          setPromptedPath(path)
-          setPromptFolderBrowserOpen(false)
-        }} 
+          setPromptedPath(path);
+          setPromptFolderBrowserOpen(false);
+        }}
       />
     </>
-  )
+  );
 }

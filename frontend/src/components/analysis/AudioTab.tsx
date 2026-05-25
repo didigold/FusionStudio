@@ -59,10 +59,16 @@ interface AudioTabProps {
 }
 
 export function AudioTab({ selectedFile }: AudioTabProps) {
-  const { analysisCheckedFiles, addLog } = useAppStore();
-  const [minFreq, setMinFreq] = useState(230);
-  const [maxFreq, setMaxFreq] = useState(2000);
-  const [threshold, setThreshold] = useState(0.5);
+  const { 
+    analysisCheckedFiles, 
+    addLog,
+    audioMinFreq: minFreq,
+    setAudioMinFreq: setMinFreq,
+    audioMaxFreq: maxFreq,
+    setAudioMaxFreq: setMaxFreq,
+    audioThreshold: threshold,
+    setAudioThreshold: setThreshold
+  } = useAppStore();
   const [isDetecting, setIsDetecting] = useState(false);
   const [peakFreq, setPeakFreq] = useState<number | null>(null);
 

@@ -34,7 +34,7 @@ import {
   Clock,
   Sliders,
   HelpCircle,
-  Eye,
+  BugPlay,
   Activity,
   Menu,
   Filter,
@@ -64,6 +64,24 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
+
+const caseIdsMap: Record<string, string> = {
+  "Long Distraction (NDT)": "Case IDs: D1-D9",
+  "Long Distraction (DT)": "Case IDs: D10-D15",
+  "Short Distraction (NDT)": "Case IDs: D16-D19, D28, D29-D42 (Includes Phone Use)",
+  "Short Distraction (DT)": "Case IDs: D20-D27",
+  "Microsleep": "Case IDs: F1",
+  "Sleep": "Case IDs: F2",
+  "Drowsiness": "Case IDs: F3",
+  "Unresponsive driver": "Case IDs: F4, F5",
+  "High Speed": "Case IDs: ADDW High Speed",
+  "Low Speed": "Case IDs: ADDW Low Speed",
+}
 
 interface SignalConfig {
   name: string
@@ -132,6 +150,9 @@ export function GazeLogicTab() {
     setGaugeRulesPath,
     knownGaugeRulesPaths,
     setKnownGaugeRulesPaths,
+    audioMinFreq,
+    audioMaxFreq,
+    audioThreshold,
 
     // Store actions
     autoLoadChannelsAndMerge,
@@ -862,6 +883,9 @@ export function GazeLogicTab() {
 
     setIsPreviewLoading(true)
 
+    // Open a blank window synchronously on user click to avoid browser popup blockers
+    const newWindow = window.open('about:blank', '_blank')
+
     try {
       const backendConfigs = getBackendCategoryConfigs()
       const res = await reportingApi.gazePreview({
@@ -875,20 +899,34 @@ export function GazeLogicTab() {
           track: analysisTrack
         },
         category_configs: backendConfigs,
-        gauge_rules: gaugeRules
+        gauge_rules: gaugeRules,
+        micro: {
+          min_freq: audioMinFreq,
+          max_freq: audioMaxFreq,
+          threshold: audioThreshold
+        },
+        source_dir: analysisSourcePath
       })
 
       if (res.data?.status === 'success' && res.data?.preview_path) {
         toast.success("Preview report generated successfully!")
         const url = `/api/analysis/media?path=${encodeURIComponent(res.data.preview_path)}`
-        window.open(url, '_blank')
+        if (newWindow) {
+          newWindow.location.href = url
+        }
       } else {
         toast.error(res.data?.message || "Failed to generate preview report")
+        if (newWindow) {
+          newWindow.close()
+        }
       }
     } catch (err) {
       console.error(err)
       const error = err as { response?: { data?: { message?: string } } }
       toast.error(error.response?.data?.message || "Error communicating with server")
+      if (newWindow) {
+        newWindow.close()
+      }
     } finally {
       setIsPreviewLoading(false)
     }
@@ -916,6 +954,9 @@ export function GazeLogicTab() {
         if (data.type === 'progress') {
           setBatchLogs(prev => [data.message, ...prev])
           setBatchProgress(prev => Math.min(95, prev + (100 / analysisCheckedFiles.length)))
+        } else if (data.type === 'progress_update') {
+          setBatchProgress(Math.min(95, (data.current / data.total) * 100))
+          setBatchLogs(prev => [data.message, ...prev])
         } else if (data.type === 'finished') {
           setBatchProgress(100)
           setBatchLogs(prev => [`[SUCCESS] ${data.message || 'Batch generation complete'}`, ...prev])
@@ -950,7 +991,13 @@ export function GazeLogicTab() {
           track: analysisTrack
         },
         category_configs: backendConfigs,
-        gauge_rules: gaugeRules
+        gauge_rules: gaugeRules,
+        micro: {
+          min_freq: audioMinFreq,
+          max_freq: audioMaxFreq,
+          threshold: audioThreshold
+        },
+        source_dir: analysisSourcePath
       })
     } catch (err) {
       console.error(err)
@@ -973,6 +1020,7 @@ export function GazeLogicTab() {
   }
 
   const currentSignalsList = signalsConfig[activeCategory] || []
+  const checkedCount = currentSignalsList.filter(s => s.checked).length
   const currentPassCriteria = passCriteria[activeCategory] || { signal: 'SoundPressure', value1: 3.0, operator1: '<', value2: 0.0, operator2: 'None', mask: 6.0 }
 
   // Preview activation: sidebar file selected, active category has an MF4 file loaded, and at least one signal is active
@@ -1103,14 +1151,31 @@ export function GazeLogicTab() {
             {/* Scenario selector Combobox with Radio buttons */}
             <div className="flex items-center gap-2.5">
               <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Scenario:</span>
-              <div className="w-[200px]">
-                <SearchableSelect
-                  value={activeCategory}
-                  onChange={setActiveCategory}
-                  placeholder="Select Scenario..."
-                  items={categoriesList}
-                  showRadio={true}
-                />
+              <div className="w-[200px] flex items-center gap-1.5">
+                <div className="flex-1 min-w-0">
+                  <SearchableSelect
+                    value={activeCategory}
+                    onChange={setActiveCategory}
+                    placeholder="Select Scenario..."
+                    items={categoriesList}
+                    showRadio={true}
+                  />
+                </div>
+                <HoverCard openDelay={10} closeDelay={100}>
+                  <HoverCardTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="w-7 h-7 rounded-full text-muted-foreground hover:text-white hover:bg-white/5 cursor-pointer shrink-0"
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                    </Button>
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-64 bg-[#1e1d1c] border border-white/5 text-white p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl">
+                    <div className="font-semibold text-primary mb-1">{activeCategory}</div>
+                    <div>{caseIdsMap[activeCategory] || "No cases mapped to this scenario."}</div>
+                  </HoverCardContent>
+                </HoverCard>
               </div>
             </div>
 
@@ -1243,20 +1308,24 @@ export function GazeLogicTab() {
 
             {/* Preview and Run Batch Button Group */}
             <div className="flex flex-row h-9 bg-surface-3 border border-white/10 rounded-lg shadow-xl backdrop-blur-md overflow-hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={!isPreviewEnabled}
-                onClick={triggerPreview}
-                className="h-9 w-9 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
-                title="Preview Report"
+              <div 
+                title={!analysisSelectedFile ? "Debes seleccionar un caso en el panel izquierdo para poder previsualizarlo" : "Preview Report"}
+                className="h-full flex items-center"
               >
-                {isPreviewLoading ? (
-                  <Clock className="w-5 h-5 text-primary animate-spin" />
-                ) : (
-                  <Eye className="w-5 h-5 text-primary" />
-                )}
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={!isPreviewEnabled}
+                  onClick={triggerPreview}
+                  className="h-9 w-9 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none border-none bg-transparent"
+                >
+                  {isPreviewLoading ? (
+                    <Clock className="w-5 h-5 text-primary animate-spin" />
+                  ) : (
+                    <BugPlay className="w-5 h-5 text-primary" />
+                  )}
+                </Button>
+              </div>
               <div className="h-full w-[1px] bg-white/10" />
               {batchRunning ? (
                 <AlertDialog>
@@ -1337,10 +1406,12 @@ export function GazeLogicTab() {
             <Table>
               <TableHeader>
                 <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-12 text-sm uppercase font-bold text-center h-10 sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">✓</TableHead>
+                  <TableHead className="w-16 text-sm uppercase font-bold text-center h-10 sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">
+                    {checkedCount}/5
+                  </TableHead>
                   <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">Signal</TableHead>
                   <TableHead className="w-32 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">Operator</TableHead>
-                  <TableHead className="w-32 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">Threshold</TableHead>
+                  <TableHead className="w-56 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">Threshold</TableHead>
                   <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">Alias</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1351,6 +1422,7 @@ export function GazeLogicTab() {
                       <Checkbox 
                         checked={sig.checked} 
                         onCheckedChange={(checked) => updateSignalField(activeCategory, sig.name, 'checked', !!checked)}
+                        disabled={!sig.checked && checkedCount >= 5}
                         className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                       />
                     </TableCell>

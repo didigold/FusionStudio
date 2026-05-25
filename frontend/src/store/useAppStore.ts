@@ -240,6 +240,14 @@ interface AppState {
   analysisEuroNcap: boolean
   setAnalysisEuroNcap: (v: boolean) => void
 
+  // Audio state
+  audioMinFreq: number
+  setAudioMinFreq: (v: number | ((prev: number) => number)) => void
+  audioMaxFreq: number
+  setAudioMaxFreq: (v: number | ((prev: number) => number)) => void
+  audioThreshold: number
+  setAudioThreshold: (v: number | ((prev: number) => number)) => void
+
   // Reporting state
   reportingRootFolder: string
   setReportingRootFolder: (p: string) => void
@@ -517,6 +525,14 @@ export const useAppStore = create<AppState>((set) => ({
   setAnalysisAnalyst: (v) => set({ analysisAnalyst: v }),
   analysisEuroNcap: false,
   setAnalysisEuroNcap: (v) => set({ analysisEuroNcap: v }),
+
+  // Audio state
+  audioMinFreq: 230,
+  setAudioMinFreq: (v) => set((state) => ({ audioMinFreq: typeof v === 'function' ? v(state.audioMinFreq) : v })),
+  audioMaxFreq: 2000,
+  setAudioMaxFreq: (v) => set((state) => ({ audioMaxFreq: typeof v === 'function' ? v(state.audioMaxFreq) : v })),
+  audioThreshold: 0.5,
+  setAudioThreshold: (v) => set((state) => ({ audioThreshold: typeof v === 'function' ? v(state.audioThreshold) : v })),
 
   // Reporting state
   reportingRootFolder: '',
@@ -810,6 +826,31 @@ export const useAppStore = create<AppState>((set) => ({
         }
       }
 
+      // Parse metadata from report
+      let metaObj: any = {}
+      if (parsed.report && typeof parsed.report === 'object') {
+        const r = parsed.report
+        metaObj = {
+          analysisOem: typeof r.oem === 'string' ? r.oem : '',
+          analysisVehicle: typeof r.vehicle === 'string' ? r.vehicle : '',
+          analysisTrack: typeof r.track === 'string' ? r.track : '',
+          analysisEngineer: typeof r.engineer === 'string' ? r.engineer : '',
+          analysisAnalyst: typeof r.analyst === 'string' ? r.analyst : '',
+          analysisEuroNcap: typeof r.ncap === 'boolean' ? r.ncap : false
+        }
+      }
+
+      // Parse audio from micro
+      let audioObj: any = {}
+      if (parsed.micro && typeof parsed.micro === 'object') {
+        const m = parsed.micro
+        audioObj = {
+          audioMinFreq: typeof m.min_freq === 'number' ? m.min_freq : 230,
+          audioMaxFreq: typeof m.max_freq === 'number' ? m.max_freq : 2000,
+          audioThreshold: typeof m.threshold === 'number' ? m.threshold : 0.5
+        }
+      }
+
       let validatedGaugeRulesPath: string | null = null
       if (typeof parsed.gauge_rules_path === 'string') {
         validatedGaugeRulesPath = parsed.gauge_rules_path
@@ -910,7 +951,9 @@ export const useAppStore = create<AppState>((set) => ({
                 analysisSourcePath: configPath,
                 analysisResults: data.results,
                 analysisAvailableCameras: data.available_cameras || [],
-                analysisCheckedFiles: []
+                analysisCheckedFiles: [],
+                ...metaObj,
+                ...audioObj
               })
               
               const allFiles: string[] = []
@@ -932,7 +975,9 @@ export const useAppStore = create<AppState>((set) => ({
                 passCriteria: mergedPassCriteria,
                 gaugeRules: mergedGaugeRules,
                 pendingConfig: parsed,
-                isPromptingForPath: true
+                isPromptingForPath: true,
+                ...metaObj,
+                ...audioObj
               })
               toast.warning(`Folder in config not found: "${configPath}". Please specify project folder.`)
               return
@@ -944,7 +989,9 @@ export const useAppStore = create<AppState>((set) => ({
               passCriteria: mergedPassCriteria,
               gaugeRules: mergedGaugeRules,
               pendingConfig: parsed,
-              isPromptingForPath: true
+              isPromptingForPath: true,
+              ...metaObj,
+              ...audioObj
             })
             toast.warning("Failed to load path from config. Please specify project folder.")
             return
@@ -957,7 +1004,9 @@ export const useAppStore = create<AppState>((set) => ({
             passCriteria: mergedPassCriteria,
             gaugeRules: mergedGaugeRules,
             pendingConfig: parsed,
-            isPromptingForPath: true
+            isPromptingForPath: true,
+            ...metaObj,
+            ...audioObj
           })
           toast.info("Imported config has no project path. Please specify project folder.")
           return
@@ -969,7 +1018,9 @@ export const useAppStore = create<AppState>((set) => ({
         passCriteria: mergedPassCriteria,
         gaugeRules: mergedGaugeRules,
         gaugeRulesPath: validatedGaugeRulesPath,
-        importedConfigName: fileName
+        importedConfigName: fileName,
+        ...metaObj,
+        ...audioObj
       })
 
       const validatedCategories: Record<string, SignalConfig[]> = {}
@@ -1053,11 +1104,37 @@ export const useAppStore = create<AppState>((set) => ({
           if (typeof parsed.gauge_rules_path === 'string') {
             validatedGaugeRulesPath = parsed.gauge_rules_path
           }
+          
+          let metaObj: any = {}
+          if (parsed.report && typeof parsed.report === 'object') {
+            const r = parsed.report
+            metaObj = {
+              analysisOem: typeof r.oem === 'string' ? r.oem : '',
+              analysisVehicle: typeof r.vehicle === 'string' ? r.vehicle : '',
+              analysisTrack: typeof r.track === 'string' ? r.track : '',
+              analysisEngineer: typeof r.engineer === 'string' ? r.engineer : '',
+              analysisAnalyst: typeof r.analyst === 'string' ? r.analyst : '',
+              analysisEuroNcap: typeof r.ncap === 'boolean' ? r.ncap : false
+            }
+          }
+
+          let audioObj: any = {}
+          if (parsed.micro && typeof parsed.micro === 'object') {
+            const m = parsed.micro
+            audioObj = {
+              audioMinFreq: typeof m.min_freq === 'number' ? m.min_freq : 230,
+              audioMaxFreq: typeof m.max_freq === 'number' ? m.max_freq : 2000,
+              audioThreshold: typeof m.threshold === 'number' ? m.threshold : 0.5
+            }
+          }
+
           set({
             protocol: parsed.protocol || 'Euro NCAP',
             passCriteria: { ...DEFAULT_PASS_CRITERIA, ...(parsed.pass_criteria || {}) },
             gaugeRules: { ...DEFAULT_GAUGE_RULES, ...(parsed.gauge_rules || {}) },
             gaugeRulesPath: validatedGaugeRulesPath,
+            ...metaObj,
+            ...audioObj
           })
           
           const validatedCategories: Record<string, SignalConfig[]> = {}
@@ -1126,7 +1203,20 @@ export const useAppStore = create<AppState>((set) => ({
       categories: state.signalsConfig,
       pass_criteria: state.passCriteria,
       gauge_rules: state.gaugeRules,
-      gauge_rules_path: state.gaugeRulesPath
+      gauge_rules_path: state.gaugeRulesPath,
+      report: {
+        oem: state.analysisOem,
+        vehicle: state.analysisVehicle,
+        track: state.analysisTrack,
+        engineer: state.analysisEngineer,
+        analyst: state.analysisAnalyst,
+        ncap: state.analysisEuroNcap
+      },
+      micro: {
+        min_freq: state.audioMinFreq,
+        max_freq: state.audioMaxFreq,
+        threshold: state.audioThreshold
+      }
     }
     
     const suggestedName = `gaze_logic_config_${state.protocol.replace(/\s+/g, '_').toLowerCase()}.json`
@@ -1174,7 +1264,16 @@ export const useAppStore = create<AppState>((set) => ({
       gaugeRulesPath: null,
       protocol: 'Euro NCAP',
       loadedFiles: {},
-      importedConfigName: null
+      importedConfigName: null,
+      analysisOem: '',
+      analysisVehicle: '',
+      analysisTrack: '',
+      analysisEngineer: '',
+      analysisAnalyst: '',
+      analysisEuroNcap: false,
+      audioMinFreq: 230,
+      audioMaxFreq: 2000,
+      audioThreshold: 0.5
     })
     toast.success("Configuration unmounted. Defaults restored.")
   }

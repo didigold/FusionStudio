@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from threading import Thread
 
 from fastapi import APIRouter, WebSocket
@@ -201,6 +202,8 @@ class GazePreviewRequest(BaseModel):
     metadata: dict = {}
     category_configs: dict = {}
     gauge_rules: dict = {}
+    micro: dict = {}
+    source_dir: str = ""
 
 
 class GazeGenerateRequest(BaseModel):
@@ -209,6 +212,8 @@ class GazeGenerateRequest(BaseModel):
     metadata: dict = {}
     category_configs: dict = {}
     gauge_rules: dict = {}
+    micro: dict = {}
+    source_dir: str = ""
 
 
 def _resolve_gsr_image_path(filename: str) -> str | None:
@@ -232,7 +237,7 @@ def _resolve_gsr_image_path(filename: str) -> str | None:
     return None
 
 
-def build_report_config(file_path: str, protocol: str, metadata: dict, category_configs: dict, gauge_rules: dict, driver_marks: list) -> dict:
+def build_report_config(file_path: str, protocol: str, metadata: dict, category_configs: dict, gauge_rules: dict, driver_marks: list, micro: dict = None) -> dict:
     import re
     import numpy as np
     from asammdf import MDF
@@ -344,7 +349,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                 'timestamps': list(np.asarray(mdf_sig.timestamps, dtype=float)),
                 'samples': processed_samples,
                 'operator': sig_info.get('operator', '>='),
-                'threshold': thresh_val,
+                'threshold': micro.get('threshold') if (sig_name == "SoundPressure" and micro and micro.get('threshold') is not None) else thresh_val,
                 'unit': getattr(mdf_sig, 'unit', 'Value'),
                 'category': target_category,
                 'alias': sig_info.get('alias') or sig_name
@@ -360,29 +365,37 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
 
         if sig_name == "SoundPressure":
             try:
-                audio_thresh = threshold
+                audio_thresh = micro.get('threshold') if (micro and micro.get('threshold') is not None) else threshold
                 if len(samples) > 0 and len(timestamps) > 0:
                     samples_numeric = samples
                     try:
-                        min_f = 230
-                        max_f = 2000
+                        min_f = micro.get('min_freq') if (micro and micro.get('min_freq') is not None) else 230
+                        max_f = micro.get('max_freq') if (micro and micro.get('max_freq') is not None) else 2000
                         samples_np = np.array(samples, dtype=float)
                         dur = timestamps[-1] - timestamps[0]
                         fs = len(samples) / dur if dur > 0 else 44100
                         nyq = 0.5 * fs
-                        low = min_f / nyq
-                        high = max_f / nyq
+                        
+                        # Apply safety limits to normalized frequencies to avoid butterworth filter errors
+                        low = max(1e-6, float(min_f) / nyq)
+                        high = min(1.0 - 1e-6, float(max_f) / nyq)
+                        if low >= high:
+                            high = low + 0.1
+                            if high >= 1.0:
+                                low = 0.1
+                                high = 0.9
+                        
                         from scipy.signal import butter, filtfilt
                         b, a = butter(4, [low, high], btype='band')
                         samples_numeric = list(filtfilt(b, a, samples_np))
-                    except:
-                        pass
+                    except Exception as fe:
+                        logger.error(f"Error filtering SoundPressure: {fe}")
                     
                     op = operator if operator and operator != 'None' else '>='
                     first_match_time = find_first_valid_event(
                         np.array(samples_numeric),
                         np.array(timestamps),
-                        float(audio_thresh),
+                        float(audio_thresh) if audio_thresh is not None else 0.0,
                         op,
                         mask_start=mask_start
                     )
@@ -485,6 +498,26 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
     if protocol == "GSR ADDW" or protocol == "2023/2590":
         camera_image_path = _resolve_gsr_image_path(os.path.basename(file_path))
 
+    # Normalize gauge_rules to ensure green_range and ticks exist
+    normalized_gauge_rules = {}
+    for cat_key, rule in gauge_rules.items():
+        r = dict(rule) if isinstance(rule, dict) else {}
+        if 'green_range' not in r:
+            r['green_range'] = [r.get('green_min', 0), r.get('green_max', 3)]
+        if 'ticks' not in r:
+            min_v = r.get('min', 0)
+            max_v = r.get('max', 10)
+            num_ticks = r.get('num_ticks', None)
+            if num_ticks and int(num_ticks) > 1:
+                count = int(num_ticks)
+                diff = max_v - min_v
+                r['ticks'] = [round(min_v + i * (diff / count), 2) for i in range(count + 1)]
+            else:
+                diff = max_v - min_v
+                count = int(diff) if 0 < diff <= 10 else 5
+                r['ticks'] = [round(min_v + i * (diff / count), 2) for i in range(count + 1)]
+        normalized_gauge_rules[cat_key] = r
+
     return {
         'filename': os.path.basename(file_path),
         'relative_path': relative_path,
@@ -506,24 +539,42 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
         't_event_color': t_event_color,
         'mask': mask_start,
         'audio_params': {
-            'min_freq': 230,
-            'max_freq': 2000,
-            'threshold': float(signals_conf.get('SoundPressure', {}).get('threshold', 0.0)) if 'SoundPressure' in signals_conf else 0.0
+            'min_freq': float(micro.get('min_freq')) if (micro and micro.get('min_freq') is not None) else 230.0,
+            'max_freq': float(micro.get('max_freq')) if (micro and micro.get('max_freq') is not None) else 2000.0,
+            'threshold': float(micro.get('threshold')) if (micro and micro.get('threshold') is not None) else (float(signals_conf.get('SoundPressure', {}).get('threshold')) if ('SoundPressure' in signals_conf and signals_conf.get('SoundPressure', {}).get('threshold') is not None) else 0.0)
         },
-        'gauge_rules': gauge_rules,
+        'gauge_rules': normalized_gauge_rules,
         'driver_marks': driver_marks
     }
 
 
-def update_excel_results(file_path: str, category: str, t0: float, t_event: any, status_color: str):
+def update_excel_results(config: dict, file_path: str):
+    """Update Analysis_Results.xlsx with 6-column format matching PySide6 original."""
     import openpyxl
-    from openpyxl.styles import Alignment
-    base_dir = os.path.dirname(file_path)
-    excel_path = os.path.join(base_dir, "Analysis_Results.xlsx")
+    from openpyxl.styles import PatternFill, Font, Alignment
+
+    participant_dir = os.path.dirname(file_path)
+    excel_path = os.path.join(participant_dir, "Analysis_Results.xlsx")
     file_name = os.path.basename(file_path)
-    file_name_clean = file_name.replace("_tracking.mf4", ".mf4")
-    overall_status = "PASS" if status_color == "green" else "FAIL"
-    
+
+    folder_name = config.get('target_category', '--')
+    dist_start = config.get('tgaze')
+
+    pass_sig = config.get('pass_signal_name')
+    warn_start = config.get('signal_times', {}).get(pass_sig) if pass_sig else None
+
+    warn_timer = config.get('t_event')
+    score = "PASS" if config.get('t_event_color') == "green" else "FAIL"
+
+    row_data = [
+        folder_name,
+        file_name,
+        dist_start if dist_start is not None else "",
+        warn_start if warn_start is not None else "nan",
+        warn_timer if isinstance(warn_timer, (int, float)) else "",
+        score
+    ]
+
     try:
         if os.path.exists(excel_path):
             wb = openpyxl.load_workbook(excel_path)
@@ -532,21 +583,25 @@ def update_excel_results(file_path: str, category: str, t0: float, t_event: any,
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Results"
-            ws.append(["File Name", "Category", "T0 / T_gaze (s)", "T_event (s)", "Result"])
+            headers = ["Folder Name", "File Name", "Distraction Start",
+                       "Warning Start", "Warning Timer", "Score"]
+            ws.append(headers)
+
+            header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+            header_font = Font(bold=True)
             for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
                 cell.alignment = Alignment(horizontal="center")
-                
+
+        # Find existing row by File Name (column 2)
         found_row = -1
         for row in range(2, ws.max_row + 1):
-            cell_val = ws.cell(row=row, column=1).value
-            if cell_val:
-                c_val = str(cell_val).replace("_tracking.mf4", ".mf4")
-                if c_val == file_name_clean:
-                    found_row = row
-                    break
-                    
-        row_data = [file_name, category, t0, t_event, overall_status]
-        
+            cell_val = ws.cell(row=row, column=2).value
+            if cell_val and str(cell_val) == file_name:
+                found_row = row
+                break
+
         if found_row != -1:
             for col_idx, val in enumerate(row_data, 1):
                 ws.cell(row=found_row, column=col_idx, value=val)
@@ -554,17 +609,17 @@ def update_excel_results(file_path: str, category: str, t0: float, t_event: any,
         else:
             ws.append(row_data)
             target_row = ws.max_row
-            
+
         for cell in ws[target_row]:
             cell.alignment = Alignment(horizontal="center")
-            
+
         for i, col in enumerate(ws.columns, 1):
             max_length = 0
             for cell in col:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
             ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = max_length + 4
-            
+
         wb.save(excel_path)
         logger.info(f"Excel result saved/updated in {excel_path}")
     except Exception as e:
@@ -580,7 +635,17 @@ async def gaze_preview(req: GazePreviewRequest):
         if not os.path.exists(req.file_path):
             return {"status": "error", "message": f"File not found: {req.file_path}"}
         
-        source_dir = os.path.dirname(req.file_path)
+        source_dir = req.source_dir
+        if not source_dir:
+            curr = os.path.dirname(req.file_path)
+            while curr and curr != os.path.dirname(curr):
+                if os.path.exists(os.path.join(curr, "marks.json")):
+                    source_dir = curr
+                    break
+                curr = os.path.dirname(curr)
+            if not source_dir:
+                source_dir = os.path.dirname(req.file_path)
+
         marks_dict = _load_marks_dict(source_dir)
         key = _get_marks_key(req.file_path)
         driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
@@ -593,7 +658,8 @@ async def gaze_preview(req: GazePreviewRequest):
             metadata=req.metadata,
             category_configs=req.category_configs,
             gauge_rules=req.gauge_rules,
-            driver_marks=driver_marks
+            driver_marks=driver_marks,
+            micro=req.micro
         )
         
         temp_dir = os.path.abspath("temp")
@@ -647,13 +713,31 @@ async def gaze_generate(req: GazeGenerateRequest):
                 
                 base_name = os.path.splitext(os.path.basename(file_path))[0]
                 on_progress(f"Processing ({idx+1}/{total_files}): {base_name}...")
+                asyncio.run_coroutine_threadsafe(
+                    manager_reporting.broadcast({
+                        "type": "progress_update",
+                        "current": idx + 1,
+                        "total": total_files,
+                        "message": f"Processing ({idx+1}/{total_files}): {base_name}..."
+                    }), loop
+                )
                 
                 try:
                     if not os.path.exists(file_path):
                         on_progress(f"[ERROR] File not found: {file_path}")
                         continue
                     
-                    source_dir = os.path.dirname(file_path)
+                    source_dir = req.source_dir
+                    if not source_dir:
+                        curr = os.path.dirname(file_path)
+                        while curr and curr != os.path.dirname(curr):
+                            if os.path.exists(os.path.join(curr, "marks.json")):
+                                source_dir = curr
+                                break
+                            curr = os.path.dirname(curr)
+                        if not source_dir:
+                            source_dir = os.path.dirname(file_path)
+
                     marks_dict = _load_marks_dict(source_dir)
                     key = _get_marks_key(file_path)
                     driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
@@ -666,7 +750,8 @@ async def gaze_generate(req: GazeGenerateRequest):
                         metadata=req.metadata,
                         category_configs=req.category_configs,
                         gauge_rules=req.gauge_rules,
-                        driver_marks=driver_marks
+                        driver_marks=driver_marks,
+                        micro=req.micro
                     )
                     
                     base_dir = os.path.dirname(file_path)
@@ -677,13 +762,7 @@ async def gaze_generate(req: GazeGenerateRequest):
                     builder = MatplotlibReportBuilder(config)
                     builder.generate(output_png, dpi=300)
                     
-                    update_excel_results(
-                        file_path=file_path,
-                        category=config['target_category'],
-                        t0=config['tgaze'],
-                        t_event=config['t_event'],
-                        status_color=config['t_event_color']
-                    )
+                    update_excel_results(config=config, file_path=file_path)
                     
                     success_count += 1
                 except Exception as e:
