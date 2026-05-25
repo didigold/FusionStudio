@@ -6535,7 +6535,7 @@ class AnalysisWidget(QWidget):
         target_category = None
         if hasattr(self, 'tab_logic'):
             try:
-                target_category = self.tab_logic._determine_category_from_filename(os.path.basename(mf4_path))
+                target_category = self.tab_logic._determine_category_from_filename(mf4_path)
             except Exception:
                 target_category = None
 
