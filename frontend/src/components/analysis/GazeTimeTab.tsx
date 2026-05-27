@@ -770,7 +770,7 @@ export function GazeTimeTab() {
   }, [currentTime]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 animate-in fade-in duration-500 h-full overflow-hidden">
+    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden">
       <style>{`
         .uplot .u-over { cursor: crosshair !important; }
         .uplot .u-select { background: rgba(0, 170, 255, 0.2) !important; }
@@ -807,8 +807,8 @@ export function GazeTimeTab() {
         }
       `}</style>
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
-        <div className="flex-[2] flex flex-col gap-2 bg-black/40 rounded-3xl border border-white/5 p-4 overflow-hidden shadow-inner h-full min-h-0 justify-center">
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+        <div className="flex-[2] flex flex-col gap-2 bg-black/40 p-4 overflow-hidden h-full min-h-0 justify-center border-r border-white/5">
           {targetFile ? (
             <>
               <div 
@@ -860,7 +860,7 @@ export function GazeTimeTab() {
           )}
         </div>
 
-        <div className="flex-1 bg-black rounded-3xl border border-white/5 overflow-hidden relative shadow-2xl group flex flex-col h-full min-h-0">
+        <div className="flex-1 bg-black overflow-hidden relative group flex flex-col h-full min-h-0">
             <div className="flex-1 relative min-h-0">
                  {videoUrl ? (
                      <>

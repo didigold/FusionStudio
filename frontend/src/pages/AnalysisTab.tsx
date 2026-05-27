@@ -37,13 +37,13 @@ const ProgressRing = ({ value, max, title }: { value: number; max: number; title
   const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
   const radius = 4.5
   const circumference = 2 * Math.PI * radius
-  const strokeDashoffset = circumference - (percent / 100) * circumference
+  const strokeDashoffset = percent === 0 ? 0 : circumference - (percent / 100) * circumference
 
   let strokeColor = "stroke-amber-500"
   if (percent === 100) {
     strokeColor = "stroke-emerald-500"
   } else if (percent === 0) {
-    strokeColor = "stroke-red-500/20"
+    strokeColor = "stroke-red-500"
   }
 
   return (

@@ -194,6 +194,8 @@ interface AppState {
   setAnalysisEventResult: (r: any) => void
   analysisChronosRunning: boolean
   setAnalysisChronosRunning: (v: boolean) => void
+  analysisBatchRunning: boolean
+  setAnalysisBatchRunning: (v: boolean) => void
   analysisChronosProgress: number
   setAnalysisChronosProgress: (v: number) => void
   analysisChronosStats: any
@@ -328,6 +330,8 @@ interface AppState {
   setIsPromptingForPath: (v: boolean) => void
   pendingConfig: any | null
   setPendingConfig: (c: any | null) => void
+  pendingConfigName: string | null
+  setPendingConfigName: (n: string | null) => void
 
   // Config actions
   autoLoadChannelsAndMerge: (importedCategories?: Record<string, SignalConfig[]>, targetProtocol?: 'Euro NCAP' | 'GSR ADDW', targetResults?: any[]) => Promise<void>
@@ -473,6 +477,8 @@ export const useAppStore = create<AppState>((set) => ({
   setAnalysisEventResult: (r: any) => set({ analysisEventResult: r }),
   analysisChronosRunning: false,
   setAnalysisChronosRunning: (v: boolean) => set({ analysisChronosRunning: v }),
+  analysisBatchRunning: false,
+  setAnalysisBatchRunning: (v) => set({ analysisBatchRunning: v }),
   analysisChronosProgress: 0,
   setAnalysisChronosProgress: (v: number) => set({ analysisChronosProgress: v }),
   analysisChronosStats: null as any,
@@ -618,6 +624,8 @@ export const useAppStore = create<AppState>((set) => ({
   setIsPromptingForPath: (v) => set({ isPromptingForPath: v }),
   pendingConfig: null,
   setPendingConfig: (c) => set({ pendingConfig: c }),
+  pendingConfigName: null,
+  setPendingConfigName: (n) => set({ pendingConfigName: n }),
 
   // Config actions implementation
   autoLoadChannelsAndMerge: async (importedCategories, targetProtocol, targetResults) => {
@@ -975,6 +983,7 @@ export const useAppStore = create<AppState>((set) => ({
                 passCriteria: mergedPassCriteria,
                 gaugeRules: mergedGaugeRules,
                 pendingConfig: parsed,
+                pendingConfigName: fileName,
                 isPromptingForPath: true,
                 ...metaObj,
                 ...audioObj
@@ -989,6 +998,7 @@ export const useAppStore = create<AppState>((set) => ({
               passCriteria: mergedPassCriteria,
               gaugeRules: mergedGaugeRules,
               pendingConfig: parsed,
+              pendingConfigName: fileName,
               isPromptingForPath: true,
               ...metaObj,
               ...audioObj
@@ -1004,6 +1014,7 @@ export const useAppStore = create<AppState>((set) => ({
             passCriteria: mergedPassCriteria,
             gaugeRules: mergedGaugeRules,
             pendingConfig: parsed,
+            pendingConfigName: fileName,
             isPromptingForPath: true,
             ...metaObj,
             ...audioObj
@@ -1133,6 +1144,7 @@ export const useAppStore = create<AppState>((set) => ({
             passCriteria: { ...DEFAULT_PASS_CRITERIA, ...(parsed.pass_criteria || {}) },
             gaugeRules: { ...DEFAULT_GAUGE_RULES, ...(parsed.gauge_rules || {}) },
             gaugeRulesPath: validatedGaugeRulesPath,
+            importedConfigName: state.pendingConfigName || 'Imported Config',
             ...metaObj,
             ...audioObj
           })
@@ -1179,7 +1191,7 @@ export const useAppStore = create<AppState>((set) => ({
           await state.autoLoadChannelsAndMerge(mergedCategories, parsed.protocol || 'Euro NCAP', data.results)
         }
 
-        set({ isPromptingForPath: false, pendingConfig: null })
+        set({ isPromptingForPath: false, pendingConfig: null, pendingConfigName: null })
         toast.success("Path loaded successfully and configuration applied.")
         return true
       } else {

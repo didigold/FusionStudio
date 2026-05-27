@@ -98,8 +98,12 @@ export function TopNav() {
   };
 
   const handleFolderSelect = (path: string) => {
-    setAnalysisSourcePath(path);
-    triggerScanForPath(path);
+    if (pendingConfig) {
+      confirmPromptedPath(path);
+    } else {
+      setAnalysisSourcePath(path);
+      triggerScanForPath(path);
+    }
   };
 
   const handleClearPath = () => {
@@ -171,14 +175,24 @@ export function TopNav() {
               onFocus={() => setIsFocused(true)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  setAnalysisSourcePath(localPath);
-                  triggerScanForPath(localPath);
+                  if (pendingConfig) {
+                    confirmPromptedPath(localPath);
+                  } else {
+                    setAnalysisSourcePath(localPath);
+                    triggerScanForPath(localPath);
+                  }
                 }
               }}
               onBlur={() => {
                 setIsFocused(false);
-                setAnalysisSourcePath(localPath);
-                triggerScanForPath(localPath);
+                if (pendingConfig) {
+                  if (localPath !== analysisSourcePath) {
+                    confirmPromptedPath(localPath);
+                  }
+                } else {
+                  setAnalysisSourcePath(localPath);
+                  triggerScanForPath(localPath);
+                }
               }}
               placeholder="Select project folder..."
               style={{ outline: "none", border: "none", boxShadow: "none" }}
