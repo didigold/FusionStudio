@@ -2,11 +2,15 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from 'sonner'
 
+// Maximum frame-update rate from WebSocket (ms between allowed state updates)
+const FRAME_THROTTLE_MS = 66 // ~15 fps
+
 export function useAnalysisWS() {
   const { addLog, setAnalysisEventResult, setAnalysisChronosRunning, setAnalysisChronosProgress, setAnalysisChronosStats, setAnalysisChronosFrame } = useAppStore()
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
+  const lastFrameTimeRef = useRef<number>(0)
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return
@@ -27,7 +31,14 @@ export function useAnalysisWS() {
           case 'progress': setAnalysisChronosProgress(data.value); break
           case 'task_done': addLog(`Task done: ${data.path}`); break
           case 'stats': setAnalysisChronosStats(data); break
-          case 'frame': setAnalysisChronosFrame(data.data); break
+          case 'frame': {
+            const now = performance.now()
+            if (now - lastFrameTimeRef.current >= FRAME_THROTTLE_MS) {
+              lastFrameTimeRef.current = now
+              setAnalysisChronosFrame(data.data)
+            }
+            break
+          }
           case 'finished': 
             if (useAppStore.getState().analysisChronosRunning) {
               setAnalysisChronosRunning(false); 

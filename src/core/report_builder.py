@@ -15,6 +15,36 @@ try:
 except Exception:
     pass
 
+def _get_rounded_rect_path(x1, y1, x2, y2, rx, ry):
+    import matplotlib.path as mpath
+    kappa = 0.552284749831
+    kx, ky = kappa * rx, kappa * ry
+    verts = [
+        (x1 + rx, y1),
+        (x2 - rx, y1),
+        (x2 - rx + kx, y1), (x2, y1 + ry - ky), (x2, y1 + ry),
+        (x2, y2 - ry),
+        (x2, y2 - ry + ky), (x2 - rx + kx, y2), (x2 - rx, y2),
+        (x1 + rx, y2),
+        (x1 + rx - kx, y2), (x1, y2 - ry + ky), (x1, y2 - ry),
+        (x1, y1 + ry),
+        (x1, y1 + ry - ky), (x1 + rx - kx, y1), (x1 + rx, y1),
+        (x1, y1)
+    ]
+    codes = [
+        mpath.Path.MOVETO,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.CLOSEPOLY
+    ]
+    return mpath.Path(verts, codes)
+
 class MatplotlibReportBuilder:
     """
     Generates professional A4 technical reports using matplotlib.
@@ -230,7 +260,6 @@ class MatplotlibReportBuilder:
     def _draw_gauge(self, ax):
         import numpy as np
         import matplotlib.patches as patches
-        import matplotlib.colors as mcolors
         import json
 
         category = self.config.get('target_category', '')
@@ -269,65 +298,122 @@ class MatplotlibReportBuilder:
         ax.set_aspect('equal')
         vmin = gauge_conf['min']
         vmax = gauge_conf['max']
-        green_min, green_max = gauge_conf['green_range']
         
+        # Center of the circular dial in axes coordinates (shifted higher)
+        CX, CY = 0.5, 0.64
+        
+        # Angle mapping (225 degrees to -45 degrees)
         def val_to_angle(v):
-            return 180.0 - (180.0 * (v - vmin) / (vmax - vmin))
+            return 225.0 - (270.0 * (v - vmin) / (vmax - vmin))
 
-        n_segments = 200
-        vals = np.linspace(vmin, vmax, n_segments)
-        R_OUT = 1.0
-        R_IN = 0.85
-        CX, CY = 0.5, 0.0
+        # Radius settings (scaled down to leave room at bottom)
+        R_OUT = 0.30     # Outer glow circle
+        R_TICKS_OUT = 0.28
+        R_TICKS_IN = 0.23
+        R_HUB = 0.15      # Center hub radius
         
-        for i in range(len(vals)-1):
-            v1, v2 = vals[i], vals[i+1]
-            a1, a2 = val_to_angle(v1), val_to_angle(v2)
-            center_v = (v1+v2)/2
-            if green_min <= center_v <= green_max:
-                color = '#54C63E'
-            else:
-                dist = (green_min - center_v) / (green_min - vmin + 1e-6) if center_v < green_min else (center_v - green_max) / (vmax - green_max + 1e-6)
-                if dist < 0.5:
-                    ratio = dist * 2
-                    color = mcolors.to_hex((1.0*ratio + 84/255*(1-ratio), 180/255*ratio + 198/255*(1-ratio), 62/255*(1-ratio)))
-                else:
-                    ratio = (dist - 0.5) * 2
-                    color = mcolors.to_hex((220/255*ratio + 1.0*(1-ratio), 30/255*ratio + 180/255*(1-ratio), 30/255*ratio))
-            
-            end_angle = a1 + 0.6 if a1 < 179 else 180.0
-            w = patches.Wedge(center=(CX, CY), r=R_OUT, theta1=a2, theta2=end_angle, width=R_OUT-R_IN, facecolor=color, edgecolor='none')
-            ax.add_patch(w)
+        # Color theme: Cyan / Teal glow
+        CYAN_GLOW = '#00F2FE'
+        
+        # 1. Base dark background card for the gauge
+        ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='#0B0F19', zorder=2))
+        
+        # 2. Outer thin cyan glowing rim (multi-layered glow)
+        for w, a in [(1.0, 0.9), (2.5, 0.4), (4.5, 0.15)]:
+            ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='none', edgecolor=CYAN_GLOW, linewidth=w, alpha=a, zorder=3))
 
+        # 3. Draw tick marks (radial lines pointing inward from R_TICKS_OUT to R_TICKS_IN)
+        n_fine = 60
+        for i in range(n_fine + 1):
+            val_t = vmin + (vmax - vmin) * (i / n_fine)
+            a = val_to_angle(val_t)
+            a_rad = np.radians(a)
+            r_in = R_TICKS_OUT - 0.012
+            x1, y1 = CX + R_TICKS_OUT * np.cos(a_rad), CY + R_TICKS_OUT * np.sin(a_rad)
+            x2, y2 = CX + r_in * np.cos(a_rad), CY + r_in * np.sin(a_rad)
+            ax.plot([x1, x2], [y1, y2], color='#E2E8F0', linewidth=0.5, alpha=0.4, zorder=4)
+
+        # Draw Major ticks and labels
         for t in gauge_conf['ticks']:
             if t < vmin or t > vmax: continue
             a = val_to_angle(t)
             a_rad = np.radians(a)
-            x1, y1 = CX + R_IN * np.cos(a_rad), CY + R_IN * np.sin(a_rad)
-            x2, y2 = CX + (R_IN - 0.05) * np.cos(a_rad), CY + (R_IN - 0.05) * np.sin(a_rad)
-            ax.plot([x1, x2], [y1, y2], color=self.COLORS['text'], linewidth=1.5, solid_capstyle='round')
-            txt_x, txt_y = CX + (R_IN - 0.17) * np.cos(a_rad), CY + (R_IN - 0.17) * np.sin(a_rad)
-            ax.text(txt_x, txt_y, str(t), fontsize=9, color=self.COLORS['text'], ha='center', va='center')
+            x1, y1 = CX + R_TICKS_OUT * np.cos(a_rad), CY + R_TICKS_OUT * np.sin(a_rad)
+            x2, y2 = CX + R_TICKS_IN * np.cos(a_rad), CY + R_TICKS_IN * np.sin(a_rad)
+            ax.plot([x1, x2], [y1, y2], color='#F1F5F9', linewidth=1.2, zorder=5)
+            
+            # Position tick labels slightly inward
+            txt_x = CX + (R_TICKS_IN - 0.045) * np.cos(a_rad)
+            txt_y = CY + (R_TICKS_IN - 0.045) * np.sin(a_rad)
+            ax.text(txt_x, txt_y, str(t), fontsize=6.5, color='#E2E8F0', ha='center', va='center', fontweight='bold', zorder=5)
 
+        # 4. Center Hub with metallic/glossy circle and cyan outer glow
+        for w, a in [(1.5, 0.3), (0.8, 0.6)]:
+            ax.add_patch(patches.Circle((CX, CY), R_HUB + (w * 0.01), facecolor='none', edgecolor=CYAN_GLOW, linewidth=1.5, alpha=a, zorder=6))
+        ax.add_patch(patches.Circle((CX, CY), R_HUB, facecolor='#0A0E17', zorder=7))
+        ax.add_patch(patches.Ellipse((CX, CY + R_HUB * 0.35), R_HUB * 1.4, R_HUB * 0.7, facecolor='#FFFFFF', alpha=0.18, zorder=8))
+        ax.text(CX, CY - R_HUB * 0.3, "s", fontsize=9, color='#94A3B8', ha='center', va='center', fontweight='bold', zorder=9)
+
+        # 5. Glowing Needle (accent line with flare effect)
         a_needle = np.radians(val_to_angle(val_for_needle))
-        needle_length = R_IN - 0.05
-        needle_base_width = 0.05
-        tip_x, tip_y = CX + needle_length * np.cos(a_needle), CY + needle_length * np.sin(a_needle)
-        b1x, b1y = CX + needle_base_width * np.cos(a_needle + np.pi/2), CY + needle_base_width * np.sin(a_needle + np.pi/2)
-        b2x, b2y = CX + needle_base_width * np.cos(a_needle - np.pi/2), CY + needle_base_width * np.sin(a_needle - np.pi/2)
-        ax.add_patch(patches.Polygon([[b1x, b1y], [tip_x, tip_y], [b2x, b2y]], facecolor='#1E293B', edgecolor='none', zorder=10))
-        ax.add_patch(patches.Circle((CX, CY), needle_base_width * 1.5, facecolor='#1E293B', edgecolor='#CBD5E1', linewidth=1.5, zorder=11))
-        ax.text(CX, CY - 0.32, display_text, fontsize=19, fontweight='bold', color=self.COLORS['text'], ha='center', va='top')
-        ax.set_xlim(CX - R_OUT - 0.05, CX + R_OUT + 0.05)
-        ax.set_ylim(CY - 0.45, CY + R_OUT + 0.05)
+        
+        n_start_r = R_HUB
+        n_end_r = R_TICKS_OUT - 0.01
+        
+        nx1, ny1 = CX + n_start_r * np.cos(a_needle), CY + n_start_r * np.sin(a_needle)
+        nx2, ny2 = CX + n_end_r * np.cos(a_needle), CY + n_end_r * np.sin(a_needle)
+        
+        # Needle cyan glow base (thick to thin layered glow)
+        ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=5.0, alpha=0.15, zorder=10)
+        ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=3.0, alpha=0.45, zorder=10)
+        ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=1.5, alpha=0.8, zorder=10)
+        # Needle white core
+        ax.plot([nx1, nx2], [ny1, ny2], color='#FFFFFF', linewidth=0.6, alpha=0.95, zorder=11)
+        
+        # Flare / Destello effect at needle tip (white core fading to cyan halo)
+        for r_flare, color_flare, alpha_flare in [
+            (0.035, CYAN_GLOW, 0.1),
+            (0.022, CYAN_GLOW, 0.35),
+            (0.015, '#FFFFFF', 0.6),
+            (0.007, '#FFFFFF', 0.9)
+        ]:
+            ax.add_patch(patches.Circle((nx2, ny2), r_flare, facecolor=color_flare, edgecolor='none', alpha=alpha_flare, zorder=12))
+
+        # 6. Glass lens overlay from PNG
+        lens_path = resource_path('assets/lens.png')
+        if os.path.exists(lens_path):
+            try:
+                from PIL import Image
+                img_lens = Image.open(lens_path)
+                extent = [CX - R_OUT, CX + R_OUT, CY - R_OUT, CY + R_OUT]
+                ax.imshow(np.array(img_lens), extent=extent, zorder=13)
+            except Exception as e:
+                pass
+
+        # Bottom display text (Value and Label)
+        # Adjusted positions so they fit safely above the axis bottom limit
+        ax.text(CX, CY - R_OUT - 0.10, display_text, fontsize=19, fontweight='bold', color=self.COLORS['primary'], ha='center', va='top', zorder=10)
+        ax.text(CX, CY - R_OUT - 0.22, "Overall Gaze Duration", fontsize=8.0, fontweight='bold', color=self.COLORS['text_light'], ha='center', va='top', zorder=10)
+        
+        ax.set_xlim(0.0, 1.0)
+        ax.set_ylim(0.0, 1.0)
     
     def _draw_camera_frame(self, ax, video_path_override=None, frame_time_override=None):
         import numpy as np
         from PIL import Image
+        import matplotlib.patches as patches
+        
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.axis('off')
         self._draw_frame_with_header(ax, "Gaze Location/Behaviour", header_height_ratio=0.12)
+
+        # Get absolute dimensions of the axis in inches for image corner rounding
+        pos = ax.get_position()
+        W_in = pos.width * self.A4_WIDTH
+        H_in = pos.height * self.A4_HEIGHT
+        rx_img = min(0.2, 0.08 / W_in)
+        ry_img = min(0.2, 0.08 / H_in)
 
         if self.config.get('om_use_video_frame'):
             video_path = video_path_override if isinstance(video_path_override, str) else self.config.get('om_video_path')
@@ -353,8 +439,18 @@ class MatplotlibReportBuilder:
                     img = img.resize((600, 600), Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
                     sq_sz, cx, cy = 0.85, 0.5, 0.44
                     extent = [cx - sq_sz/2, cx + sq_sz/2, cy - sq_sz/2, cy + sq_sz/2]
-                    ax.imshow(np.array(img), extent=extent, zorder=3)
-                    ax.text(extent[0] + 0.02, extent[3] - 0.02, f"T = {frame_time:.2f}s", fontsize=8, color=self.COLORS['text_white'], ha='left', va='top', bbox=dict(facecolor='black', alpha=0.5, edgecolor='none', pad=1.5))
+                    
+                    img_path = _get_rounded_rect_path(extent[0], extent[2], extent[1], extent[3], rx_img, ry_img)
+                    clip_patch = patches.PathPatch(img_path, facecolor='none', edgecolor='none', transform=ax.transAxes)
+                    ax.add_patch(clip_patch)
+                    
+                    im = ax.imshow(np.array(img), extent=extent, zorder=3)
+                    im.set_clip_path(clip_patch)
+                    
+                    border_patch = patches.PathPatch(img_path, facecolor='none', edgecolor=self.COLORS['border'], linewidth=1.0, transform=ax.transAxes, zorder=4)
+                    ax.add_patch(border_patch)
+                    
+                    ax.text(extent[0] + 0.02, extent[3] - 0.02, f"T = {frame_time:.2f}s", fontsize=8, color=self.COLORS['text_white'], ha='left', va='top', bbox=dict(facecolor='black', alpha=0.5, edgecolor='none', pad=1.5), zorder=5)
                     return
                 except Exception: pass
             ax.text(0.5, 0.45, "No Video Frame", fontsize=9, color=self.COLORS['text_light'], ha='center', va='center')
@@ -387,7 +483,16 @@ class MatplotlibReportBuilder:
                 img = img.resize((600, 600), Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
                 sq_sz, cx, cy = 0.85, 0.5, 0.44
                 extent = [cx - sq_sz/2, cx + sq_sz/2, cy - sq_sz/2, cy + sq_sz/2]
-                ax.imshow(np.array(img), extent=extent, zorder=3)
+                
+                img_path = _get_rounded_rect_path(extent[0], extent[2], extent[1], extent[3], rx_img, ry_img)
+                clip_patch = patches.PathPatch(img_path, facecolor='none', edgecolor='none', transform=ax.transAxes)
+                ax.add_patch(clip_patch)
+                
+                im = ax.imshow(np.array(img), extent=extent, zorder=3)
+                im.set_clip_path(clip_patch)
+                
+                border_patch = patches.PathPatch(img_path, facecolor='none', edgecolor=self.COLORS['border'], linewidth=1.0, transform=ax.transAxes, zorder=4)
+                ax.add_patch(border_patch)
             
                 filename = self.config.get('filename', '')
                 import re
@@ -687,13 +792,36 @@ class MatplotlibReportBuilder:
 
     def _draw_frame_with_header(self, ax, title, header_height_ratio=0.15):
         import matplotlib.patches as patches
-        f = patches.FancyBboxPatch((0.0, 0.0), 1.0, 1.0, boxstyle="round,pad=0.0,rounding_size=0.03", facecolor='white', edgecolor=self.COLORS['border'], linewidth=1.5, clip_on=False)
+        
+        # Get absolute dimensions of the axis in inches
+        pos = ax.get_position()
+        W_in = pos.width * self.A4_WIDTH
+        H_in = pos.height * self.A4_HEIGHT
+        
+        # Target radius in inches (e.g. 0.12 inches)
+        R_in = 0.12
+        rx = min(0.4, R_in / W_in)
+        ry = min(0.4, R_in / H_in)
+        
+        # Build the rounded rectangle path in axes coordinates (0.0 to 1.0)
+        rr_path = _get_rounded_rect_path(0.0, 0.0, 1.0, 1.0, rx, ry)
+        
+        # Draw background patch with rounded path
+        f = patches.PathPatch(rr_path, facecolor='white', edgecolor=self.COLORS['border'], linewidth=1.5, transform=ax.transAxes, clip_on=False)
         ax.add_patch(f)
-        hr = patches.Rectangle((0.0, 1.0 - header_height_ratio), 1.0, header_height_ratio, facecolor=self.COLORS['frame_header'], edgecolor='none')
-        hr.set_clip_path(f); ax.add_patch(hr)
-        b = patches.FancyBboxPatch((0.0, 0.0), 1.0, 1.0, boxstyle="round,pad=0.0,rounding_size=0.03", facecolor='none', edgecolor=self.COLORS['border'], linewidth=1.5, clip_on=False, zorder=5)
+        
+        # Draw the header background rectangle
+        hr = patches.Rectangle((0.0, 1.0 - header_height_ratio), 1.0, header_height_ratio, facecolor=self.COLORS['frame_header'], edgecolor='none', transform=ax.transAxes)
+        # Clip the header background to the rounded rectangle shape
+        hr.set_clip_path(f)
+        ax.add_patch(hr)
+        
+        # Draw the border outline patch (on top of header)
+        b = patches.PathPatch(rr_path, facecolor='none', edgecolor=self.COLORS['border'], linewidth=1.5, transform=ax.transAxes, clip_on=False, zorder=5)
         ax.add_patch(b)
-        ax.text(0.5, 1.0 - header_height_ratio/2, title, fontsize=8, fontweight='bold', color=self.COLORS['primary'], ha='center', va='center', zorder=6)
+        
+        # Add the header title text
+        ax.text(0.5, 1.0 - header_height_ratio/2, title, fontsize=8, fontweight='bold', color=self.COLORS['primary'], ha='center', va='center', zorder=6, transform=ax.transAxes)
 
     def _add_logo(self, ax, image_path: str, position: tuple, max_size: tuple = (1.0, 1.0)):
         from PIL import Image

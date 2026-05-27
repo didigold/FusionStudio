@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useCallback, useRef } from "react"
 import { FileText, User, MapPin, Wrench, Users, ShieldCheck, Car } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+import { AnimatePresence, motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -173,7 +173,12 @@ export function MetadataTab() {
     setAnalysisEuroNcap,
   } = useAppStore()
   
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeField, setActiveField] = useState<ActiveFieldType>("oem")
+  const setActiveFieldDebounced = useCallback((field: ActiveFieldType) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setActiveField(field), 150);
+  }, []);
 
   return (
     <div className="relative flex items-center justify-center min-h-[calc(100vh-14rem)] overflow-hidden p-8 bg-[#121211]">
@@ -188,49 +193,34 @@ export function MetadataTab() {
             WebkitMaskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)' 
           }}
         >
-          <svg 
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[2048px] h-[2048px]"
-          >
-            <defs>
-              {/* Base Grid Pattern */}
-              <pattern id="base-grid" width="32" height="32" patternUnits="userSpaceOnUse">
-                <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-              </pattern>
-              
-              {/* Glowing Active Grid Pattern (Light gray/white pulse) */}
-              <pattern id="active-grid" width="32" height="32" patternUnits="userSpaceOnUse">
-                <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="1.2" />
-              </pattern>
-
-              {/* Ring Gradient for the expanding wave */}
-              <radialGradient id="ring-glow-grad" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="white" stopOpacity="0" />
-                <stop offset="85%" stopColor="white" stopOpacity="1" />
-                <stop offset="100%" stopColor="white" stopOpacity="0" />
-              </radialGradient>
-
-            </defs>
-
-            {/* Base constant faint grid */}
-            <rect width="100%" height="100%" fill="url(#base-grid)" />
-
-            {/* Active pulsing glowing grid */}
-            <rect width="100%" height="100%" fill="url(#active-grid)" className="animate-pulse-sync" />
-          </svg>
+          {/* Base faint grid — pure CSS, zero SVG overhead */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: `linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)`,
+              backgroundSize: '32px 32px',
+            }}
+          />
+          {/* Pulsing brighter grid layer — opacity-only animation (compositor) */}
+          <div
+            className="absolute inset-0 pointer-events-none animate-pulse-sync"
+            style={{
+              backgroundImage: `linear-gradient(rgba(255,255,255,0.28) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.28) 1px, transparent 1px)`,
+              backgroundSize: '32px 32px',
+            }}
+          />
         </div>
 
-        {/* Soft orange glowing core with breathing animation (radial-gradient for 0% CPU cost) */}
-        <motion.div
-          animate={{
-            scale: [0.9, 1.1, 0.9],
-            opacity: [0.5, 1.0, 0.5],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-          className="absolute w-[400px] h-[400px] rounded-full pointer-events-none"
+        {/* Soft orange glowing core — pure CSS breathing animation (compositor thread, zero rAF) */}
+        <style>{`
+          @keyframes glowBreathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1.0; }
+          }
+          .glow-breathe { animation: glowBreathe 4s ease-in-out infinite; }
+        `}</style>
+        <div
+          className="absolute w-[400px] h-[400px] rounded-full pointer-events-none glow-breathe"
           style={{
             background: 'radial-gradient(circle, rgba(249, 115, 22, 0.05) 0%, rgba(249, 115, 22, 0) 70%)'
           }}
@@ -297,8 +287,8 @@ export function MetadataTab() {
           
           <div 
             className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveField('oem')}
-            onClickCapture={() => setActiveField('oem')}
+            onFocusCapture={() => setActiveFieldDebounced('oem')}
+            onClickCapture={() => setActiveFieldDebounced('oem')}
           >
             <Label htmlFor="oem" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <Wrench className="w-3.5 h-3.5 text-muted-foreground" /> OEM
@@ -313,7 +303,7 @@ export function MetadataTab() {
 
           <div 
             className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveField('vehicle')}
+            onFocusCapture={() => setActiveFieldDebounced('vehicle')}
           >
             <Label htmlFor="vehicle" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <Car className="w-3.5 h-3.5 text-muted-foreground" /> Vehicle
@@ -329,8 +319,8 @@ export function MetadataTab() {
 
           <div 
             className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveField('track')}
-            onClickCapture={() => setActiveField('track')}
+            onFocusCapture={() => setActiveFieldDebounced('track')}
+            onClickCapture={() => setActiveFieldDebounced('track')}
           >
             <Label htmlFor="track" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <MapPin className="w-3.5 h-3.5 text-muted-foreground" /> Track
@@ -349,7 +339,7 @@ export function MetadataTab() {
 
           <div 
             className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveField('engineer')}
+            onFocusCapture={() => setActiveFieldDebounced('engineer')}
           >
             <Label htmlFor="engineer" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <User className="w-3.5 h-3.5 text-muted-foreground" /> Engineer
@@ -365,7 +355,7 @@ export function MetadataTab() {
 
           <div 
             className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveField('analyst')}
+            onFocusCapture={() => setActiveFieldDebounced('analyst')}
           >
             <Label htmlFor="analyst" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <Users className="w-3.5 h-3.5 text-muted-foreground" /> Analyst
@@ -381,7 +371,7 @@ export function MetadataTab() {
 
           <div 
             className="flex items-center justify-between group/field py-1"
-            onClickCapture={() => setActiveField('euroNcap')}
+            onClickCapture={() => setActiveFieldDebounced('euroNcap')}
           >
             <Label htmlFor="euro-ncap" className="text-sm font-medium text-foreground flex items-center gap-2 cursor-pointer select-none">
               <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" /> Euro NCAP

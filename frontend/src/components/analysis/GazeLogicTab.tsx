@@ -26,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
@@ -47,10 +46,8 @@ import {
   Save,
   Download,
   Play,
-  PlayCircle,
   AlertCircle,
   Clock,
-  Sliders,
   HelpCircle,
   BugPlay,
   Activity,
@@ -292,7 +289,7 @@ export function GazeLogicTab() {
     const activeConfig = list.find((c) => c.id === activeId);
     if (activeConfig) {
       const initializedRules = JSON.parse(JSON.stringify(activeConfig.rules));
-      for (const [cat, rule] of Object.entries(initializedRules)) {
+      for (const [_cat, rule] of Object.entries(initializedRules)) {
         if (rule && typeof rule === "object") {
           const r = rule as any;
           if (r.ticks_count === undefined) {
@@ -312,11 +309,12 @@ export function GazeLogicTab() {
       const initializedDefaultRules = JSON.parse(
         JSON.stringify(DEFAULT_GAUGE_RULES),
       );
-      for (const [cat, rule] of Object.entries(initializedDefaultRules)) {
-        const minVal = rule.min ?? 0;
-        const maxVal = rule.max ?? 10;
+      for (const [_cat, rule] of Object.entries(initializedDefaultRules)) {
+        const r = rule as any;
+        const minVal = r.min ?? 0;
+        const maxVal = r.max ?? 10;
         const diff = maxVal - minVal;
-        rule.ticks_count = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4;
+        r.ticks_count = diff > 0 && diff <= 10 ? Math.round(diff) - 1 : 4;
       }
       setEditingRules(initializedDefaultRules);
     }
@@ -344,7 +342,7 @@ export function GazeLogicTab() {
     const config = modalConfigs.find((c) => c.id === configId);
     if (config) {
       const initializedRules = JSON.parse(JSON.stringify(config.rules));
-      for (const [cat, rule] of Object.entries(initializedRules)) {
+      for (const [_cat, rule] of Object.entries(initializedRules)) {
         if (rule && typeof rule === "object") {
           const r = rule as any;
           if (r.ticks_count === undefined) {
@@ -705,6 +703,9 @@ export function GazeLogicTab() {
   const [signalValuesCache, setSignalValuesCache] = useState<
     Record<string, (number | string)[]>
   >({});
+  // Ref to read cache inside effects without adding it to the dep array
+  const signalValuesCacheRef = useRef(signalValuesCache);
+  signalValuesCacheRef.current = signalValuesCache;
 
   // Sync participant files whenever analysisResults changes
   useEffect(() => {
@@ -787,6 +788,8 @@ export function GazeLogicTab() {
         setSignalValuesCache((prev) => ({ ...prev, [cacheKey]: data.values }));
       }
     } catch {
+      // Error is caught, will clean up in finally
+    } finally {
       fetchingValues.delete(cacheKey);
     }
   };
@@ -800,12 +803,14 @@ export function GazeLogicTab() {
     categorySignals.forEach((sig) => {
       if (sig && sig.name !== "SoundPressure") {
         const cacheKey = `${activeFile}::${sig.name}`;
-        if (!signalValuesCache[cacheKey] && !fetchingValues.has(cacheKey)) {
+        if (!signalValuesCacheRef.current[cacheKey] && !fetchingValues.has(cacheKey)) {
           fetchSignalValues(activeFile, sig.name);
         }
       }
     });
-  }, [activeCategory, loadedFiles, signalsConfig, signalValuesCache]);
+  // signalValuesCache intentionally excluded — read via ref to break self-trigger loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory, loadedFiles, signalsConfig]);
 
   const handleSelectFile = async (filePath: string) => {
     setFileSelectorOpen(false);
@@ -935,25 +940,6 @@ export function GazeLogicTab() {
     });
   };
 
-  // Gauge Rules Updates
-  const updateGaugeRuleField = (
-    category: string,
-    field: keyof GaugeConfig,
-    value: number,
-  ) => {
-    setGaugeRules({
-      ...gaugeRules,
-      [category]: {
-        ...(gaugeRules[category] || {
-          min: 0,
-          max: 10,
-          green_min: 0,
-          green_max: 3,
-        }),
-        [field]: value,
-      },
-    });
-  };
 
   // Helper to map UI structures to the flat format the backend expects
   const getBackendCategoryConfigs = () => {
@@ -1029,7 +1015,6 @@ export function GazeLogicTab() {
           max_freq: audioMaxFreq,
           threshold: audioThreshold,
         },
-        source_dir: analysisSourcePath,
       });
 
       if (res.data?.status === "success" && res.data?.preview_path) {
@@ -1121,7 +1106,6 @@ export function GazeLogicTab() {
           max_freq: audioMaxFreq,
           threshold: audioThreshold,
         },
-        source_dir: analysisSourcePath,
       });
     } catch (err) {
       console.error(err);
@@ -1191,6 +1175,11 @@ export function GazeLogicTab() {
           display: inline-block;
           white-space: nowrap;
           animation: marquee-path 14s linear infinite;
+          animation-play-state: paused;
+        }
+        .overflow-hidden:hover .animate-marquee-path,
+        .animate-marquee-path:hover {
+          animation-play-state: running;
         }
         .gaze-table-container {
           scrollbar-width: none;
@@ -1224,6 +1213,20 @@ export function GazeLogicTab() {
         .group:hover .pill-clear-btn {
           opacity: 1;
           pointer-events: auto;
+        }
+        .group:has(.pill-clear-btn:hover) {
+          background-color: rgba(239, 68, 68, 0.15) !important;
+          border-color: rgba(239, 68, 68, 0.4) !important;
+          color: #ef4444 !important;
+        }
+        .group:has(.pill-clear-btn:hover) svg {
+          color: #ef4444 !important;
+        }
+        .group:has(.pill-clear-btn:hover) .pill-text {
+          color: #ef4444 !important;
+        }
+        .group:has(.pill-clear-btn:hover) .pill-clear-btn {
+          color: #ef4444 !important;
         }
       `}</style>
 
@@ -2070,7 +2073,7 @@ export function GazeLogicTab() {
                   step="0.1"
                 />
               </div>
-              <span className="text-muted-foreground text-xs whitespace-nowrap">seconds</span>
+              <span className="text-muted-foreground text-sm whitespace-nowrap">seconds</span>
             </div>
           </div>
         </div>
@@ -2785,7 +2788,7 @@ export function GazeLogicTab() {
                 }
                 setResetConfirmType(null);
               }}
-              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-lg"
+              className="flex-1 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 active:bg-red-500/30 text-red-500 rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-lg shadow-red-500/5"
             >
               Reset
             </AlertDialogAction>

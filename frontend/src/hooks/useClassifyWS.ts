@@ -8,6 +8,7 @@ export function useClassifyWS() {
   const mountedRef = useRef(true)
   const groupsRef = useRef(classifyGroups)
   groupsRef.current = classifyGroups
+  const lastProgressTimeRef = useRef(0) // throttle progress to ~10fps
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return
@@ -24,7 +25,14 @@ export function useClassifyWS() {
       try {
         const data = JSON.parse(e.data)
         switch (data.type) {
-          case 'progress': setClassifyProgress(data.value); break
+          case 'progress': {
+            const now = performance.now();
+            if (now - lastProgressTimeRef.current >= 100) {
+              lastProgressTimeRef.current = now;
+              setClassifyProgress(data.value);
+            }
+            break
+          }
           case 'status': setClassifyStatus(data.message); break
           case 'item_done': {
             const groups = groupsRef.current.map((g: any) => ({

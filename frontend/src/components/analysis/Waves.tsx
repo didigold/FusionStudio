@@ -285,6 +285,9 @@ const Waves: React.FC<WavesProps> = ({
       ctx.stroke();
     }
 
+    const frameIdRef_inner = frameIdRef // alias for closure
+    let paused = false
+
     function tick(t: number) {
       const mouse = mouseRef.current;
       mouse.sx += (mouse.x - mouse.sx) * 0.1;
@@ -305,8 +308,31 @@ const Waves: React.FC<WavesProps> = ({
 
       movePoints(t);
       drawLines();
-      frameIdRef.current = requestAnimationFrame(tick);
+      if (!paused) {
+        frameIdRef_inner.current = requestAnimationFrame(tick);
+      } else {
+        frameIdRef_inner.current = null;
+      }
     }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          if (paused) {
+            paused = false;
+            frameIdRef_inner.current = requestAnimationFrame(tick);
+          }
+        } else {
+          paused = true;
+          if (frameIdRef_inner.current !== null) {
+            cancelAnimationFrame(frameIdRef_inner.current);
+            frameIdRef_inner.current = null;
+          }
+        }
+      },
+      { threshold: 0 }
+    );
+    observer.observe(canvas);
 
     function onResize() {
       setSize();
@@ -335,17 +361,18 @@ const Waves: React.FC<WavesProps> = ({
 
     setSize();
     setLines();
-    frameIdRef.current = requestAnimationFrame(tick);
+    frameIdRef_inner.current = requestAnimationFrame(tick);
     window.addEventListener('resize', onResize);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('touchmove', onTouchMove as unknown as EventListener, { passive: false });
 
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize', onResize);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('touchmove', onTouchMove as unknown as EventListener);
-      if (frameIdRef.current !== null) {
-        cancelAnimationFrame(frameIdRef.current);
+      if (frameIdRef_inner.current !== null) {
+        cancelAnimationFrame(frameIdRef_inner.current);
       }
     };
   }, []);

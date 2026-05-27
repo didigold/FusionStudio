@@ -1,4 +1,4 @@
-import { Fragment, useCallback } from "react";
+import { Fragment, useCallback, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -6,7 +6,7 @@ import {
   ButtonGroup,
   ButtonGroupSeparator,
 } from "@/components/ui/button-group";
-import { Play, Square, Video, StopCircle, CircleGauge, MoveHorizontal, MoveVertical } from "lucide-react";
+import { Play, Square, Video, StopCircle, CircleGauge, MoveHorizontal, MoveVertical, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
 import { analysisApi } from "@/api/analysisApi";
@@ -37,6 +37,31 @@ export function TrackingTab() {
     analysisChronosFrame,
     addLog,
   } = useAppStore();
+
+  const [showAmbilight, setShowAmbilight] = useState(true);
+  const [ambilightColor, setAmbilightColor] = useState('0,0,0');
+  const lastFrameRef = useRef<string | null>(null);
+
+  // Sample dominant color from frame using a tiny offscreen canvas
+  useEffect(() => {
+    if (!analysisChronosFrame || analysisChronosFrame === lastFrameRef.current) return;
+    lastFrameRef.current = analysisChronosFrame;
+    if (!showAmbilight) return;
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = 4; c.height = 4;
+      const ctx = c.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, 4, 4);
+      const d = ctx.getImageData(0, 0, 4, 4).data;
+      let r = 0, g = 0, b = 0;
+      for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2]; }
+      const px = d.length / 4;
+      setAmbilightColor(`${Math.round(r/px)},${Math.round(g/px)},${Math.round(b/px)}`);
+    };
+    img.src = `data:image/jpeg;base64,${analysisChronosFrame}`;
+  }, [analysisChronosFrame, showAmbilight]);
 
   const availableCameras = analysisAvailableCameras;
 
@@ -149,6 +174,17 @@ export function TrackingTab() {
             )}
           </ButtonGroup>
 
+          {/* Ambilight toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-7 rounded-lg transition-all", showAmbilight ? "text-primary bg-primary/10" : "text-muted-foreground")}
+            onClick={() => setShowAmbilight(v => !v)}
+            title={showAmbilight ? "Disable ambilight" : "Enable ambilight"}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+          </Button>
+
           {analysisChronosRunning ? (
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -202,15 +238,15 @@ export function TrackingTab() {
         {analysisChronosRunning ? (
           analysisChronosFrame ? (
             <>
-              {/* Ambilight Effect - Blurred background glow */}
-              <div 
-                className="absolute inset-0 pointer-events-none opacity-40 blur-[100px] scale-125 transition-opacity duration-1000"
-                style={{
-                  backgroundImage: `url(data:image/jpeg;base64,${analysisChronosFrame})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                }}
-              />
+              {/* Ambilight Effect — dominant-color radial glow (no decode, no blur filter) */}
+              {showAmbilight && (
+                <div
+                  className="absolute inset-0 pointer-events-none transition-all duration-700"
+                  style={{
+                    background: `radial-gradient(ellipse at center, rgba(${ambilightColor},0.45) 0%, rgba(${ambilightColor},0.15) 50%, transparent 80%)`,
+                  }}
+                />
+              )}
               <img
                 src={`data:image/jpeg;base64,${analysisChronosFrame}`}
                 className="w-full h-full object-contain relative z-10"

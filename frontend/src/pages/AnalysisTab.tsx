@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useAnalysisWS } from '../hooks/useAnalysisWS'
 import { 
@@ -37,7 +37,7 @@ const ProgressRing = ({ value, max, title }: { value: number; max: number; title
   const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
   const radius = 4.5
   const circumference = 2 * Math.PI * radius
-  const strokeDashoffset = percent === 0 ? 0 : circumference - (percent / 100) * circumference
+  const strokeDashoffset = 0
 
   let strokeColor = "stroke-amber-500"
   if (percent === 100) {
@@ -78,13 +78,13 @@ interface FileFolderRipple {
   size: number
 }
 
-// --- TREE NODE COMPONENT ---
-function RecordingNode({ 
+// Memoized tree node — only re-renders when its own props change
+const RecordingNode = memo(function RecordingNode({ 
   node, 
   level = 0, 
   selectedPath, 
   onSelect,
-  checkedFiles,
+  checkedFilesSet,
   onToggleCheck,
   expandedAll
 }: { 
@@ -92,7 +92,7 @@ function RecordingNode({
   level?: number, 
   selectedPath: string | null, 
   onSelect: (path: string) => void,
-  checkedFiles: string[],
+  checkedFilesSet: Set<string>,
   onToggleCheck: (path: string) => void,
   expandedAll: boolean | null
 }) {
@@ -128,7 +128,8 @@ function RecordingNode({
   }
 
   const hasChildren = node.children && node.children.length > 0
-  const isChecked = node.type === 'file' ? checkedFiles.includes(node.path) : false
+  // O(1) lookup using Set instead of O(N) array.includes()
+  const isChecked = node.type === 'file' ? checkedFilesSet.has(node.path) : false
 
   if (node.type === 'file') {
     return (
@@ -257,7 +258,7 @@ function RecordingNode({
                 level={level + 1} 
                 selectedPath={selectedPath} 
                 onSelect={onSelect}
-                checkedFiles={checkedFiles}
+                checkedFilesSet={checkedFilesSet}
                 onToggleCheck={onToggleCheck}
                 expandedAll={expandedAll}
               />
@@ -267,7 +268,7 @@ function RecordingNode({
       )}
     </div>
   )
-}
+}) // end memo(RecordingNode)
 
 export default function AnalysisTab() {
   const {
@@ -282,26 +283,30 @@ export default function AnalysisTab() {
   const [selectionType, setSelectionType] = useState('all')
   const [activeTab, setActiveTab] = useState('audio')
 
-  const selectFile = (filePath: string) => {
+  // Stable callback — won't invalidate memoized RecordingNode children
+  const selectFile = useCallback((filePath: string) => {
     setAnalysisSelectedFile(filePath)
-  }
+  }, [setAnalysisSelectedFile])
+
+  // O(1) lookup set — rebuilt only when the array reference changes
+  const checkedFilesSet = useMemo(() => new Set(analysisCheckedFiles), [analysisCheckedFiles])
 
   const totalMF4Count = useMemo(() => 
     analysisResults.reduce((acc, res) => acc + (res.tracking_stats?.[1] || 0), 0), 
     [analysisResults]
   )
 
-  const handleSelectionChange = (val: string) => {
+  const handleSelectionChange = useCallback((val: string) => {
     setSelectionType(val)
     if (val === 'all') setAllAnalysisFiles(true)
     else setAllAnalysisFiles(false)
-  }
+  }, [setAllAnalysisFiles])
 
   const isAllExpanded = analysisExpandedAll === true
 
-  const toggleExpand = () => {
+  const toggleExpand = useCallback(() => {
     setAnalysisExpandedAll(!isAllExpanded)
-  }
+  }, [setAnalysisExpandedAll, isAllExpanded])
 
   return (
     <div className="flex h-full gap-6 p-1 overflow-hidden">
@@ -355,7 +360,7 @@ export default function AnalysisTab() {
                   node={res} 
                   selectedPath={analysisSelectedFile} 
                   onSelect={selectFile} 
-                  checkedFiles={analysisCheckedFiles}
+                  checkedFilesSet={checkedFilesSet}
                   onToggleCheck={toggleAnalysisFile}
                   expandedAll={analysisExpandedAll}
                 />

@@ -6,6 +6,7 @@ export function useBrainTrainingWS() {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
+  const lastEpochTimeRef = useRef(0) // throttle epoch renders to ~10fps
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return
@@ -28,9 +29,14 @@ export function useBrainTrainingWS() {
             if (data.progress != null) setBrainPhaseProgress(data.progress)
             break
           case 'progress': setBrainPhaseProgress(data.value); break
-          case 'epoch':
-            addBrainEpochData({ epoch: data.epoch, loss: data.loss, acc: data.acc, val_loss: data.val_loss, val_acc: data.val_acc })
+          case 'epoch': {
+            const now = performance.now();
+            if (now - lastEpochTimeRef.current >= 100) {
+              lastEpochTimeRef.current = now;
+              addBrainEpochData({ epoch: data.epoch, loss: data.loss, acc: data.acc, val_loss: data.val_loss, val_acc: data.val_acc })
+            }
             break
+          }
           case 'finished': setBrainTraining(false); setBrainPhase('done'); addLog('Training completed successfully!'); break
           case 'error': setBrainTraining(false); setBrainPhase('error'); addLog(`Error: ${data.message}`); break
         }

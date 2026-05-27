@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FolderOpen, Loader2, X, Download, Save } from "lucide-react";
+import { FolderOpen, Loader2, X, Save, Cog, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +44,6 @@ export function TopNav() {
     addLog,
 
     // Config actions & states
-    importedConfigName,
     importConfigJSON,
     exportConfig,
     handleUnmountConfig,
@@ -113,6 +112,7 @@ export function TopNav() {
     setAnalysisAvailableCameras([]);
     setAnalysisSelectedFile("");
     setAllAnalysisFiles(false);
+    handleUnmountConfig();
     addLog("Analysis source path cleared.");
   };
 
@@ -126,6 +126,21 @@ export function TopNav() {
 
   return (
     <>
+      <style>{`
+        .nav-entry-wrapper {
+          transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .nav-entry-wrapper:has(.nav-clear-btn:hover) {
+          background-color: rgba(239, 68, 68, 0.15) !important;
+          border-color: rgba(239, 68, 68, 0.4) !important;
+        }
+        .nav-entry-wrapper:has(.nav-clear-btn:hover) input {
+          color: #ef4444 !important;
+        }
+        .nav-entry-wrapper:has(.nav-clear-btn:hover) .nav-clear-btn {
+          color: #ef4444 !important;
+        }
+      `}</style>
       <header className="relative w-full h-16 border-b border-white/5 bg-[#121110] flex items-center justify-between px-8 z-40 sticky top-0">
         {/* Left Side: Brand Logo and Text */}
         <div className="flex items-center gap-2.5 shrink-0">
@@ -160,7 +175,7 @@ export function TopNav() {
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
           <div
             className={cn(
-              "relative w-[600px] h-9 flex items-center bg-[#1e1d1c] border rounded-lg px-2 transition-all shadow-inner",
+              "nav-entry-wrapper relative w-[600px] h-9 flex items-center bg-[#1e1d1c] border rounded-lg px-2 transition-all shadow-inner",
               isFocused
                 ? "border-orange-500 ring-1 ring-orange-500/20"
                 : !analysisSourcePath
@@ -202,7 +217,7 @@ export function TopNav() {
               <button
                 type="button"
                 onClick={() => setClearConfirmOpen(true)}
-                className="p-1 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-md transition-all mr-1"
+                className="nav-clear-btn p-1 hover:bg-white/5 text-muted-foreground hover:text-foreground rounded-md transition-all mr-1"
                 title="Clear Path"
               >
                 <X className="w-3.5 h-3.5" />
@@ -242,7 +257,7 @@ export function TopNav() {
               className="w-9 h-9 rounded-lg border border-white/5 bg-[#1e1d1c] text-white hover:bg-white/5 hover:border-white/10 transition-all shrink-0"
               title="Import Configuration JSON"
             >
-              <Download className="w-3.5 h-3.5 text-zinc-400" />
+              <Cog className="w-3.5 h-3.5 text-zinc-400" />
             </Button>
             <input
               type="file"
@@ -309,18 +324,20 @@ export function TopNav() {
 
       {/* CLEAR PATH CONFIRM DIALOG */}
       <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
-        <AlertDialogContent className="bg-[#1e1d1c] border-white/10 text-white">
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Are you sure you want to clear the project folder?
+        <AlertDialogContent className="max-w-[340px] border border-white/10 bg-surface-2/80 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
+            <Trash2 className="w-5 h-5" />
+          </div>
+          <AlertDialogHeader className="items-center text-center gap-1.5">
+            <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+              Clear Project Folder?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-zinc-400 text-xs">
-              This action will clear the loaded project path and reset all
-              analysis results and cameras.
+            <AlertDialogDescription className="text-sm text-white/70 max-w-[280px]">
+              This action will clear the loaded project path and reset all analysis results and cameras.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-xs bg-zinc-800 border-white/5 text-white hover:bg-zinc-700 hover:text-white rounded-lg">
+          <AlertDialogFooter className="flex-row items-center justify-center gap-3 w-full mt-2">
+            <AlertDialogCancel className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -328,7 +345,7 @@ export function TopNav() {
                 handleClearPath();
                 setClearConfirmOpen(false);
               }}
-              className="h-8 text-xs bg-destructive text-white hover:bg-destructive/90 rounded-lg"
+              className="flex-1 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 active:bg-red-500/30 text-red-500 rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-lg shadow-red-500/5"
             >
               Clear Folder
             </AlertDialogAction>
@@ -347,11 +364,11 @@ export function TopNav() {
           </DialogHeader>
 
           <div className="p-5 flex flex-col gap-4">
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               The imported configuration requires a valid project source
               directory to automatically scan and load signals.
               {pendingConfig?.analysis_source_path && (
-                <span className="block mt-2 font-mono text-[10px] text-orange-400 bg-orange-500/5 border border-orange-500/10 p-2.5 rounded-lg break-all">
+                <span className="block mt-2 font-mono text-xs text-orange-400 bg-orange-500/5 border border-orange-500/10 p-2.5 rounded-lg break-all">
                   Configured path not found:{" "}
                   {pendingConfig.analysis_source_path}
                 </span>
@@ -359,7 +376,7 @@ export function TopNav() {
             </p>
 
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Select Project Directory
               </label>
               <div className="flex gap-2">
@@ -368,16 +385,17 @@ export function TopNav() {
                     placeholder="c:/path/to/project/folder..."
                     value={promptedPath}
                     onChange={(e) => setPromptedPath(e.target.value)}
-                    className="h-9 bg-surface-3 border-white/10 text-xs rounded-lg placeholder:text-muted-foreground/40"
+                    className="h-9 bg-surface-3 border-white/10 text-sm rounded-lg placeholder:text-muted-foreground/40"
                   />
                 </div>
                 <Button
                   type="button"
                   onClick={() => setPromptFolderBrowserOpen(true)}
                   variant="outline"
-                  className="h-9 rounded-lg border border-white/10 bg-surface-3 text-white hover:bg-white/5 transition-all text-xs font-semibold px-4"
+                  className="h-9 rounded-lg border border-white/10 bg-surface-3 text-white hover:bg-white/5 transition-all px-3"
+                  title="Browse Folder"
                 >
-                  Browse
+                  <FolderOpen className="w-4 h-4 text-zinc-400" />
                 </Button>
               </div>
             </div>
@@ -394,7 +412,7 @@ export function TopNav() {
             <Button
               disabled={!promptedPath}
               onClick={handleConfirmPromptedPath}
-              className="h-8 bg-primary hover:bg-primary/95 text-white font-bold uppercase text-[10px] tracking-widest rounded-lg px-4"
+              className="h-8 bg-white text-black hover:bg-white/90 disabled:opacity-50 font-bold uppercase text-[10px] tracking-widest rounded-lg px-4"
             >
               Confirm
             </Button>

@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Minus, Plus, Activity, Mic, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
 import { useAppStore } from '@/store/useAppStore';
 
 // Custom hook for hold-to-repeat behavior with acceleration
@@ -146,42 +145,34 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
             WebkitMaskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)' 
           }}
         >
-          <svg 
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[2048px] h-[2048px]"
-          >
-            <defs>
-              {/* Base Grid Pattern */}
-              <pattern id="audio-base-grid" width="32" height="32" patternUnits="userSpaceOnUse">
-                <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-              </pattern>
-              
-              {/* Glowing Active Grid Pattern (Light gray/white pulse) */}
-              <pattern id="audio-active-grid" width="32" height="32" patternUnits="userSpaceOnUse">
-                <path d="M 32 0 L 0 0 0 32" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="1.2" />
-              </pattern>
-
-            </defs>
-
-            {/* Base constant faint grid */}
-            <rect width="100%" height="100%" fill="url(#audio-base-grid)" />
-
-            {/* Active pulsing glowing grid */}
-            <rect width="100%" height="100%" fill="url(#audio-active-grid)" className="animate-pulse-sync" />
-          </svg>
+          {/* Base faint grid — pure CSS */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: `linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)`,
+              backgroundSize: '32px 32px',
+            }}
+          />
+          {/* Pulsing brighter grid — opacity-only (compositor) */}
+          <div
+            className="absolute inset-0 pointer-events-none animate-pulse-sync"
+            style={{
+              backgroundImage: `linear-gradient(rgba(255,255,255,0.28) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.28) 1px, transparent 1px)`,
+              backgroundSize: '32px 32px',
+            }}
+          />
         </div>
 
-        {/* Soft orange glowing core with breathing animation (radial-gradient for 0% CPU cost) */}
-        <motion.div
-          animate={{
-            scale: [0.9, 1.1, 0.9],
-            opacity: [0.5, 1.0, 0.5],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-          className="absolute w-[400px] h-[400px] rounded-full pointer-events-none"
+        {/* Soft orange glowing core — pure CSS breathing animation */}
+        <style>{`
+          @keyframes audioBreathe {
+            0%, 100% { transform: scale(0.9); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1.0; }
+          }
+          .audio-breathe { animation: audioBreathe 4s ease-in-out infinite; }
+        `}</style>
+        <div
+          className="absolute w-[400px] h-[400px] rounded-full pointer-events-none audio-breathe"
           style={{
             background: 'radial-gradient(circle, rgba(249, 115, 22, 0.05) 0%, rgba(249, 115, 22, 0) 70%)'
           }}

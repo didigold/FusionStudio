@@ -22,6 +22,7 @@ import {
   Menu,
   Plus,
   Minus,
+  Sparkles,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -199,6 +200,7 @@ export function GazeTimeTab() {
   const [videoZoom, setVideoZoom] = useState(1);
   const zoomIn = useCallback(() => setVideoZoom(z => Math.min(3, parseFloat((z + 0.25).toFixed(2)))), []);
   const zoomOut = useCallback(() => setVideoZoom(z => Math.max(1, parseFloat((z - 0.25).toFixed(2)))), []);
+  const [showBlur, setShowBlur] = useState(true);
 
   // Zoom overlay timer logic
   const [showZoomOverlay, setShowZoomOverlay] = useState(false);
@@ -751,6 +753,9 @@ export function GazeTimeTab() {
     bottomChartRef.current?.redraw();
   }, [marks]);
 
+  // Ref to throttle expensive React state updates from onTimeUpdate
+  const lastStateUpdateRef = useRef<number>(0);
+
   useEffect(() => {
     const timer = setInterval(() => {
       if (currentTimeRef.current !== currentTime) {
@@ -762,7 +767,8 @@ export function GazeTimeTab() {
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [currentTime]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Stable: no dependency on currentTime to avoid interval churn
 
   useEffect(() => {
     topChartRef.current?.redraw();
@@ -864,6 +870,7 @@ export function GazeTimeTab() {
             <div className="flex-1 relative min-h-0">
                  {videoUrl ? (
                      <>
+                         {showBlur && (
                          <video
                              ref={blurVideoRef}
                              src={videoUrl}
@@ -872,6 +879,7 @@ export function GazeTimeTab() {
                              playsInline
                              className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[60px] scale-125 pointer-events-none transition-opacity duration-500"
                          />
+                         )}
                          <video 
                              ref={videoRef} 
                              src={videoUrl} 
@@ -881,7 +889,12 @@ export function GazeTimeTab() {
                                  if (videoRef.current) {
                                      const t = videoRef.current.currentTime;
                                      currentTimeRef.current = t;
-                                     setCurrentTime(t);
+                                     // Throttle React state updates to ~10fps to reduce render thrashing
+                                     const now = performance.now();
+                                     if (now - lastStateUpdateRef.current >= 100) {
+                                         lastStateUpdateRef.current = now;
+                                         setCurrentTime(t);
+                                     }
                                      if (blurVideoRef.current && isPlaying && Math.abs(blurVideoRef.current.currentTime - t) > 0.15) {
                                          blurVideoRef.current.currentTime = t;
                                      }
@@ -969,7 +982,7 @@ export function GazeTimeTab() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-52 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
                             {/* --- Signals --- */}
-                            <DropdownMenuLabel>Top Signal</DropdownMenuLabel>
+                            <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Top Signal</DropdownMenuLabel>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">{topSignal || 'Select...'}</DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
@@ -984,7 +997,7 @@ export function GazeTimeTab() {
                                     </DropdownMenuSubContent>
                                 </DropdownMenuPortal>
                             </DropdownMenuSub>
-                            <DropdownMenuLabel className="pt-1">Bottom Signal</DropdownMenuLabel>
+                            <DropdownMenuLabel className="pt-1 text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Bottom Signal</DropdownMenuLabel>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">{bottomSignal || 'Select...'}</DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
@@ -1002,7 +1015,7 @@ export function GazeTimeTab() {
 
                             {/* --- Subject / Case --- */}
                             <DropdownMenuSeparator />
-                            <DropdownMenuLabel>Subject</DropdownMenuLabel>
+                            <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Subject</DropdownMenuLabel>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">{selectedSubject || 'Select...'}</DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
@@ -1015,7 +1028,7 @@ export function GazeTimeTab() {
                                     </DropdownMenuSubContent>
                                 </DropdownMenuPortal>
                             </DropdownMenuSub>
-                            <DropdownMenuLabel className="pt-1">Case</DropdownMenuLabel>
+                            <DropdownMenuLabel className="pt-1 text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Case</DropdownMenuLabel>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">
                                     {targetFile?.split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '') || 'Select...'}
@@ -1035,34 +1048,31 @@ export function GazeTimeTab() {
 
                             {/* --- Case Navigation --- */}
                             <DropdownMenuSeparator />
-                            <DropdownMenuLabel>Navigate</DropdownMenuLabel>
-                            <DropdownMenuItem disabled={currentCaseIdx <= 0} onClick={goToPrevCase} title={prevCaseName ?? ''}>
+                            <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Navigate</DropdownMenuLabel>
+                            <DropdownMenuItem className="text-sm" disabled={currentCaseIdx <= 0} onClick={goToPrevCase} title={prevCaseName ?? ''}>
                                 <ArrowLeft className="w-3 h-3" /> Previous
-                                <DropdownMenuShortcut>⇧+Tab</DropdownMenuShortcut>
+                                <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">⇧+Tab</DropdownMenuShortcut>
                             </DropdownMenuItem>
-                            <div className="px-2 py-0.5 text-[9px] text-muted-foreground font-mono text-center">
-                                {currentCaseIdx + 1} / {subjectCases.length}
-                            </div>
-                            <DropdownMenuItem disabled={currentCaseIdx >= subjectCases.length - 1} onClick={goToNextCase} title={nextCaseName ?? ''}>
+                            <DropdownMenuItem className="text-sm" disabled={currentCaseIdx >= subjectCases.length - 1} onClick={goToNextCase} title={nextCaseName ?? ''}>
                                 <ArrowRight className="w-3 h-3" /> Next
-                                <DropdownMenuShortcut>Tab</DropdownMenuShortcut>
+                                <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Tab</DropdownMenuShortcut>
                             </DropdownMenuItem>
 
                             {/* --- Marker Actions --- */}
                             <DropdownMenuSeparator />
-                            <DropdownMenuLabel>Markers</DropdownMenuLabel>
-                            <DropdownMenuItem disabled={undoCount === 0} onClick={undoLastAction}>
+                            <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Markers</DropdownMenuLabel>
+                            <DropdownMenuItem className="text-sm" disabled={undoCount === 0} onClick={undoLastAction}>
                                 <Undo2 className="w-3 h-3" /> Undo
-                                <DropdownMenuShortcut>⌘Z</DropdownMenuShortcut>
+                                <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+Z</DropdownMenuShortcut>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={clearLastMark} disabled={marks.length === 0}>
+                            <DropdownMenuItem className="text-sm" onClick={clearLastMark} disabled={marks.length === 0}>
                                 <Eraser className="w-3 h-3" /> Clear Last
-                                <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
+                                <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+D</DropdownMenuShortcut>
                             </DropdownMenuItem>
                             <AlertDialog open={confirmClearAll} onOpenChange={setConfirmClearAll}>
-                                <DropdownMenuItem variant="destructive" disabled={marks.length === 0} onSelect={(e) => { e.preventDefault(); setConfirmClearAll(true); }}>
+                                <DropdownMenuItem className="text-sm" variant="destructive" disabled={marks.length === 0} onSelect={(e) => { e.preventDefault(); setConfirmClearAll(true); }}>
                                     <Trash2 className="w-3 h-3" /> Clear All
-                                    <DropdownMenuShortcut>⌘Space</DropdownMenuShortcut>
+                                    <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+Space</DropdownMenuShortcut>
                                 </DropdownMenuItem>
                                 <AlertDialogContent className="max-w-[340px] border border-white/10 bg-surface-2/80 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
                                     <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
@@ -1089,9 +1099,9 @@ export function GazeTimeTab() {
 
                             {/* --- View --- */}
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={resetZoom}>
+                            <DropdownMenuItem className="text-sm" onClick={resetZoom}>
                                 <Maximize className="w-3.5 h-3.5" /> Autorange
-                                <DropdownMenuShortcut>⌘A</DropdownMenuShortcut>
+                                <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+A</DropdownMenuShortcut>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -1109,13 +1119,13 @@ export function GazeTimeTab() {
                                     <DropdownMenuItem 
                                         key={cam} 
                                         className={cn(
-                                            'text-[10px] font-bold cursor-pointer rounded-lg px-2 py-1.5 transition-colors flex items-center justify-between',
+                                            'text-sm font-bold cursor-pointer rounded-lg px-2 py-1.5 transition-colors flex items-center justify-between',
                                             analysisSelectedCamera === cam ? 'bg-primary text-black focus:bg-primary focus:text-black' : 'text-white/80 hover:bg-white hover:text-black focus:bg-white focus:text-black'
                                         )}
                                         onClick={() => setAnalysisSelectedCamera(Number(cam))}
                                     >
                                         <span>Camera {cam}</span>
-                                        {analysisSelectedCamera === cam && <span className="text-[10px] font-bold">✓</span>}
+                                        {analysisSelectedCamera === cam && <span className="text-sm font-bold">✓</span>}
                                     </DropdownMenuItem>
                                 ))}
                             </DropdownMenuContent>
@@ -1151,7 +1161,7 @@ export function GazeTimeTab() {
             </div>
             <div className="h-24 bg-surface-2/50 border-t border-white/5 p-3 shrink-0 flex flex-col justify-between">
                 <div className="flex items-center gap-3 w-full">
-                    <span className="text-xs font-bold text-muted-foreground/60 font-mono">0.00s</span>
+                    <span className="text-xs font-bold text-muted-foreground/60 font-mono">{currentTime.toFixed(2)}s</span>
                     <div className="flex-1 relative py-2 flex items-center">
                         <Slider 
                             value={[currentTime]} 
@@ -1268,6 +1278,18 @@ export function GazeTimeTab() {
                             title={isSynced ? 'Disable Mouse Sync' : 'Enable Mouse Sync'}
                         >
                             {isSynced ? <Mouse className="w-3.5 h-3.5 text-white" /> : <MouseOff className="w-3.5 h-3.5 text-white" />}
+                        </Button>
+                        <Button 
+                            size="icon" 
+                            variant="ghost"
+                            onClick={() => setShowBlur(v => !v)} 
+                            className={cn(
+                                'h-7 w-7 rounded-lg border-white/10 transition-all disabled:opacity-30',
+                                showBlur ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-white/5'
+                            )} 
+                            title={showBlur ? 'Disable ambient blur' : 'Enable ambient blur'}
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
                         </Button>
                     </div>
                     <div className="bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider truncate max-w-[200px]" title={targetFile ? videoFileName : "No project loaded"}>
