@@ -30,7 +30,7 @@ export function Sidebar() {
               className={`w-11 h-11 flex items-center justify-center rounded-lg text-[17px] transition-all duration-150
                 ${isActive
                   ? 'bg-[#F39200] text-black shadow-md shadow-[#F3920040]'
-                  : 'hover:bg-card text-[#999] hover:text-foreground'}`}
+                  : 'hover:bg-card text-muted-foreground hover:text-foreground'}`}
             >
               <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
             </span>

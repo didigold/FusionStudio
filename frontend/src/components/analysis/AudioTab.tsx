@@ -133,7 +133,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
   };
 
   return (
-    <div className="relative flex items-center justify-center min-h-[calc(100vh-14rem)] overflow-hidden p-8 bg-[#121211]">
+    <div className="relative flex items-center justify-center h-full min-h-0 overflow-y-auto p-8 bg-background">
       
       {/* Background Grid & Animation Layer */}
       <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
@@ -147,17 +147,17 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
         >
           {/* Base faint grid — pure CSS */}
           <div
-            className="absolute inset-0 pointer-events-none"
+            className="absolute inset-0 pointer-events-none opacity-40"
             style={{
-              backgroundImage: `linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)`,
+              backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
               backgroundSize: '32px 32px',
             }}
           />
-          {/* Pulsing brighter grid — opacity-only (compositor) */}
+          {/* Pulsing brighter grid */}
           <div
-            className="absolute inset-0 pointer-events-none animate-pulse-sync"
+            className="absolute inset-0 pointer-events-none animate-pulse-sync opacity-80"
             style={{
-              backgroundImage: `linear-gradient(rgba(255,255,255,0.28) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.28) 1px, transparent 1px)`,
+              backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
               backgroundSize: '32px 32px',
             }}
           />

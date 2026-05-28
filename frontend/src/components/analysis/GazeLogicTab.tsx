@@ -1242,21 +1242,21 @@ export function GazeLogicTab() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 w-9 p-0 bg-black/50 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all duration-300"
+                    className="h-9 w-9 p-0 bg-surface-2 text-foreground border-border rounded-lg hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all duration-300"
                   >
                     <Menu className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="start"
-                  className="w-52 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl"
+                  className="w-52 bg-popover border-border text-popover-foreground p-1 shadow-md"
                 >
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger className="text-sm">
                       Protocols
                     </DropdownMenuSubTrigger>
                     <DropdownMenuPortal>
-                      <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl">
+                      <DropdownMenuSubContent className="bg-popover border-border text-popover-foreground p-1 shadow-md">
                         <DropdownMenuRadioGroup
                           value={protocol}
                           onValueChange={(val) =>
@@ -1285,7 +1285,7 @@ export function GazeLogicTab() {
                       Configuration
                     </DropdownMenuSubTrigger>
                     <DropdownMenuPortal>
-                      <DropdownMenuSubContent className="bg-surface-2/95 border-white/5 text-white p-1 backdrop-blur-xl w-48">
+                      <DropdownMenuSubContent className="bg-popover border-border text-popover-foreground p-1 shadow-md w-48">
                         <DropdownMenuItem
                           onClick={() =>
                             document
@@ -1312,7 +1312,7 @@ export function GazeLogicTab() {
                     </DropdownMenuPortal>
                   </DropdownMenuSub>
 
-                  <DropdownMenuSeparator className="bg-white/5" />
+                  <DropdownMenuSeparator className="bg-border" />
 
                   <DropdownMenuItem
                     onClick={() => autoLoadChannelsAndMerge()}

@@ -76,8 +76,8 @@ export function GlowEffect({
             ease: "linear",
           }}
         />
-        {/* 3. The inner element container (solid dark background) */}
-        <div className="relative w-full h-full rounded-full bg-[#151413] overflow-hidden flex items-center">
+        {/* 3. The inner element container (solid background) */}
+        <div className="relative w-full h-full rounded-full bg-surface-1 overflow-hidden flex items-center">
           {children}
         </div>
       </div>

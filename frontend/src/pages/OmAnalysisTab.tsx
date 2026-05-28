@@ -101,7 +101,7 @@ export default function OmAnalysisTab() {
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
             {files.map((f, i) => (
-              <div key={i} onClick={() => selectFile(f.path)} className={`p-3 rounded-lg mb-1 cursor-pointer transition-all ${selectedFile === f.path ? 'bg-primary text-background' : 'hover:bg-surface-3'}`}>
+              <div key={i} onClick={() => selectFile(f.path)} className={`p-3 rounded-lg mb-1 cursor-pointer transition-all ${selectedFile === f.path ? 'bg-primary text-primary-foreground' : 'hover:bg-surface-3'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold truncate">{f.name}</span>
                   {f.has_tracking && <CheckCircle2 className="w-3 h-3 text-green-500" />}
@@ -115,7 +115,7 @@ export default function OmAnalysisTab() {
 
       <div className="flex-1 flex flex-col gap-6 overflow-hidden">
         <div className="grid grid-cols-3 gap-6 h-2/3">
-          <div className="col-span-2 bg-black border border-border/50 rounded-3xl overflow-hidden relative group flex items-center justify-center">
+          <div className="col-span-2 bg-surface-ink border border-border/50 rounded-3xl overflow-hidden relative group flex items-center justify-center">
             <Video className="w-16 h-16 text-white/5" />
             <div className="absolute bottom-4 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-4 bg-background/80 backdrop-blur-md px-6 py-3 rounded-full border border-border/30">
               <button className="text-foreground hover:text-primary"><Play className="w-5 h-5 fill-current" /></button>

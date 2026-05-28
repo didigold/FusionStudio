@@ -16,7 +16,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[8rem] rounded-xl border border-border/50 bg-surface-2/40 backdrop-blur-xl p-1 shadow-md",
+        "z-50 min-w-[8rem] rounded-xl border border-border bg-popover/90 backdrop-blur-md text-popover-foreground p-1 shadow-md",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className
       )}
@@ -33,8 +33,8 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors focus:bg-white focus:text-black hover:bg-white hover:text-black data-[highlighted]:bg-white data-[highlighted]:text-black data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      variant === 'destructive' && "text-red-500 focus:text-white focus:bg-red-500",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      variant === 'destructive' && "text-destructive focus:text-destructive-foreground focus:bg-destructive",
       className
     )}
     {...props}
@@ -60,7 +60,7 @@ const DropdownMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-white/5", className)}
+    className={cn("-mx-1 my-1 h-px bg-border", className)}
     {...props}
   />
 ))
@@ -80,7 +80,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none focus:bg-white focus:text-black hover:bg-white hover:text-black data-[highlighted]:bg-white data-[highlighted]:text-black data-[state=open]:bg-white data-[state=open]:text-black",
+      "flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground",
       className
     )}
     {...props}
@@ -98,7 +98,7 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      "min-w-[8rem] rounded-xl border border-border/50 bg-surface-2/40 backdrop-blur-xl p-1 shadow-md",
+      "min-w-[8rem] rounded-xl border border-border bg-popover/90 backdrop-blur-md text-popover-foreground p-1 shadow-md",
       "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
       className
     )}
@@ -117,14 +117,14 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-white focus:text-black hover:bg-white hover:text-black data-[highlighted]:bg-white data-[highlighted]:text-black data-[disabled]:pointer-events-none data-[disabled]:opacity-50 group",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 group",
       className
     )}
     {...props}
   >
     <span className="absolute left-2.5 flex h-3.5 w-3.5 items-center justify-center">
       <DropdownMenuPrimitive.ItemIndicator>
-        <div className="h-1.5 w-1.5 rounded-full bg-primary group-focus:bg-black" />
+        <div className="h-1.5 w-1.5 rounded-full bg-primary group-focus:bg-accent-foreground" />
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}

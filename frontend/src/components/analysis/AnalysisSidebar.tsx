@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 import { 
   Mic, FileText, Clock, GitBranch, Package,
   AlertTriangle, BrainCircuit, Tags, FileSpreadsheet,
-  Terminal, Eye, UserCheck, ChevronRight, Construction, ScanFace
+  Terminal, Eye, UserCheck, ChevronRight, Construction, ScanFace, Merge
 } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { useAppStore } from "@/store/useAppStore"
@@ -102,7 +102,8 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
     analysisChronosRunning, 
     analysisBatchRunning, 
     classifyProcessing, 
-    reportingProcessing 
+    reportingProcessing,
+    fusionState
   } = useAppStore()
 
   const isLogWriting = analysisChronosRunning || analysisBatchRunning || classifyProcessing || reportingProcessing
@@ -110,9 +111,27 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
   return (
     <Sidebar collapsible="none" className="border-r border-border/50 bg-surface-2/50">
       <SidebarContent>
-        {/* First Steps */}
+        {/* File Customization */}
         <SidebarGroup>
-          <SidebarGroupLabel>First Steps</SidebarGroupLabel>
+          <SidebarGroupLabel>File Customization</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                variant={activeTab === "fuse" ? "active" : "default"}
+                size="sm"
+                onClick={() => onTabChange("fuse")}
+              >
+                <Merge className="w-4 h-4" />
+                <span>File Fusion</span>
+                {fusionState !== 'idle' && <Spinner className="size-3 text-primary/60 ml-auto" />}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* Analysis */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Analysis</SidebarGroupLabel>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -134,13 +153,6 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
                 <span>Metadata</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-
-        {/* Scenario */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Scenario</SidebarGroupLabel>
-          <SidebarMenu>
             <ExpandableGroup
               label="Gaze Analysis"
               icon={Eye}

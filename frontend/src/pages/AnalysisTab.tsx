@@ -31,6 +31,7 @@ import { PlaceholderTab } from '@/components/analysis/PlaceholderTab'
 import { MetadataTab } from '@/components/analysis/MetadataTab'
 import ClassificationTab from './ClassificationTab'
 import ReportingTab from './ReportingTab'
+import FuseTab from './FuseTab'
 
 // --- PROGRESS RING COMPONENT ---
 const ProgressRing = ({ value, max, title }: { value: number; max: number; title: string }) => {
@@ -308,103 +309,116 @@ export default function AnalysisTab() {
     setAnalysisExpandedAll(!isAllExpanded)
   }, [setAnalysisExpandedAll, isAllExpanded])
 
+  const SHOW_RECORDINGS_TABS = ['audio', 'metadata', 'tracking', 'time-selector', 'logic', 'occupant-time', 'misuse-logic'];
+  const shouldShowRecordings = SHOW_RECORDINGS_TABS.includes(activeTab);
+
   return (
-    <div className="flex h-full gap-6 p-1 overflow-hidden">
-      <div className="w-80 flex flex-col gap-6 overflow-hidden">
-        {/* Participant Status Panel */}
-        <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
-          <div className="p-4 border-b border-white/5 bg-surface-2/30">
-            <div className="flex items-center justify-between mb-4">
-               <div className="flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-bold tracking-tight text-foreground">Recordings</span>
-               </div>
-               <div className="flex gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="w-6 h-6 hover:bg-primary/10 hover:text-primary transition-colors"
-                    onClick={toggleExpand}
-                    title={isAllExpanded ? "Collapse All" : "Expand All"}
-                  >
-                    {isAllExpanded ? <ListChevronsDownUp className="w-3.5 h-3.5" /> : <ListChevronsUpDown className="w-3.5 h-3.5" />}
-                  </Button>
-               </div>
-            </div>
-
-            {/* Radio Selection Group */}
-            <RadioGroup 
-              value={selectionType} 
-              onValueChange={handleSelectionChange}
-              className="flex gap-x-3 gap-y-2"
-            >
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'none', label: 'None' },
-              ].map((item) => (
-                <div key={item.id} className="flex items-center space-x-1.5">
-                  <RadioGroupItem value={item.id} id={`r-${item.id}`} className="w-3 h-3 border-white/20" />
-                  <Label htmlFor={`r-${item.id}`} className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors">
-                    {item.label}
-                  </Label>
+    <div className="flex h-full gap-0 p-1 overflow-hidden">
+      <AnimatePresence initial={false}>
+        {shouldShowRecordings && (
+          <motion.div
+            initial={{ width: 0, opacity: 0, marginRight: 0 }}
+            animate={{ width: 320, opacity: 1, marginRight: 24 }}
+            exit={{ width: 0, opacity: 0, marginRight: 0 }}
+            transition={{ duration: 0.35, ease: "easeInOut" }}
+            className="flex flex-col gap-6 overflow-hidden shrink-0"
+          >
+            {/* Participant Status Panel */}
+            <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
+              <div className="p-4 border-b border-white/5 bg-surface-2/30">
+                <div className="flex items-center justify-between mb-4">
+                   <div className="flex items-center gap-2">
+                      <LayoutGrid className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-bold tracking-tight text-foreground">Recordings</span>
+                   </div>
+                   <div className="flex gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="w-6 h-6 hover:bg-primary/10 hover:text-primary transition-colors"
+                        onClick={toggleExpand}
+                        title={isAllExpanded ? "Collapse All" : "Expand All"}
+                      >
+                        {isAllExpanded ? <ListChevronsDownUp className="w-3.5 h-3.5" /> : <ListChevronsUpDown className="w-3.5 h-3.5" />}
+                      </Button>
+                   </div>
                 </div>
-              ))}
-            </RadioGroup>
-          </div>
 
-          <ScrollArea className="flex-1 bg-[#121211]/30 scroll-fade-mask relative">
-            <div className={cn("flex flex-col gap-0.5 p-2", analysisResults.length === 0 && "h-full min-h-[350px] justify-center items-center")}>
-              {analysisResults.map((res, i) => (
-                <RecordingNode 
-                  key={i} 
-                  node={res} 
-                  selectedPath={analysisSelectedFile} 
-                  onSelect={selectFile} 
-                  checkedFilesSet={checkedFilesSet}
-                  onToggleCheck={toggleAnalysisFile}
-                  expandedAll={analysisExpandedAll}
-                />
-              ))}
-              {analysisResults.length === 0 && (
-                <div className="flex flex-col items-center justify-center gap-4 select-none w-full relative">
-                  {/* Ambient glow circle */}
-                  <div className="absolute w-[180px] h-[180px] rounded-full bg-white/[0.02] blur-[40px] pointer-events-none" />
-                  
-                  <div className="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center animate-pulse-sync mb-1">
-                    <FileSearch className="w-6 h-6 stroke-[1.2]" />
-                  </div>
-                  <div className="text-center space-y-1.5 animate-pulse-sync">
-                    <p className="text-sm tracking-[0.2em] font-extrabold uppercase text-foreground">
-                      No recordings found
-                    </p>
-                    <p className="text-xs uppercase tracking-wider opacity-60 font-mono text-muted-foreground">
-                      Enter a valid source path to scan
-                    </p>
-                  </div>
+                {/* Radio Selection Group */}
+                <RadioGroup 
+                  value={selectionType} 
+                  onValueChange={handleSelectionChange}
+                  className="flex gap-x-3 gap-y-2"
+                >
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'none', label: 'None' },
+                  ].map((item) => (
+                    <div key={item.id} className="flex items-center space-x-1.5">
+                      <RadioGroupItem value={item.id} id={`r-${item.id}`} className="w-3 h-3 border-white/20" />
+                      <Label htmlFor={`r-${item.id}`} className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors">
+                        {item.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              <ScrollArea className="flex-1 bg-background/30 scroll-fade-mask relative">
+                <div className={cn("flex flex-col gap-0.5 p-2", analysisResults.length === 0 && "h-full min-h-[350px] justify-center items-center")}>
+                  {analysisResults.map((res, i) => (
+                    <RecordingNode 
+                      key={i} 
+                      node={res} 
+                      selectedPath={analysisSelectedFile} 
+                      onSelect={selectFile} 
+                      checkedFilesSet={checkedFilesSet}
+                      onToggleCheck={toggleAnalysisFile}
+                      expandedAll={analysisExpandedAll}
+                    />
+                  ))}
+                  {analysisResults.length === 0 && (
+                    <div className="flex flex-col items-center justify-center gap-4 select-none w-full relative">
+                      {/* Ambient glow circle */}
+                      <div className="absolute w-[180px] h-[180px] rounded-full bg-white/[0.02] blur-[40px] pointer-events-none" />
+                      
+                      <div className="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center animate-pulse-sync mb-1">
+                        <FileSearch className="w-6 h-6 stroke-[1.2]" />
+                      </div>
+                      <div className="text-center space-y-1.5 animate-pulse-sync">
+                        <p className="text-sm tracking-[0.2em] font-extrabold uppercase text-foreground">
+                          No recordings found
+                        </p>
+                        <p className="text-xs uppercase tracking-wider opacity-60 font-mono text-muted-foreground">
+                          Enter a valid source path to scan
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </ScrollArea>
+              </ScrollArea>
 
-          <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between">
-             <div className="flex items-center gap-2">
-                <CheckSquare className="w-3.5 h-3.5 text-primary" />
-                <span className="text-sm font-bold text-primary tracking-tight">
-                  {analysisCheckedFiles.length} selected
-                </span>
-             </div>
-             <span className="text-xs font-medium text-muted-foreground tracking-tight opacity-50">
-                Total: {totalMF4Count} MF4
-             </span>
-          </div>
-        </div>
-      </div>
+              <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between">
+                 <div className="flex items-center gap-2">
+                    <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-sm font-bold text-primary tracking-tight">
+                      {analysisCheckedFiles.length} selected
+                    </span>
+                 </div>
+                 <span className="text-xs font-medium text-muted-foreground tracking-tight opacity-50">
+                    Total: {totalMF4Count} MF4
+                 </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Analysis Panel (Sidebar + Content) */}
       <div className="flex-1 bg-card/50 border border-border/50 rounded-3xl flex overflow-hidden shadow-sm relative min-h-0">
         <SidebarProvider defaultOpen className="h-full w-full flex overflow-hidden min-h-0">
           <AnalysisSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-          <div className="flex-1 flex flex-col overflow-hidden bg-[#121211]">
+          <div className="flex-1 flex flex-col overflow-hidden bg-background">
             <AnimatePresence mode="wait">
               {activeTab === 'tracking' && (
                 <motion.div
@@ -442,6 +456,18 @@ export default function AnalysisTab() {
                   <GazeLogicTab />
                 </motion.div>
               )}
+              {activeTab === 'fuse' && (
+                <motion.div
+                  key="fuse"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full w-full min-h-0 overflow-hidden flex flex-col"
+                >
+                  <FuseTab />
+                </motion.div>
+              )}
               {activeTab === 'audio' && (
                 <motion.div
                   key="audio"
@@ -451,9 +477,7 @@ export default function AnalysisTab() {
                   transition={{ duration: 0.25, ease: "easeOut" }}
                   className="h-full w-full min-h-0 overflow-hidden flex flex-col"
                 >
-                  <ScrollArea className="flex-1">
-                    <AudioTab selectedFile={analysisSelectedFile} />
-                  </ScrollArea>
+                  <AudioTab selectedFile={analysisSelectedFile} />
                 </motion.div>
               )}
               {activeTab === 'metadata' && (
@@ -465,9 +489,7 @@ export default function AnalysisTab() {
                   transition={{ duration: 0.25, ease: "easeOut" }}
                   className="h-full w-full min-h-0 overflow-hidden flex flex-col"
                 >
-                  <ScrollArea className="flex-1">
-                    <MetadataTab />
-                  </ScrollArea>
+                  <MetadataTab />
                 </motion.div>
               )}
               {activeTab === 'occupant-time' && (

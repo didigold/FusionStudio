@@ -158,7 +158,7 @@ export function TrackingTab() {
                     className={cn(
                       "h-7 px-3 rounded-lg text-sm font-bold transition-all",
                       analysisSelectedCamera === cam
-                        ? "bg-primary text-black"
+                        ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-surface-2",
                     )}
                     onClick={() => setAnalysisSelectedCamera(cam)}

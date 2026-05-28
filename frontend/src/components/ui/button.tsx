@@ -95,7 +95,7 @@ function Button({
       {ripples.map((ripple) => (
         <span
           key={ripple.key}
-          className="absolute rounded-full bg-white/20 pointer-events-none animate-ripple"
+          className="absolute rounded-full bg-foreground/15 pointer-events-none animate-ripple"
           style={{
             width: ripple.size,
             height: ripple.size,

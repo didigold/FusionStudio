@@ -27,21 +27,23 @@ class ParticipantScanner:
                 masters = []
                 satellites = []
 
+                # Masters: .mf4 files directly in the participant root folder
+                for f in os.listdir(p_path):
+                    full_path = os.path.join(p_path, f)
+                    if os.path.isfile(full_path) and f.lower().endswith(".mf4"):
+                        masters.append({"name": f, "path": full_path})
+
+                # Satellites: .mf4 files in any subfolder of the participant
                 for root, _, files in os.walk(p_path):
+                    if root == p_path:
+                        continue  # already handled above
                     if "_FUSION_RESULTS" in root or "_TEMP" in root:
                         continue
                     for f in files:
                         if f.lower().endswith(".mf4"):
-                            full_path = os.path.join(root, f)
-                            try:
-                                if os.path.getsize(full_path) > 50 * 1024 * 1024:
-                                    masters.append(f)
-                                else:
-                                    satellites.append(f)
-                            except Exception:
-                                pass
+                            satellites.append(f)
 
-                masters.sort()
+                masters.sort(key=lambda x: x["name"])
                 satellites.sort()
 
                 count_total_files = len(satellites)
@@ -261,6 +263,11 @@ class FusionWorker:
                 self.on_finished()
 
     def obtener_maestros(self, carpeta):
+        """Return master .mf4 files from the participant root folder, ranked by relevance.
+        Masters are always located directly inside the participant folder (never in subfolders).
+        Ranking: files whose name starts with the participant code score higher;
+        size (in GB) provides a secondary tie-breaker.
+        """
         p_name = os.path.basename(carpeta)
         all_files = [f for f in os.listdir(carpeta) if f.lower().endswith(".mf4")]
         candidates = []
@@ -268,12 +275,10 @@ class FusionWorker:
             path = os.path.join(carpeta, f)
             try:
                 size = os.path.getsize(path)
-                if size < 10 * 1024 * 1024:
-                    continue
                 score = 0
                 if f.upper().startswith(p_name.upper()):
                     score += 100
-                score += (size / (1024 * 1024 * 1024))
+                score += (size / (1024 * 1024 * 1024))  # GB as secondary sort
                 candidates.append((score, path))
             except Exception:
                 pass

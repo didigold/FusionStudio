@@ -55,12 +55,14 @@ import { analysisApi } from '@/api/analysisApi';
 import { UPlotChart } from './UPlotChart';
 import uPlot from 'uplot';
 import Waves from './Waves';
+import { useTheme } from '@/hooks/useTheme';
+
 
 // --- CHART SKELETON COMPONENT ---
 const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: string }) => {
   const strokeColor = colorClass.includes('#00AAFF') ? 'rgba(0, 170, 255, 0.3)' : 'rgba(0, 255, 136, 0.3)';
   return (
-    <div className="flex-1 min-h-[90px] bg-surface-1/10 rounded-xl border border-white/5 relative overflow-hidden flex flex-col justify-between p-4 select-none">
+    <div className="flex-1 min-h-[90px] bg-white dark:bg-surface-1/10 rounded-xl border border-border dark:border-white/5 relative overflow-hidden flex flex-col justify-between p-4 select-none">
       <div className="absolute top-2 left-2 z-10">
         <div className="h-5 px-2 bg-black/40 backdrop-blur-md rounded-md border border-white/5 flex items-center justify-center">
           <span className={cn("text-[9px] font-bold uppercase tracking-wider", colorClass)}>{title}</span>
@@ -85,13 +87,13 @@ const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: strin
         />
         {/* Soft grid background overlay */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 400 100" preserveAspectRatio="none">
-          <line x1="0" y1="20" x2="400" y2="20" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4" />
-          <line x1="0" y1="50" x2="400" y2="50" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4" />
-          <line x1="0" y1="80" x2="400" y2="80" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4" />
+          <line x1="0" y1="20" x2="400" y2="20" stroke="currentColor" className="text-black/[0.04] dark:text-white/[0.03]" strokeWidth="1" strokeDasharray="4" />
+          <line x1="0" y1="50" x2="400" y2="50" stroke="currentColor" className="text-black/[0.04] dark:text-white/[0.03]" strokeWidth="1" strokeDasharray="4" />
+          <line x1="0" y1="80" x2="400" y2="80" stroke="currentColor" className="text-black/[0.04] dark:text-white/[0.03]" strokeWidth="1" strokeDasharray="4" />
         </svg>
       </div>
 
-      <div className="flex justify-between items-center w-full text-[9px] text-muted-foreground/30 font-mono mt-1 pt-1 border-t border-white/5">
+      <div className="flex justify-between items-center w-full text-[9px] text-muted-foreground/30 font-mono mt-1 pt-1 border-t border-border dark:border-white/5">
         <span>0.00s</span>
         <span>25.00s</span>
         <span>50.00s</span>
@@ -103,6 +105,7 @@ const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: strin
 };
 
 export function GazeTimeTab() {
+  const { isDark } = useTheme();
   const {
     analysisCheckedFiles,
     analysisSelectedFile,
@@ -118,6 +121,7 @@ export function GazeTimeTab() {
   const [bottomSignal, setBottomSignal] = useState<string>('');
   const [topData, setTopData] = useState<uPlot.AlignedData>([[], []]);
   const [bottomData, setBottomData] = useState<uPlot.AlignedData>([[], []]);
+
 
   const topSignalRef = useRef(topSignal);
   useEffect(() => { topSignalRef.current = topSignal; }, [topSignal]);
@@ -508,8 +512,8 @@ export function GazeTimeTab() {
     series: [{}, { label: label, stroke: color, width: 2 }],
     legend: { show: false },
     axes: [
-      { stroke: '#666', grid: { stroke: '#333', width: 0.5 } },
-      { stroke: 'transparent', grid: { stroke: '#333', width: 0.5 }, values: [] }
+      { stroke: isDark ? '#666' : '#888888', grid: { stroke: isDark ? '#333' : '#E5E5E5', width: 0.5 } },
+      { stroke: 'transparent', grid: { stroke: isDark ? '#333' : '#E5E5E5', width: 0.5 }, values: [] }
     ],
     hooks: {
       setCursor: [
@@ -743,7 +747,7 @@ export function GazeTimeTab() {
         ctx.restore();
       }]
     }
-  }), [addMarkAtTime, sync.key, findMarkerIndexAtPos, addToUndoStack, targetFile]);
+  }), [addMarkAtTime, sync.key, findMarkerIndexAtPos, addToUndoStack, targetFile, isDark]);
 
   const topOptions = useMemo(() => createOptions(topSignal, '#00AAFF'), [topSignal, createOptions]);
   const bottomOptions = useMemo(() => createOptions(bottomSignal, '#00FF88'), [bottomSignal, createOptions]);
@@ -776,7 +780,7 @@ export function GazeTimeTab() {
   }, [currentTime]);
 
   return (
-    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden">
+    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden" style={{ backgroundColor: isDark ? 'transparent' : '#ffffff' }}>
       <style>{`
         .uplot .u-over { cursor: crosshair !important; }
         .uplot .u-select { background: rgba(0, 170, 255, 0.2) !important; }
@@ -814,11 +818,15 @@ export function GazeTimeTab() {
       `}</style>
 
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
-        <div className="flex-[2] flex flex-col gap-2 bg-black/40 p-4 overflow-hidden h-full min-h-0 justify-center border-r border-white/5">
+        <div 
+          className="flex-[2] flex flex-col gap-2 p-4 overflow-hidden h-full min-h-0 justify-center border-r border-border"
+          style={{ backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : '#ffffff' }}
+        >
           {targetFile ? (
             <>
               <div 
-                className="flex-1 min-h-[90px] bg-surface-1/30 rounded-xl border border-white/5 relative overflow-hidden group"
+                className="flex-1 min-h-[90px] rounded-xl border border-border relative overflow-hidden group"
+                style={{ backgroundColor: isDark ? 'rgba(22, 21, 20, 0.3)' : '#ffffff' }}
                 onMouseEnter={() => setHoveringChart('top')}
                 onMouseLeave={() => { setHoveringChart(null); if (topTooltipRef.current) topTooltipRef.current.style.display = 'none'; }}
               >
@@ -827,18 +835,19 @@ export function GazeTimeTab() {
                 </div>
                 <UPlotChart options={topOptions} data={topData} className="w-full h-full" onReady={u => topChartRef.current = u} />
                 <div ref={topTooltipRef} style={{display: 'none', transform: 'translateY(-50%)'}}
-                  className="absolute z-30 pointer-events-none bg-surface-3/45 border border-white/10 backdrop-blur-xl rounded-xl p-2.5 shadow-2xl flex flex-col gap-1"
+                  className="absolute z-30 pointer-events-none bg-popover/90 dark:bg-surface-3/45 border border-border dark:border-white/10 backdrop-blur-xl rounded-xl p-2.5 shadow-md flex flex-col gap-1"
                 >
-                  <div className="text-[10px] text-white/50 font-bold uppercase tracking-wider font-mono" data-tip-time>Time: 0.000s</div>
+                  <div className="text-[10px] text-muted-foreground/80 dark:text-white/50 font-bold uppercase tracking-wider font-mono" data-tip-time>Time: 0.000s</div>
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#00AAFF]" />
-                    <span className="text-[10px] font-bold text-white/80">{topSignal}</span>
-                    <span className="text-[11px] font-extrabold text-white font-mono" data-tip-value>0.00°</span>
+                    <span className="text-[10px] font-bold text-foreground/80 dark:text-white/80">{topSignal}</span>
+                    <span className="text-[11px] font-extrabold text-foreground dark:text-white font-mono" data-tip-value>0.00°</span>
                   </div>
                 </div>
               </div>
               <div 
-                className="flex-1 min-h-[90px] bg-surface-1/30 rounded-xl border border-white/5 relative overflow-hidden group"
+                className="flex-1 min-h-[90px] rounded-xl border border-border relative overflow-hidden group"
+                style={{ backgroundColor: isDark ? 'rgba(22, 21, 20, 0.3)' : '#ffffff' }}
                 onMouseEnter={() => setHoveringChart('bottom')}
                 onMouseLeave={() => { setHoveringChart(null); if (bottomTooltipRef.current) bottomTooltipRef.current.style.display = 'none'; }}
               >
@@ -847,13 +856,13 @@ export function GazeTimeTab() {
                 </div>
                 <UPlotChart options={bottomOptions} data={bottomData} className="w-full h-full" onReady={u => bottomChartRef.current = u} />
                 <div ref={bottomTooltipRef} style={{display: 'none', transform: 'translateY(-50%)'}}
-                  className="absolute z-30 pointer-events-none bg-surface-3/45 border border-white/10 backdrop-blur-xl rounded-xl p-2.5 shadow-2xl flex flex-col gap-1"
+                  className="absolute z-30 pointer-events-none bg-popover/90 dark:bg-surface-3/45 border border-border dark:border-white/10 backdrop-blur-xl rounded-xl p-2.5 shadow-md flex flex-col gap-1"
                 >
-                  <div className="text-[10px] text-white/50 font-bold uppercase tracking-wider font-mono" data-tip-time>Time: 0.000s</div>
+                  <div className="text-[10px] text-muted-foreground/80 dark:text-white/50 font-bold uppercase tracking-wider font-mono" data-tip-time>Time: 0.000s</div>
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#00FF88]" />
-                    <span className="text-[10px] font-bold text-white/80">{bottomSignal}</span>
-                    <span className="text-[11px] font-extrabold text-white font-mono" data-tip-value>0.00°</span>
+                    <span className="text-[10px] font-bold text-foreground/80 dark:text-white/80">{bottomSignal}</span>
+                    <span className="text-[11px] font-extrabold text-foreground dark:text-white font-mono" data-tip-value>0.00°</span>
                   </div>
                 </div>
               </div>
@@ -976,17 +985,17 @@ export function GazeTimeTab() {
                 <div className="absolute top-3 left-3 z-20">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild disabled={!targetFile}>
-                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/50 hover:bg-black/70 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
-                                <Menu className="w-3.5 h-3.5" />
+                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/50 hover:!bg-black/70 !text-white hover:!text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
+                                <Menu className="w-3.5 h-3.5 !text-white" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-52 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
+                        <DropdownMenuContent align="start" className="w-52 bg-popover border-border text-popover-foreground p-1 shadow-md">
                             {/* --- Signals --- */}
                             <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Top Signal</DropdownMenuLabel>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">{topSignal || 'Select...'}</DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
-                                    <DropdownMenuSubContent className="max-h-[220px] overflow-y-auto bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                    <DropdownMenuSubContent className="max-h-[220px] overflow-y-auto bg-popover border-border text-popover-foreground">
                                         <DropdownMenuRadioGroup value={topSignal} onValueChange={setTopSignal}>
                                             {channels.map((ch: any) => (
                                                 <DropdownMenuRadioItem key={ch.name} value={ch.name} className="text-sm">
@@ -1001,7 +1010,7 @@ export function GazeTimeTab() {
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">{bottomSignal || 'Select...'}</DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
-                                    <DropdownMenuSubContent className="max-h-[220px] overflow-y-auto bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                    <DropdownMenuSubContent className="max-h-[220px] overflow-y-auto bg-popover border-border text-popover-foreground">
                                         <DropdownMenuRadioGroup value={bottomSignal} onValueChange={setBottomSignal}>
                                             {channels.map((ch: any) => (
                                                 <DropdownMenuRadioItem key={ch.name} value={ch.name} className="text-sm">
@@ -1019,7 +1028,7 @@ export function GazeTimeTab() {
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">{selectedSubject || 'Select...'}</DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
-                                    <DropdownMenuSubContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                    <DropdownMenuSubContent className="bg-popover border-border text-popover-foreground">
                                         <DropdownMenuRadioGroup value={selectedSubject} onValueChange={setSelectedSubject}>
                                             {subjects.map(s => (
                                                 <DropdownMenuRadioItem key={s} value={s} className="text-sm">{s}</DropdownMenuRadioItem>
@@ -1034,7 +1043,7 @@ export function GazeTimeTab() {
                                     {targetFile?.split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '') || 'Select...'}
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
-                                    <DropdownMenuSubContent className="max-h-[260px] overflow-y-auto bg-surface-2/40 border-white/5 text-white backdrop-blur-xl">
+                                    <DropdownMenuSubContent className="max-h-[260px] overflow-y-auto bg-popover border-border text-popover-foreground">
                                         <DropdownMenuRadioGroup value={targetFile?.replace('_tracking.mf4', '.mf4') || ''} onValueChange={setAnalysisSelectedFile}>
                                             {subjectCases.map(c => (
                                                 <DropdownMenuRadioItem key={c} value={c} className="text-sm">
@@ -1050,11 +1059,11 @@ export function GazeTimeTab() {
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Navigate</DropdownMenuLabel>
                             <DropdownMenuItem className="text-sm" disabled={currentCaseIdx <= 0} onClick={goToPrevCase} title={prevCaseName ?? ''}>
-                                <ArrowLeft className="w-3 h-3" /> Previous
+                                <ArrowLeft className="w-3 h-3 text-muted-foreground" /> Previous
                                 <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">⇧+Tab</DropdownMenuShortcut>
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-sm" disabled={currentCaseIdx >= subjectCases.length - 1} onClick={goToNextCase} title={nextCaseName ?? ''}>
-                                <ArrowRight className="w-3 h-3" /> Next
+                                <ArrowRight className="w-3 h-3 text-muted-foreground" /> Next
                                 <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Tab</DropdownMenuShortcut>
                             </DropdownMenuItem>
 
@@ -1062,32 +1071,32 @@ export function GazeTimeTab() {
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Markers</DropdownMenuLabel>
                             <DropdownMenuItem className="text-sm" disabled={undoCount === 0} onClick={undoLastAction}>
-                                <Undo2 className="w-3 h-3" /> Undo
+                                <Undo2 className="w-3 h-3 text-muted-foreground" /> Undo
                                 <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+Z</DropdownMenuShortcut>
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-sm" onClick={clearLastMark} disabled={marks.length === 0}>
-                                <Eraser className="w-3 h-3" /> Clear Last
+                                <Eraser className="w-3 h-3 text-muted-foreground" /> Clear Last
                                 <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+D</DropdownMenuShortcut>
                             </DropdownMenuItem>
                             <AlertDialog open={confirmClearAll} onOpenChange={setConfirmClearAll}>
                                 <DropdownMenuItem className="text-sm" variant="destructive" disabled={marks.length === 0} onSelect={(e) => { e.preventDefault(); setConfirmClearAll(true); }}>
-                                    <Trash2 className="w-3 h-3" /> Clear All
+                                    <Trash2 className="w-3 h-3 text-red-500" /> Clear All
                                     <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+Space</DropdownMenuShortcut>
                                 </DropdownMenuItem>
-                                <AlertDialogContent className="max-w-[340px] border border-white/10 bg-surface-2/80 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
+                                <AlertDialogContent className="max-w-[340px] border border-border bg-surface-2 p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
                                     <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
                                         <Trash2 className="w-5 h-5" />
                                     </div>
                                     <AlertDialogHeader className="items-center text-center gap-1.5">
-                                        <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+                                        <AlertDialogTitle className="text-base font-bold text-foreground uppercase tracking-wider">
                                             Clear All Markers?
                                         </AlertDialogTitle>
-                                        <AlertDialogDescription className="text-sm text-white/70 max-w-[280px]">
+                                        <AlertDialogDescription className="text-sm text-muted-foreground max-w-[280px]">
                                             This will permanently delete all <span className="text-red-400 font-extrabold">{marks.length}</span> markers. This action cannot be undone.
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter className="flex-row items-center justify-center gap-3 w-full mt-2">
-                                        <AlertDialogCancel className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
+                                        <AlertDialogCancel className="flex-1 bg-accent border border-border hover:bg-accent/80 text-foreground rounded-xl py-2 px-4 text-xs font-bold transition-all">
                                             Cancel
                                         </AlertDialogCancel>
                                         <AlertDialogAction onClick={clearAllMarks} className="flex-1 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 active:bg-red-500/30 text-red-500 rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-lg shadow-red-500/5">
@@ -1109,18 +1118,18 @@ export function GazeTimeTab() {
                 <div className="absolute top-3 right-3 z-20 flex flex-col items-end gap-2">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild disabled={!targetFile}>
-                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/50 hover:bg-black/70 text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
-                                <Camera className={cn("w-3.5 h-3.5", targetFile ? "text-primary animate-pulse" : "text-muted-foreground")} />
+                            <Button variant="outline" size="sm" className={cn("h-7 w-7 p-0 bg-black/50 hover:!bg-black/70 !text-white hover:!text-white border-white/10 rounded-lg shadow-xl backdrop-blur-md", !targetFile && "opacity-50 pointer-events-none")}>
+                                <Camera className={cn("w-3.5 h-3.5 !text-white", targetFile && "animate-pulse")} />
                             </Button>
                         </DropdownMenuTrigger>
                         {targetFile && (
-                            <DropdownMenuContent align="end" className="w-32 bg-surface-2/40 border-white/5 text-white p-1 backdrop-blur-xl">
+                            <DropdownMenuContent align="end" className="w-32 bg-popover border-border text-popover-foreground p-1 shadow-md">
                                 {(analysisAvailableCameras.length > 0 ? analysisAvailableCameras : [1, 2, 3]).map(cam => (
                                     <DropdownMenuItem 
                                         key={cam} 
                                         className={cn(
                                             'text-sm font-bold cursor-pointer rounded-lg px-2 py-1.5 transition-colors flex items-center justify-between',
-                                            analysisSelectedCamera === cam ? 'bg-primary text-black focus:bg-primary focus:text-black' : 'text-white/80 hover:bg-white hover:text-black focus:bg-white focus:text-black'
+                                            analysisSelectedCamera === cam ? 'bg-primary text-primary-foreground focus:bg-primary focus:text-primary-foreground' : 'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground'
                                         )}
                                         onClick={() => setAnalysisSelectedCamera(Number(cam))}
                                     >
@@ -1140,10 +1149,10 @@ export function GazeTimeTab() {
                             size="icon"
                             disabled={!targetFile || videoZoom >= 3}
                             onClick={zoomIn}
-                            className="h-7 w-7 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
+                            className="h-7 w-7 p-0 rounded-none !text-white hover:!bg-white/10 hover:!text-white disabled:opacity-30 border-none bg-transparent"
                             title="Zoom In"
                         >
-                            <Plus className="w-3.5 h-3.5" />
+                            <Plus className="w-3.5 h-3.5 !text-white" />
                         </Button>
                         <div className="w-full h-[1px] bg-white/10" />
                         <Button
@@ -1151,17 +1160,17 @@ export function GazeTimeTab() {
                             size="icon"
                             disabled={!targetFile || videoZoom <= 1}
                             onClick={zoomOut}
-                            className="h-7 w-7 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
+                            className="h-7 w-7 p-0 rounded-none !text-white hover:!bg-white/10 hover:!text-white disabled:opacity-30 border-none bg-transparent"
                             title="Zoom Out"
                         >
-                            <Minus className="w-3.5 h-3.5" />
+                            <Minus className="w-3.5 h-3.5 !text-white" />
                         </Button>
                     </div>
                 </div>
             </div>
-            <div className="h-24 bg-surface-2/50 border-t border-white/5 p-3 shrink-0 flex flex-col justify-between">
+            <div className="h-24 bg-surface-2 border-t border-border p-3 shrink-0 flex flex-col justify-between">
                 <div className="flex items-center gap-3 w-full">
-                    <span className="text-xs font-bold text-muted-foreground/60 font-mono">{currentTime.toFixed(2)}s</span>
+                    <span className="text-xs font-bold text-black dark:text-muted-foreground/60 font-mono">{currentTime.toFixed(2)}s</span>
                     <div className="flex-1 relative py-2 flex items-center">
                         <Slider 
                             value={[currentTime]} 
@@ -1183,7 +1192,7 @@ export function GazeTimeTab() {
                             )}
                         />
                     </div>
-                    <span className={cn("font-bold text-muted-foreground/60", targetFile ? "text-xs font-mono" : "text-xl font-sans relative -top-[1.5px]")}>
+                    <span className={cn("font-bold text-black dark:text-muted-foreground/60", targetFile ? "text-xs font-mono" : "text-xl font-sans relative -top-[1.5px]")}>
                         {targetFile ? `${duration.toFixed(2)}s` : "∞"}
                     </span>
                 </div>
@@ -1193,7 +1202,7 @@ export function GazeTimeTab() {
                             disabled={!targetFile}
                             size="icon" 
                             variant="ghost" 
-                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center disabled:opacity-30"
+                            className="h-7 w-7 rounded-lg hover:bg-accent text-foreground flex items-center justify-center disabled:opacity-30"
                             title="Restart from beginning"
                             onClick={() => {
                                 currentTimeRef.current = 0;
@@ -1210,7 +1219,7 @@ export function GazeTimeTab() {
                             disabled={!targetFile}
                             size="icon" 
                             variant="ghost" 
-                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center disabled:opacity-30"
+                            className="h-7 w-7 rounded-lg hover:bg-accent text-foreground flex items-center justify-center disabled:opacity-30"
                             title="Rewind 5 seconds"
                             onClick={() => {
                                 const t = Math.max(0, currentTime - 5);
@@ -1241,18 +1250,18 @@ export function GazeTimeTab() {
                                 } 
                             }} 
                             className={cn(
-                                'h-7 w-7 rounded-lg border-white/10 bg-surface-3 transition-colors text-white hover:text-white disabled:opacity-30',
-                                isPlaying ? 'bg-primary hover:bg-primary/90' : 'hover:bg-white/5'
+                                'h-7 w-7 rounded-lg border-border bg-surface-3 transition-colors disabled:opacity-30',
+                                isPlaying ? 'bg-primary hover:bg-primary/90 !text-primary-foreground' : 'hover:bg-accent text-foreground'
                             )}
                             title={isPlaying ? 'Pause' : 'Play'}
                         >
-                            {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current text-white" /> : <Play className="w-3.5 h-3.5 fill-current text-white ml-0.5" />}
+                            {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
                         </Button>
                         <Button 
                             disabled={!targetFile}
                             size="icon" 
                             variant="ghost" 
-                            className="h-7 w-7 rounded-lg hover:bg-white/5 text-white flex items-center justify-center disabled:opacity-30"
+                            className="h-7 w-7 rounded-lg hover:bg-accent text-foreground flex items-center justify-center disabled:opacity-30"
                             title="Forward 5 seconds"
                             onClick={() => {
                                 const t = Math.min(duration, currentTime + 5);
@@ -1272,20 +1281,22 @@ export function GazeTimeTab() {
                             variant="outline" 
                             onClick={toggleSync} 
                             className={cn(
-                                'h-7 w-7 rounded-lg border-white/10 transition-all text-white hover:text-white disabled:opacity-30',
-                                isSynced ? 'bg-primary hover:bg-primary/90' : 'bg-surface-3 hover:bg-surface-2'
+                                'h-7 w-7 rounded-lg border-border transition-all disabled:opacity-30',
+                                isSynced ? 'bg-primary/10 border-primary/30 text-foreground' : 'bg-surface-3 hover:bg-surface-2 text-foreground'
                             )} 
                             title={isSynced ? 'Disable Mouse Sync' : 'Enable Mouse Sync'}
                         >
-                            {isSynced ? <Mouse className="w-3.5 h-3.5 text-white" /> : <MouseOff className="w-3.5 h-3.5 text-white" />}
+                            {isSynced ? <Mouse className="w-3.5 h-3.5" /> : <MouseOff className="w-3.5 h-3.5" />}
                         </Button>
                         <Button 
                             size="icon" 
                             variant="ghost"
                             onClick={() => setShowBlur(v => !v)} 
                             className={cn(
-                                'h-7 w-7 rounded-lg border-white/10 transition-all disabled:opacity-30',
-                                showBlur ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-white/5'
+                                'h-7 w-7 rounded-lg transition-all disabled:opacity-30 border',
+                                showBlur 
+                                  ? 'bg-primary/10 border-primary/30 text-foreground' 
+                                  : 'bg-surface-3 hover:bg-surface-2 text-foreground border-border'
                             )} 
                             title={showBlur ? 'Disable ambient blur' : 'Enable ambient blur'}
                         >

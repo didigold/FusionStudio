@@ -172,7 +172,7 @@ export default function ClassificationTab() {
             </button>
           ) : (
             <div className="flex items-center gap-3">
-              <button onClick={handleStop} className="bg-destructive text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-destructive/90 transition-all">
+              <button onClick={handleStop} className="bg-destructive text-destructive-foreground px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-destructive/90 transition-all">
                 <Square className="w-4 h-4" /> STOP
               </button>
               <span className="text-xs text-primary font-semibold animate-pulse">{classifyStatus}</span>

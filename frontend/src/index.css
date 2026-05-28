@@ -1,33 +1,33 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #111110;
-  --color-foreground: #F0EDE9;
-  --color-card: #201E1C;
-  --color-card-foreground: #F0EDE9;
-  --color-popover: #FFFFFF;
-  --color-popover-foreground: #141413;
-  --color-primary: #F0EDE9;
-  --color-primary-foreground: #111110;
-  --color-secondary: transparent;
-  --color-secondary-foreground: #F0EDE9;
-  --color-muted: #1A1917;
-  --color-muted-foreground: #A09C96;
-  --color-accent: #2A2825;
-  --color-accent-foreground: #F0EDE9;
-  --color-destructive: #CF4500;
-  --color-destructive-foreground: #FFFFFF;
-  --color-border: rgba(240, 237, 233, 0.10);
-  --color-input: rgba(240, 237, 233, 0.10);
-  --color-ring: rgba(240, 237, 233, 0.60);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --radius: 0.5rem;
-  --color-success: #2da44e;
-  --color-warning: #CF4500;
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   
-  --color-surface-1: #161514;
-  --color-surface-2: #201E1C;
-  --color-surface-3: #2A2825;
-  --color-surface-ink: #0F0E0D;
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-ink: var(--surface-ink);
 
   --animate-in: dropdownEnter 150ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-out: dropdownExit 150ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -55,6 +55,91 @@
   }
 }
 
+:root {
+  /* Default to Dark Mode variables */
+  --background: #111110;
+  --foreground: #F0EDE9;
+  --card: #201E1C;
+  --card-foreground: #F0EDE9;
+  --popover: #201E1C;
+  --popover-foreground: #F0EDE9;
+  --primary: #F0EDE9;
+  --primary-foreground: #111110;
+  --secondary: transparent;
+  --secondary-foreground: #F0EDE9;
+  --muted: #1A1917;
+  --muted-foreground: #A09C96;
+  --accent: #2A2825;
+  --accent-foreground: #F0EDE9;
+  --destructive: #CF4500;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(240, 237, 233, 0.10);
+  --input: rgba(240, 237, 233, 0.10);
+  --ring: rgba(240, 237, 233, 0.60);
+  --success: #2da44e;
+  --warning: #CF4500;
+  --surface-1: #161514;
+  --surface-2: #201E1C;
+  --surface-3: #2A2825;
+  --surface-ink: #0F0E0D;
+}
+
+:root.light {
+  --background: #F5F3F0;
+  --foreground: #1A1918;
+  --card: #FFFFFF;
+  --card-foreground: #1A1918;
+  --popover: #FFFFFF;
+  --popover-foreground: #141413;
+  --primary: #1A1918;
+  --primary-foreground: #F5F3F0;
+  --secondary: transparent;
+  --secondary-foreground: #1A1918;
+  --muted: #EDEBE8;
+  --muted-foreground: #6B6762;
+  --accent: #E5E2DE;
+  --accent-foreground: #1A1918;
+  --destructive: #CF4500;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(26, 25, 24, 0.12);
+  --input: rgba(26, 25, 24, 0.12);
+  --ring: rgba(26, 25, 24, 0.30);
+  --success: #2da44e;
+  --warning: #CF4500;
+  --surface-1: #F0EEEB;
+  --surface-2: #FFFFFF;
+  --surface-3: #E8E5E1;
+  --surface-ink: #FAFAF9;
+}
+
+:root.dark {
+  --background: #111110;
+  --foreground: #F0EDE9;
+  --card: #201E1C;
+  --card-foreground: #F0EDE9;
+  --popover: #201E1C;
+  --popover-foreground: #F0EDE9;
+  --primary: #F0EDE9;
+  --primary-foreground: #111110;
+  --secondary: transparent;
+  --secondary-foreground: #F0EDE9;
+  --muted: #1A1917;
+  --muted-foreground: #A09C96;
+  --accent: #2A2825;
+  --accent-foreground: #F0EDE9;
+  --destructive: #CF4500;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(240, 237, 233, 0.10);
+  --input: rgba(240, 237, 233, 0.10);
+  --ring: rgba(240, 237, 233, 0.60);
+  --success: #2da44e;
+  --warning: #CF4500;
+  --surface-1: #161514;
+  --surface-2: #201E1C;
+  --surface-3: #2A2825;
+  --surface-ink: #0F0E0D;
+}
+
 * {
   border-color: var(--color-border);
 }
@@ -77,21 +162,44 @@ body {
   height: 8px;
 }
 
-::-webkit-scrollbar-track {
+:root.dark ::-webkit-scrollbar-track {
   background: #1a1a1a;
 }
 
-::-webkit-scrollbar-thumb {
+:root.dark ::-webkit-scrollbar-thumb {
   background: #444;
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+:root.dark ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
 
-::-webkit-scrollbar-corner {
+:root.dark ::-webkit-scrollbar-corner {
   background: #1a1a1a;
+}
+
+:root.light ::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+:root.light ::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+
+:root.light ::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+:root.light ::-webkit-scrollbar-corner {
+  background: #f0f0f0;
+}
+
+/* ── Light mode: suppress all shadows / neumorphism ──────────────────────── */
+:root.light *:not([class*="shadow-none"]) {
+  box-shadow: none !important;
+  text-shadow: none !important;
 }
 
 input:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible {

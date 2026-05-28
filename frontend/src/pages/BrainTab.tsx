@@ -150,7 +150,7 @@ export default function BrainTab() {
             </button>
           ) : (
             <div className="space-y-3">
-              <button onClick={handleStop} className="w-full bg-destructive text-white rounded-lg py-5 font-bold flex items-center justify-center gap-3 hover:bg-destructive/90 transition-all">
+              <button onClick={handleStop} className="w-full bg-destructive text-destructive-foreground rounded-lg py-5 font-bold flex items-center justify-center gap-3 hover:bg-destructive/90 transition-all">
                 <Square className="w-5 h-5 fill-current" /> STOP TRAINING
               </button>
               <span className="text-xs text-primary font-semibold animate-pulse block text-center uppercase">{brainPhase || 'Running...'}</span>
