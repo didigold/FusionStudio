@@ -197,7 +197,7 @@ class MatplotlibReportBuilder:
         self._add_footer()
         
         self.fig.savefig(output_path, dpi=dpi, facecolor='white', 
-                         edgecolor='none', bbox_inches='tight', pad_inches=0.2)
+                         edgecolor='none')
         plt.close(self.fig)
         return os.path.abspath(output_path)
     
@@ -243,19 +243,19 @@ class MatplotlibReportBuilder:
     
     def _add_top_band(self):
         band_top = 0.88
-        standard_gauge_height = 0.28 * (self.A4_WIDTH / self.A4_HEIGHT)
-        gauge_width = 0.38
+        gauge_width = 0.35
         gauge_draw_height = gauge_width * (self.A4_WIDTH / self.A4_HEIGHT)
-        cam_width = 0.33
+        cam_width = 0.35
         cam_height = cam_width * (self.A4_WIDTH / self.A4_HEIGHT) 
         
-        gauge_ax = self.fig.add_axes([self.MARGIN_X, band_top - gauge_draw_height, gauge_width, gauge_draw_height])
+        # Center the gauge horizontally in the left-hand column
+        gauge_ax = self.fig.add_axes([0.11, band_top - gauge_draw_height, gauge_width, gauge_draw_height])
         self._draw_gauge(gauge_ax)
 
         right_margin_x = 1.0 - self.MARGIN_X - cam_width
         camera_ax = self.fig.add_axes([right_margin_x, band_top - cam_height, cam_width, cam_height])
         self._draw_camera_frame(camera_ax)
-        self.band_height = max(standard_gauge_height, cam_height)
+        self.band_height = cam_height
     
     def _draw_gauge(self, ax):
         import numpy as np
@@ -299,102 +299,198 @@ class MatplotlibReportBuilder:
         vmin = gauge_conf['min']
         vmax = gauge_conf['max']
         
-        # Center of the circular dial in axes coordinates (shifted higher)
-        CX, CY = 0.5, 0.64
+        # Center of the circular dial — enlarged and vertically centered
+        CX, CY = 0.5, 0.5
         
-        # Angle mapping (225 degrees to -45 degrees)
+        # Angle mapping: min=225°(bottom-left), max=-45°(bottom-right), sweeps 270°
         def val_to_angle(v):
             return 225.0 - (270.0 * (v - vmin) / (vmax - vmin))
 
-        # Radius settings (scaled down to leave room at bottom)
-        R_OUT = 0.30     # Outer glow circle
-        R_TICKS_OUT = 0.28
-        R_TICKS_IN = 0.23
-        R_HUB = 0.15      # Center hub radius
+        # Radius settings
+        R_OUT       = 0.42   # Outer dial circle
+        R_TICKS_OUT = 0.39   # Start of tick marks (outermost)
+        R_TICKS_IN  = 0.33   # End of major tick marks (inward)
+        R_SPOKE     = 0.19   # Where spoke lines stop (just outside hub)
+        R_HUB       = 0.17   # Center hub PNG radius
         
-        # Color theme: Cyan / Teal glow
         CYAN_GLOW = '#00F2FE'
         
-        # 1. Base dark background card for the gauge
-        ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='#0B0F19', zorder=2))
+        # 1. Dark circular face — brand colour #1A1D1C
+        ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='#1A1D1C', zorder=2))
         
-        # 2. Outer thin cyan glowing rim (multi-layered glow)
-        for w, a in [(1.0, 0.9), (2.5, 0.4), (4.5, 0.15)]:
-            ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='none', edgecolor=CYAN_GLOW, linewidth=w, alpha=a, zorder=3))
+        # 2. Multi-layered cyan glowing rim
+        for lw, alpha in [(1.0, 0.9), (2.5, 0.4), (5.0, 0.12)]:
+            ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='none',
+                                        edgecolor=CYAN_GLOW, linewidth=lw, alpha=alpha, zorder=3))
 
-        # 3. Draw tick marks (radial lines pointing inward from R_TICKS_OUT to R_TICKS_IN)
+        # White outer ring just inside the rim (sits behind tick tips)
+        ax.add_patch(patches.Circle((CX, CY), R_TICKS_OUT, facecolor='none',
+                                    edgecolor='#FFFFFF', linewidth=1.2, alpha=1.0, zorder=3))
+
+        # 3. Fine tick marks (white) + thin spoke lines toward hub
         n_fine = 60
         for i in range(n_fine + 1):
             val_t = vmin + (vmax - vmin) * (i / n_fine)
-            a = val_to_angle(val_t)
-            a_rad = np.radians(a)
-            r_in = R_TICKS_OUT - 0.012
-            x1, y1 = CX + R_TICKS_OUT * np.cos(a_rad), CY + R_TICKS_OUT * np.sin(a_rad)
-            x2, y2 = CX + r_in * np.cos(a_rad), CY + r_in * np.sin(a_rad)
-            ax.plot([x1, x2], [y1, y2], color='#E2E8F0', linewidth=0.5, alpha=0.4, zorder=4)
+            a_rad = np.radians(val_to_angle(val_t))
+            r_inner = R_TICKS_OUT - 0.016
+            r_outer_fine = R_TICKS_OUT - 0.003
+            x1 = CX + r_outer_fine * np.cos(a_rad)
+            y1 = CY + r_outer_fine * np.sin(a_rad)
+            x2 = CX + r_inner * np.cos(a_rad)
+            y2 = CY + r_inner * np.sin(a_rad)
+            # White fine tick
+            ax.plot([x1, x2], [y1, y2], color='#FFFFFF', linewidth=1.8, alpha=1.0,
+                    solid_capstyle='round', zorder=4)
+            # Thin spoke
+            xs = CX + R_SPOKE * np.cos(a_rad)
+            ys = CY + R_SPOKE * np.sin(a_rad)
+            ax.plot([x2, xs], [y2, ys], color='#8899AA', linewidth=0.35, alpha=0.20,
+                    solid_capstyle='butt', zorder=3)
 
-        # Draw Major ticks and labels
+        # 4. Major ticks (white, thick) + prominent spoke + label
         for t in gauge_conf['ticks']:
-            if t < vmin or t > vmax: continue
-            a = val_to_angle(t)
-            a_rad = np.radians(a)
-            x1, y1 = CX + R_TICKS_OUT * np.cos(a_rad), CY + R_TICKS_OUT * np.sin(a_rad)
-            x2, y2 = CX + R_TICKS_IN * np.cos(a_rad), CY + R_TICKS_IN * np.sin(a_rad)
-            ax.plot([x1, x2], [y1, y2], color='#F1F5F9', linewidth=1.2, zorder=5)
-            
-            # Position tick labels slightly inward
-            txt_x = CX + (R_TICKS_IN - 0.045) * np.cos(a_rad)
-            txt_y = CY + (R_TICKS_IN - 0.045) * np.sin(a_rad)
-            ax.text(txt_x, txt_y, str(t), fontsize=6.5, color='#E2E8F0', ha='center', va='center', fontweight='bold', zorder=5)
+            if t < vmin or t > vmax:
+                continue
+            a_rad = np.radians(val_to_angle(t))
+            r_outer_major = R_TICKS_OUT - 0.006
+            r_outer_halo = R_TICKS_OUT - 0.010
+            x1 = CX + r_outer_major * np.cos(a_rad)
+            y1 = CY + r_outer_major * np.sin(a_rad)
+            x1_halo = CX + r_outer_halo * np.cos(a_rad)
+            y1_halo = CY + r_outer_halo * np.sin(a_rad)
+            x2 = CX + R_TICKS_IN * np.cos(a_rad)
+            y2 = CY + R_TICKS_IN * np.sin(a_rad)
+            # Subtle glow halo behind major tick
+            ax.plot([x1_halo, x2], [y1_halo, y2], color='#FFFFFF', linewidth=7.0, alpha=0.18,
+                    solid_capstyle='round', zorder=4)
+            # White major tick (bright core)
+            ax.plot([x1, x2], [y1, y2], color='#FFFFFF', linewidth=3.5, alpha=1.0,
+                    solid_capstyle='round', zorder=5)
+            # Thin spoke from end of major tick to hub edge
+            xs = CX + R_SPOKE * np.cos(a_rad)
+            ys = CY + R_SPOKE * np.sin(a_rad)
+            ax.plot([x2, xs], [y2, ys], color='#8899AA', linewidth=0.55, alpha=0.30,
+                    solid_capstyle='butt', zorder=4)
+            # Label — slightly bigger, bold white
+            txt_r = R_TICKS_IN - 0.055
+            ax.text(CX + txt_r * np.cos(a_rad), CY + txt_r * np.sin(a_rad),
+                    str(t), fontsize=8.5, color='#FFFFFF',
+                    ha='center', va='center', fontweight='bold', zorder=5)
 
-        # 4. Center Hub with metallic/glossy circle and cyan outer glow
-        for w, a in [(1.5, 0.3), (0.8, 0.6)]:
-            ax.add_patch(patches.Circle((CX, CY), R_HUB + (w * 0.01), facecolor='none', edgecolor=CYAN_GLOW, linewidth=1.5, alpha=a, zorder=6))
-        ax.add_patch(patches.Circle((CX, CY), R_HUB, facecolor='#0A0E17', zorder=7))
-        ax.add_patch(patches.Ellipse((CX, CY + R_HUB * 0.35), R_HUB * 1.4, R_HUB * 0.7, facecolor='#FFFFFF', alpha=0.18, zorder=8))
-        ax.text(CX, CY - R_HUB * 0.3, "s", fontsize=9, color='#94A3B8', ha='center', va='center', fontweight='bold', zorder=9)
+        # 5. Glowing needle PNG — upscale 4×, BICUBIC rotation (PIL doesn't support LANCZOS in rotate)
+        needle_path = resource_path('assets/speedometer_indicator.png')
+        needle_drawn = False
+        if os.path.exists(needle_path):
+            try:
+                from PIL import Image
+                img_needle = Image.open(needle_path).convert('RGBA')
+                SCALE = 4
+                img_needle = img_needle.resize(
+                    (img_needle.width * SCALE, img_needle.height * SCALE),
+                    Image.LANCZOS)
+                # The new needle PNG points straight UP.
+                # In matplotlib display coords (y up), this is exactly 90° from East (CCW).
+                REF_ANGLE_DEG = 90.0
+                target_angle  = val_to_angle(val_for_needle)
+                rotation_deg  = target_angle - REF_ANGLE_DEG
+                # PIL rotate with positive angle matches matplotlib counter-clockwise rotation
+                img_needle_rot = img_needle.rotate(
+                    rotation_deg, expand=False, resample=Image.BICUBIC)
+                
+                # Resize needle back so it renders smoothly in matplotlib
+                img_needle_rot = img_needle_rot.resize((800, 800), Image.LANCZOS)
 
-        # 5. Glowing Needle (accent line with flare effect)
-        a_needle = np.radians(val_to_angle(val_for_needle))
-        
-        n_start_r = R_HUB
-        n_end_r = R_TICKS_OUT - 0.01
-        
-        nx1, ny1 = CX + n_start_r * np.cos(a_needle), CY + n_start_r * np.sin(a_needle)
-        nx2, ny2 = CX + n_end_r * np.cos(a_needle), CY + n_end_r * np.sin(a_needle)
-        
-        # Needle cyan glow base (thick to thin layered glow)
-        ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=5.0, alpha=0.15, zorder=10)
-        ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=3.0, alpha=0.45, zorder=10)
-        ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=1.5, alpha=0.8, zorder=10)
-        # Needle white core
-        ax.plot([nx1, nx2], [ny1, ny2], color='#FFFFFF', linewidth=0.6, alpha=0.95, zorder=11)
-        
-        # Flare / Destello effect at needle tip (white core fading to cyan halo)
-        for r_flare, color_flare, alpha_flare in [
-            (0.035, CYAN_GLOW, 0.1),
-            (0.022, CYAN_GLOW, 0.35),
-            (0.015, '#FFFFFF', 0.6),
-            (0.007, '#FFFFFF', 0.9)
-        ]:
-            ax.add_patch(patches.Circle((nx2, ny2), r_flare, facecolor=color_flare, edgecolor='none', alpha=alpha_flare, zorder=12))
+                # Overlay needle on gauge
+                # Increase multiplier so it's longer
+                needle_size = R_OUT * 2.0 * 0.95
+                extent = [CX - needle_size / 2, CX + needle_size / 2,
+                          CY - needle_size / 2, CY + needle_size / 2]
+                ax.imshow(np.array(img_needle_rot), extent=extent, zorder=10,
+                          interpolation='lanczos')
+                needle_drawn = True
+            except Exception:
+                pass
 
-        # 6. Glass lens overlay from PNG
+        # Fallback: drawn glowing line needle if PNG failed
+        if not needle_drawn:
+            a_needle = np.radians(val_to_angle(val_for_needle))
+            nx1 = CX + R_HUB * np.cos(a_needle)
+            ny1 = CY + R_HUB * np.sin(a_needle)
+            nx2 = CX + (R_TICKS_OUT - 0.01) * np.cos(a_needle)
+            ny2 = CY + (R_TICKS_OUT - 0.01) * np.sin(a_needle)
+            for lw, alpha in [(5.0, 0.15), (3.0, 0.45), (1.5, 0.8)]:
+                ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=lw, alpha=alpha, zorder=10)
+            ax.plot([nx1, nx2], [ny1, ny2], color='#FFFFFF', linewidth=0.6, alpha=0.95, zorder=11)
+            for r_f, c_f, a_f in [(0.030, CYAN_GLOW, 0.15), (0.018, '#FFFFFF', 0.65), (0.007, '#FFFFFF', 0.9)]:
+                ax.add_patch(patches.Circle((nx2, ny2), r_f, facecolor=c_f, edgecolor='none', alpha=a_f, zorder=12))
+
+        # 6. Center hub PNG (circle.png) — upscaled for crispness, drawn ABOVE needle
+        hub_path = resource_path('assets/circle.png')
+        hub_drawn = False
+        if os.path.exists(hub_path):
+            try:
+                from PIL import Image, ImageOps
+                img_hub = Image.open(hub_path).convert('RGBA')
+                # Crop to square (centered) to prevent oval distortion
+                side = min(img_hub.width, img_hub.height)
+                img_hub = ImageOps.fit(img_hub, (side, side), method=Image.LANCZOS, centering=(0.5, 0.5))
+                # Upscale if needed for crispness
+                if img_hub.width < 512:
+                    img_hub = img_hub.resize((512, 512), Image.LANCZOS)
+                hub_size = R_HUB * 2.0
+                hub_extent = [CX - hub_size / 2, CX + hub_size / 2,
+                              CY - hub_size / 2, CY + hub_size / 2]
+                ax.imshow(np.array(img_hub), extent=hub_extent, zorder=14,
+                          interpolation='lanczos')
+                hub_drawn = True
+            except Exception:
+                pass
+
+        if not hub_drawn:
+            for lw, alpha in [(1.5, 0.3), (0.8, 0.6)]:
+                ax.add_patch(patches.Circle((CX, CY), R_HUB + lw * 0.01,
+                                            facecolor='none', edgecolor=CYAN_GLOW,
+                                            linewidth=1.5, alpha=alpha, zorder=13))
+            ax.add_patch(patches.Circle((CX, CY), R_HUB, facecolor='#0A0E17', zorder=14))
+
+        # 7. Value text centered on hub (above everything)
+        from matplotlib.font_manager import FontProperties
+        font_path = resource_path('assets/Montserrat-ExtraBold.ttf')
+        if os.path.exists(font_path):
+            font_val = FontProperties(fname=font_path, size=21)
+            font_unit = FontProperties(fname=font_path, size=12.5)
+            font_fallback = FontProperties(fname=font_path, size=16)
+        else:
+            font_val = FontProperties(weight='bold', size=21)
+            font_unit = FontProperties(weight='bold', size=12.5)
+            font_fallback = FontProperties(weight='bold', size=16)
+
+        if isinstance(t_event_value, (int, float)):
+            val_str = f"{t_event_value:.2f}"
+            unit_str = "s"
+            ax.text(CX, CY + 0.015, val_str,
+                    fontproperties=font_val, color='#FFFFFF',
+                    ha='center', va='center', zorder=16)
+            ax.text(CX, CY - 0.060, unit_str,
+                    fontproperties=font_unit, color='#FFFFFF',
+                    ha='center', va='center', zorder=16)
+        else:
+            ax.text(CX, CY, str(t_event_value),
+                    fontproperties=font_fallback, color='#FFFFFF',
+                    ha='center', va='center', zorder=16)
+
+        # 7. Glass lens overlay (lens.png) — topmost layer
         lens_path = resource_path('assets/lens.png')
         if os.path.exists(lens_path):
             try:
                 from PIL import Image
                 img_lens = Image.open(lens_path)
                 extent = [CX - R_OUT, CX + R_OUT, CY - R_OUT, CY + R_OUT]
-                ax.imshow(np.array(img_lens), extent=extent, zorder=13)
-            except Exception as e:
+                ax.imshow(np.array(img_lens), extent=extent, zorder=17,
+                          interpolation='lanczos')
+            except Exception:
                 pass
 
-        # Bottom display text (Value and Label)
-        # Adjusted positions so they fit safely above the axis bottom limit
-        ax.text(CX, CY - R_OUT - 0.10, display_text, fontsize=19, fontweight='bold', color=self.COLORS['primary'], ha='center', va='top', zorder=10)
-        ax.text(CX, CY - R_OUT - 0.22, "Overall Gaze Duration", fontsize=8.0, fontweight='bold', color=self.COLORS['text_light'], ha='center', va='top', zorder=10)
-        
         ax.set_xlim(0.0, 1.0)
         ax.set_ylim(0.0, 1.0)
     

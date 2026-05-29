@@ -330,25 +330,19 @@ export default function FuseTab() {
                         <div className="flex items-center gap-2.5 text-muted-foreground">
                           {parsed.files && (
                             <div className="flex items-center gap-1.5 w-14 shrink-0" title="Satellite files fused">
-                              <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded dark:bg-muted-foreground/25 shrink-0">
-                                <Box className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80" />
-                              </span>
+                              <Box className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80 shrink-0" />
                               <span className="text-sm font-mono">{parsed.files}</span>
                             </div>
                           )}
                           {parsed.vids && (
                             <div className="flex items-center gap-1.5 w-14 shrink-0" title="Tracking videos">
-                              <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded dark:bg-muted-foreground/25 shrink-0">
-                                <Clapperboard className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80" />
-                              </span>
+                              <Clapperboard className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80 shrink-0" />
                               <span className="text-sm font-mono">{parsed.vids}</span>
                             </div>
                           )}
                           {hasMasters && (
                             <div className="flex items-center gap-1.5 w-10 shrink-0" title={`${p.masters.length} master file(s)`}>
-                              <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded dark:bg-amber-500/30 shrink-0">
-                                <Crown className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300" />
-                              </span>
+                              <Crown className="w-3.5 h-3.5 text-amber-900 dark:text-amber-300 shrink-0" />
                               <span className="text-sm font-mono">{p.masters.length}</span>
                             </div>
                           )}
@@ -376,9 +370,7 @@ export default function FuseTab() {
                     {hasMasters && (
                       <div>
                         <div className="flex items-center gap-1.5 pl-[52px] pr-4 py-1.5 bg-amber-500/5 border-b border-amber-500/10">
-                          <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded dark:bg-amber-500/30 shrink-0">
-                            <Crown className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300" />
-                          </span>
+                          <Crown className="w-3.5 h-3.5 text-amber-900 dark:text-amber-300 shrink-0" />
                           <span className="text-sm font-bold uppercase tracking-wider text-amber-500/70">
                             Master Files — {p.masters.length}
                           </span>
@@ -403,9 +395,7 @@ export default function FuseTab() {
                     {hasSatellites && (
                       <div>
                         <div className="flex items-center gap-1.5 pl-[52px] pr-4 py-1.5 bg-surface-3/10 border-b border-border/10 border-t border-border/10">
-                          <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded dark:bg-muted-foreground/25 shrink-0">
-                            <Box className="w-3.5 h-3.5 text-muted-foreground/50 dark:text-foreground/80" />
-                          </span>
+                          <Box className="w-3.5 h-3.5 text-muted-foreground/50 dark:text-foreground/80 shrink-0" />
                           <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground/50">
                             Satellite Files — {p.satellites.length}
                           </span>

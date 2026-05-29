@@ -21,9 +21,6 @@ export interface PassConfig {
 export interface GaugeConfig {
   min: number
   max: number
-  green_min?: number
-  green_max?: number
-  green_range?: [number, number]
   ticks?: number[]
   ticks_count?: number
 }
@@ -75,16 +72,16 @@ const DEFAULT_PASS_CRITERIA: Record<string, PassConfig> = {
 }
 
 const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
-  "Long Distraction (NDT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Long Distraction (DT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Short Distraction (NDT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Short Distraction (DT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Microsleep": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Sleep": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Drowsiness": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Unresponsive driver": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "High Speed": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Low Speed": { min: 0, max: 10, green_min: 0, green_max: 3 }
+  "Long Distraction (NDT)": { min: 0, max: 10 },
+  "Long Distraction (DT)": { min: 0, max: 10 },
+  "Short Distraction (NDT)": { min: 0, max: 10 },
+  "Short Distraction (DT)": { min: 0, max: 10 },
+  "Microsleep": { min: 0, max: 10 },
+  "Sleep": { min: 0, max: 10 },
+  "Drowsiness": { min: 0, max: 10 },
+  "Unresponsive driver": { min: 0, max: 10 },
+  "High Speed": { min: 0, max: 10 },
+  "Low Speed": { min: 0, max: 10 }
 }
 
 type Module = 'fuse' | 'analysis' | 'classification' | 'reporting' | 'om' | 'brain'
@@ -928,11 +925,13 @@ export const useAppStore = create<AppState>((set) => ({
       if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
         for (const [catName, gr] of Object.entries(parsed.gauge_rules)) {
           if (gr && typeof gr === 'object') {
+            const ticksCountVal = typeof (gr as any).ticks_count === 'number' ? (gr as any).ticks_count : undefined;
+            const ticksVal = Array.isArray((gr as any).ticks) ? (gr as any).ticks.map(Number) : undefined;
             validatedGaugeRules[catName] = {
               min: typeof (gr as any).min === 'number' ? (gr as any).min : 0,
               max: typeof (gr as any).max === 'number' ? (gr as any).max : 10,
-              green_min: typeof (gr as any).green_min === 'number' ? (gr as any).green_min : 0,
-              green_max: typeof (gr as any).green_max === 'number' ? (gr as any).green_max : 3
+              ticks: ticksVal,
+              ticks_count: ticksCountVal
             }
           }
         }

@@ -382,8 +382,8 @@ export default function AnalysisTab() {
                       {/* Ambient glow circle */}
                       <div className="absolute w-[180px] h-[180px] rounded-full bg-white/[0.02] blur-[40px] pointer-events-none" />
                       
-                      <div className="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center animate-pulse-sync mb-1">
-                        <FileSearch className="w-6 h-6 stroke-[1.2]" />
+                      <div className="w-16 h-16 rounded-full border border-border dark:border-white/5 flex items-center justify-center animate-pulse-sync mb-1">
+                        <FileSearch className="w-6 h-6 stroke-[1.2] text-foreground" />
                       </div>
                       <div className="text-center space-y-1.5 animate-pulse-sync">
                         <p className="text-sm tracking-[0.2em] font-extrabold uppercase text-foreground">

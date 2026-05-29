@@ -120,21 +120,21 @@ interface PassConfig {
 interface GaugeConfig {
   min: number;
   max: number;
-  green_min: number;
-  green_max: number;
+  ticks?: number[];
+  ticks_count?: number;
 }
 
 const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
-  "Long Distraction (NDT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Long Distraction (DT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Short Distraction (NDT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Short Distraction (DT)": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  Microsleep: { min: 0, max: 10, green_min: 0, green_max: 3 },
-  Sleep: { min: 0, max: 10, green_min: 0, green_max: 3 },
-  Drowsiness: { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Unresponsive driver": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "High Speed": { min: 0, max: 10, green_min: 0, green_max: 3 },
-  "Low Speed": { min: 0, max: 10, green_min: 0, green_max: 3 },
+  "Long Distraction (NDT)": { min: 0, max: 10 },
+  "Long Distraction (DT)": { min: 0, max: 10 },
+  "Short Distraction (NDT)": { min: 0, max: 10 },
+  "Short Distraction (DT)": { min: 0, max: 10 },
+  Microsleep: { min: 0, max: 10 },
+  Sleep: { min: 0, max: 10 },
+  Drowsiness: { min: 0, max: 10 },
+  "Unresponsive driver": { min: 0, max: 10 },
+  "High Speed": { min: 0, max: 10 },
+  "Low Speed": { min: 0, max: 10 },
 };
 
 const fetchingValues = new Set<string>();
@@ -248,12 +248,38 @@ export function GazeLogicTab() {
 
   // Load configs in the modal
   const loadModalConfigs = async () => {
+    // Load the actual default gauge_rules.json from disk
+    let defaultRules: Record<string, GaugeConfig> = DEFAULT_GAUGE_RULES;
+    try {
+      const defaultRes = await fetch("/api/reporting/gauge_rules");
+      if (defaultRes.ok) {
+        const diskRules = await defaultRes.json();
+        if (diskRules && typeof diskRules === "object" && Object.keys(diskRules).length > 0) {
+          // Merge with DEFAULT_GAUGE_RULES keys so all categories are present
+          const merged: Record<string, GaugeConfig> = { ...DEFAULT_GAUGE_RULES };
+          for (const [key, rule] of Object.entries(diskRules)) {
+            if (rule && typeof rule === "object") {
+              merged[key] = {
+                min: typeof (rule as any).min === "number" ? (rule as any).min : 0,
+                max: typeof (rule as any).max === "number" ? (rule as any).max : 10,
+                ticks: Array.isArray((rule as any).ticks) ? (rule as any).ticks.map(Number) : undefined,
+                ticks_count: typeof (rule as any).ticks_count === "number" ? (rule as any).ticks_count : undefined,
+              };
+            }
+          }
+          defaultRules = merged;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load default gauge_rules.json from disk:", err);
+    }
+
     const list: ConfigItem[] = [
       {
         id: "default",
         name: "Default",
         path: "config/gauge_rules.json",
-        rules: DEFAULT_GAUGE_RULES,
+        rules: defaultRules,
         isDefault: true,
       },
     ];
@@ -366,7 +392,7 @@ export function GazeLogicTab() {
   const handleFieldChange = (cat: string, field: string, val: any) => {
     const updated = { ...editingRules };
     if (!updated[cat]) {
-      updated[cat] = { min: 0, max: 10, green_min: 0, green_max: 3 };
+      updated[cat] = { min: 0, max: 10 };
     }
     updated[cat] = { ...updated[cat], [field]: val };
     setEditingRules(updated);
@@ -378,15 +404,6 @@ export function GazeLogicTab() {
     for (const [cat, rule] of Object.entries(rulesToClean)) {
       const minVal = parseFloat(rule.min) || 0;
       const maxVal = parseFloat(rule.max) || 10;
-
-      let gMin = rule.green_min;
-      let gMax = rule.green_max;
-      if (rule.green_range && Array.isArray(rule.green_range)) {
-        if (gMin === undefined) gMin = rule.green_range[0];
-        if (gMax === undefined) gMax = rule.green_range[1];
-      }
-      if (gMin === undefined) gMin = 0;
-      if (gMax === undefined) gMax = 3;
 
       // Calculate Ticks Count
       let ticksCount = rule.ticks_count;
@@ -410,7 +427,7 @@ export function GazeLogicTab() {
       cleanRules[cat] = {
         min: minVal,
         max: maxVal,
-        green_range: [parseFloat(gMin) || 0, parseFloat(gMax) || 0],
+        ticks_count: ticksCount,
         ticks: generatedTicks,
       };
     }
@@ -421,8 +438,6 @@ export function GazeLogicTab() {
     const defaults = DEFAULT_GAUGE_RULES[cat] || {
       min: 0,
       max: 10,
-      green_min: 0,
-      green_max: 3,
     };
     const updated = { ...editingRules };
 
@@ -434,9 +449,6 @@ export function GazeLogicTab() {
     updated[cat] = {
       min: minVal,
       max: maxVal,
-      green_min: defaults.green_min,
-      green_max: defaults.green_max,
-      green_range: [defaults.green_min, defaults.green_max],
       ticks_count: ticksCount,
     };
     setEditingRules(updated);
@@ -739,8 +751,10 @@ export function GazeLogicTab() {
     setAllParticipantMf4s(getMf4Files(firstParticipant));
   }, [analysisResults]);
 
-  // Load backend gauge rules on mount
+  // Load backend gauge rules on mount — only if no custom gaugeRulesPath is active
   useEffect(() => {
+    // If the user already has a custom gauge file selected, don't overwrite it
+    if (gaugeRulesPath) return;
     reportingApi
       .getGaugeRules()
       .then((res) => {
@@ -751,8 +765,8 @@ export function GazeLogicTab() {
               rules[key] = {
                 min: res.data[key].min ?? 0,
                 max: res.data[key].max ?? 10,
-                green_min: res.data[key].green_min ?? 0,
-                green_max: res.data[key].green_max ?? 3,
+                ticks: Array.isArray(res.data[key].ticks) ? res.data[key].ticks.map(Number) : undefined,
+                ticks_count: typeof res.data[key].ticks_count === 'number' ? res.data[key].ticks_count : undefined,
               };
             }
           });
@@ -760,7 +774,7 @@ export function GazeLogicTab() {
         }
       })
       .catch((err) => console.error("Error loading gauge rules:", err));
-  }, [setGaugeRules]);
+  }, [setGaugeRules, gaugeRulesPath]);
 
   const handleImportConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1330,7 +1344,7 @@ export function GazeLogicTab() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <div className="h-6 w-[1px] bg-white/10" />
+              <div className="h-6 w-[1px] bg-border dark:bg-white/10" />
             </div>
 
             {/* Scenario selector Combobox with Radio buttons */}
@@ -2040,7 +2054,7 @@ export function GazeLogicTab() {
                 />
               </div>
 
-              <div className="h-5 w-[1px] bg-white/10 mx-1 shrink-0" />
+              <div className="h-5 w-[1px] bg-border dark:bg-white/10 mx-1 shrink-0" />
 
               <HoverCard openDelay={10} closeDelay={100}>
                 <HoverCardTrigger asChild>
@@ -2267,18 +2281,6 @@ export function GazeLogicTab() {
                         </TableHead>
                         <TableHead
                           className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help"
-                          title="Start value of the green range (Pass zone) for the gauge."
-                        >
-                          Pass Min
-                        </TableHead>
-                        <TableHead
-                          className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help"
-                          title="End value of the green range (Pass zone) for the gauge."
-                        >
-                          Pass Max
-                        </TableHead>
-                        <TableHead
-                          className="text-sm font-bold uppercase text-center text-muted-foreground/80 tracking-wider w-20 cursor-help"
                           title="Number of intermediate ticks between the minimum and maximum values."
                         >
                           Ticks
@@ -2296,21 +2298,7 @@ export function GazeLogicTab() {
                         const rule = editingRules[cat] || {
                           min: 0,
                           max: 10,
-                          green_min: 0,
-                          green_max: 3,
                         };
-
-                        let gMin = rule.green_min;
-                        let gMax = rule.green_max;
-                        if (
-                          rule.green_range &&
-                          Array.isArray(rule.green_range)
-                        ) {
-                          gMin = rule.green_range[0];
-                          gMax = rule.green_range[1];
-                        }
-                        if (gMin === undefined) gMin = 0;
-                        if (gMax === undefined) gMax = 3;
 
                         // Calculate Ticks Count
                         let ticksCount = rule.ticks_count;
@@ -2355,36 +2343,6 @@ export function GazeLogicTab() {
                                 value={rule.max !== undefined ? rule.max : ""}
                                 onChange={(e) =>
                                   handleFieldChange(cat, "max", e.target.value)
-                                }
-                                className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
-                              />
-                            </TableCell>
-                            <TableCell className="py-2.5 text-center">
-                              <Input
-                                type="number"
-                                disabled={isDisabled}
-                                value={gMin !== undefined ? gMin : ""}
-                                onChange={(e) =>
-                                  handleFieldChange(
-                                    cat,
-                                    "green_min",
-                                    e.target.value,
-                                  )
-                                }
-                                className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
-                              />
-                            </TableCell>
-                            <TableCell className="py-2.5 text-center">
-                              <Input
-                                type="number"
-                                disabled={isDisabled}
-                                value={gMax !== undefined ? gMax : ""}
-                                onChange={(e) =>
-                                  handleFieldChange(
-                                    cat,
-                                    "green_max",
-                                    e.target.value,
-                                  )
                                 }
                                 className="h-9 bg-surface-3/60 border-white/5 text-base text-center rounded-md px-1.5 w-16 font-mono disabled:opacity-60 mx-auto"
                               />
