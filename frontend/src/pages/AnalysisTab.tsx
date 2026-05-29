@@ -192,22 +192,25 @@ const RecordingNode = memo(function RecordingNode({
         </div>
         <div className="flex gap-1 shrink-0 ml-2 relative z-10">
           <Badge 
+            key={`tracking-${node.has_tracking}`}
             variant={node.has_tracking ? "success" : "destructive"} 
-            className="p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md"
+            className={cn("p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md transition-all duration-300", node.has_tracking && "animate-badge-pop")}
             title={node.has_tracking ? "Tracking Completed" : "Tracking Pending"}
           >
             {node.has_tracking ? <Smile className="w-3.5 h-3.5" /> : <Frown className="w-3.5 h-3.5" />}
           </Badge>
           <Badge 
+            key={`marks-${node.has_marks}`}
             variant={node.has_marks ? "success" : "destructive"} 
-            className="p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md"
+            className={cn("p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md transition-all duration-300", node.has_marks && "animate-badge-pop")}
             title={node.has_marks ? "Marks Completed" : "Marks Pending"}
           >
             {node.has_marks ? <Locate className="w-3.5 h-3.5" /> : <LocateOff className="w-3.5 h-3.5" />}
           </Badge>
           <Badge 
+            key={`report-${node.has_report}`}
             variant={node.has_report ? "success" : "destructive"} 
-            className="p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md"
+            className={cn("p-0 w-[18px] h-[18px] border-0 flex items-center justify-center rounded-md transition-all duration-300", node.has_report && "animate-badge-pop")}
             title={node.has_report ? "Report Completed" : "Report Pending"}
           >
             {node.has_report ? <FileChartColumnIncreasing className="w-3.5 h-3.5" /> : <File className="w-3.5 h-3.5" />}

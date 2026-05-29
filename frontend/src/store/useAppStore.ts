@@ -175,6 +175,7 @@ interface AppState {
   toggleAnalysisFile: (path: string) => void
   setAllAnalysisFiles: (checked: boolean) => void
   setIncompleteAnalysisFiles: (category: 'tracking' | 'marks' | 'report') => void
+  updateFileStatus: (filePath: string, status: Partial<{ has_tracking: boolean; has_marks: boolean; has_report: boolean }>) => void
   analysisExpandedAll: boolean | null
   setAnalysisExpandedAll: (v: boolean | null) => void
   analysisAvailableCameras: number[]
@@ -457,6 +458,52 @@ export const useAppStore = create<AppState>((set) => ({
       }
       collect(s.analysisResults)
       return { analysisCheckedFiles: pending }
+    }),
+  updateFileStatus: (filePath, status) =>
+    set((s) => {
+      // Recompute aggregate stats for a parent node after a child changed
+      const recomputeStats = (node: any): any => {
+        let totalMf4 = 0, totalTracking = 0, totalMarks = 0, totalAnalysis = 0
+        const walk = (n: any) => {
+          if (n.type === 'file') {
+            totalMf4++
+            if (n.has_tracking) totalTracking++
+            if (n.has_marks) totalMarks++
+            if (n.has_report) totalAnalysis++
+          }
+          if (n.children) n.children.forEach(walk)
+        }
+        node.children?.forEach(walk)
+        return {
+          ...node,
+          tracking_stats: [totalTracking, totalMf4],
+          marks_stats: [totalMarks, totalMf4],
+          analysis_stats: [totalAnalysis, totalMf4],
+        }
+      }
+
+      // Recursively patch the matching file node; return same ref if unchanged
+      const patchNode = (node: any): any => {
+        if (node.type === 'file') {
+          if (node.path !== filePath) return node
+          return { ...node, ...status }
+        }
+        if (!node.children) return node
+        let changed = false
+        const newChildren = node.children.map((c: any) => {
+          const nc = patchNode(c)
+          if (nc !== c) changed = true
+          return nc
+        })
+        if (!changed) return node
+        return recomputeStats({ ...node, children: newChildren })
+      }
+
+      const newResults = s.analysisResults.map(patchNode)
+      // Bail out early if nothing changed — avoids unnecessary re-renders
+      const anyChanged = newResults.some((r, i) => r !== s.analysisResults[i])
+      if (!anyChanged) return s
+      return { analysisResults: newResults }
     }),
   analysisExpandedAll: null,
   setAnalysisExpandedAll: (v) => set({ analysisExpandedAll: v }),

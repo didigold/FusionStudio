@@ -29,7 +29,13 @@ export function useAnalysisWS() {
         switch (data.type) {
           case 'log': addLog(data.message); break
           case 'progress': setAnalysisChronosProgress(data.value); break
-          case 'task_done': addLog(`Task done: ${data.path}`); break
+          case 'task_done': {
+            addLog(`Task done: ${data.path}`)
+            // Surgically flip has_tracking on the matching file node so the
+            // sidebar badge updates in real-time without a full re-scan.
+            useAppStore.getState().updateFileStatus(data.path, { has_tracking: true })
+            break
+          }
           case 'stats': setAnalysisChronosStats(data); break
           case 'frame': {
             const now = performance.now()

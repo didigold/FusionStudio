@@ -614,8 +614,15 @@ async def run_chronos(req: ChronosRequest):
         )
 
     def on_finished_task(fpath):
+        # Resolve the source MF4 path for the completed task so the frontend
+        # can match it against node.path in the recordings tree.
+        source_mf4 = fpath  # fallback: use what was given
+        for t in tasks:
+            if t.get("file_path") == fpath:
+                source_mf4 = t.get("mf4_path", fpath)
+                break
         asyncio.run_coroutine_threadsafe(
-            manager_analysis.broadcast({"type": "task_done", "path": fpath}), loop
+            manager_analysis.broadcast({"type": "task_done", "path": source_mf4}), loop
         )
 
     def on_all_finished():
