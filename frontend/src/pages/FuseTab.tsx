@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore'
 import { useFuseWebSocket } from '../hooks/useFuseWebSocket'
 import { 
   Play, Pause, Square, Box, Clapperboard, Crown, File,
-  RefreshCw, Filter, ChevronRight, ChevronDown, Check, ChevronsUpDown
+  RefreshCw, Filter, ChevronRight, ChevronDown, Check, ChevronsUpDown, X
 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
+
+let lastScannedFusePath = ''
 
 export default function FuseTab() {
   const { 
@@ -27,7 +29,7 @@ export default function FuseTab() {
     signalFilter, setSignalFilter
   } = useAppStore()
 
-  useFuseWebSocket()
+  // Removed useFuseWebSocket() - now managed at parent level in AnalysisTab.tsx to prevent tab-switch disconnects.
 
   const [scanning, setScanning] = useState(false)
   const [loadingSignals, setLoadingSignals] = useState(false)
@@ -171,7 +173,12 @@ export default function FuseTab() {
   // Trigger participant scan when analysisSourcePath changes
   useEffect(() => {
     if (analysisSourcePath) {
-      handleScan(analysisSourcePath)
+      if (analysisSourcePath !== lastScannedFusePath) {
+        handleScan(analysisSourcePath)
+        lastScannedFusePath = analysisSourcePath
+      }
+    } else {
+      lastScannedFusePath = ''
     }
   }, [analysisSourcePath])
 
@@ -274,7 +281,6 @@ export default function FuseTab() {
           <div className="w-7 shrink-0" />   {/* chevron space */}
           <div className="flex-1 font-medium pl-1">Participant</div>
           <div className="w-48 font-medium">Status</div>
-          <div className="w-28 font-medium">Progress</div>
         </div>
 
         {/* Participant List */}
@@ -286,12 +292,21 @@ export default function FuseTab() {
             const hasSatellites = p.satellites && p.satellites.length > 0
             const hasChildren = hasMasters || hasSatellites
 
+            const progress = p.progress || 0
+            const showShading = progress > 0 && progress < 100
+            const style = showShading
+              ? {
+                  background: `linear-gradient(to right, color-mix(in srgb, var(--primary) 8%, transparent) ${progress}%, transparent ${progress}%)`
+                }
+              : undefined
+
             return (
               <div key={p.name} className="border-b border-border/30 last:border-0">
 
                 {/* Main Row */}
                 <div
-                  className={`flex items-center pl-4 pr-4 py-2.5 cursor-pointer hover:bg-primary/5 transition-colors select-none ${p.checked ? 'bg-primary/[0.02]' : ''}`}
+                  style={style}
+                  className={`flex items-center pl-4 pr-4 py-2.5 cursor-pointer hover:bg-primary/5 transition-all select-none ${p.checked ? 'bg-primary/[0.02]' : ''}`}
                   onClick={(e) => toggleExpanded(p.name, e)}
                 >
                   {/* Checkbox — consistent with Recordings panel */}
@@ -348,16 +363,6 @@ export default function FuseTab() {
                           )}
                         </div>
                       )}
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="w-28">
-                    <div className="w-full bg-surface-3 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-primary h-full transition-all duration-500"
-                        style={{ width: `${p.progress || 0}%` }}
-                      />
                     </div>
                   </div>
                 </div>
@@ -495,15 +500,24 @@ export default function FuseTab() {
                 </PopoverContent>
               </Popover>
 
-              <div className="relative">
+              <div className="relative group/filter">
                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Filter signals..."
-                  value={signalFilter}
+                  value={signalFilter || ''}
                   onChange={e => setSignalFilter(e.target.value)}
-                  className="w-full bg-surface-3 border border-border/50 rounded-lg pl-9 pr-4 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full bg-surface-3 border border-border/50 rounded-lg pl-9 pr-8 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
+                {signalFilter && (
+                  <button
+                    onClick={() => setSignalFilter('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground opacity-0 group-hover/filter:opacity-100 transition-opacity p-0.5 rounded-md hover:bg-surface-2"
+                    title="Clear filter"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

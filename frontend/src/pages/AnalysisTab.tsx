@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useAnalysisWS } from '../hooks/useAnalysisWS'
+import { useFuseWebSocket } from '../hooks/useFuseWebSocket'
 import { 
   ChevronRight, ChevronDown, Folder, File,
   ListChevronsUpDown, ListChevronsDownUp,
@@ -79,6 +80,19 @@ interface FileFolderRipple {
   size: number
 }
 
+const getAllFilesUnderNode = (node: any): string[] => {
+  let files: string[] = []
+  if (node.type === 'file') {
+    files.push(node.path)
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      files = files.concat(getAllFilesUnderNode(child))
+    }
+  }
+  return files
+}
+
 // Memoized tree node — only re-renders when its own props change
 const RecordingNode = memo(function RecordingNode({ 
   node, 
@@ -87,6 +101,7 @@ const RecordingNode = memo(function RecordingNode({
   onSelect,
   checkedFilesSet,
   onToggleCheck,
+  onToggleFolder,
   expandedAll
 }: { 
   node: any, 
@@ -95,6 +110,7 @@ const RecordingNode = memo(function RecordingNode({
   onSelect: (path: string) => void,
   checkedFilesSet: Set<string>,
   onToggleCheck: (path: string) => void,
+  onToggleFolder: (node: any) => void,
   expandedAll: boolean | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -131,6 +147,21 @@ const RecordingNode = memo(function RecordingNode({
   const hasChildren = node.children && node.children.length > 0
   // O(1) lookup using Set instead of O(N) array.includes()
   const isChecked = node.type === 'file' ? checkedFilesSet.has(node.path) : false
+
+  // For parent nodes (folders/participants)
+  const nestedFiles = useMemo(() => {
+    if (node.type === 'file') return []
+    return getAllFilesUnderNode(node)
+  }, [node])
+
+  const checkedNestedCount = useMemo(() => {
+    if (node.type === 'file') return 0
+    return nestedFiles.filter(f => checkedFilesSet.has(f)).length
+  }, [nestedFiles, checkedFilesSet])
+
+  const isAllChecked = nestedFiles.length > 0 && checkedNestedCount === nestedFiles.length
+  const isIndeterminate = checkedNestedCount > 0 && checkedNestedCount < nestedFiles.length
+  const isFolderChecked = isAllChecked ? true : (isIndeterminate ? "indeterminate" : false)
 
   if (node.type === 'file') {
     return (
@@ -210,10 +241,18 @@ const RecordingNode = memo(function RecordingNode({
         className="flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-all mb-0.5 relative overflow-hidden"
         style={{ paddingLeft: `${(level * 12) + 8}px` }}
       >
-        <div className="flex items-center gap-2 overflow-hidden relative z-10">
-          <div className="w-4 h-4 flex items-center justify-center">
+        <div className="flex items-center gap-2 overflow-hidden relative z-10 flex-1">
+          <div className="w-4 h-4 flex items-center justify-center" onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}>
             {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
           </div>
+          {nestedFiles.length > 0 && (
+            <div onClick={(e) => { e.stopPropagation(); onToggleFolder(node); }}>
+               <Checkbox 
+                 checked={isFolderChecked} 
+                 className="w-3.5 h-3.5 border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
+               />
+            </div>
+          )}
           <Folder className="w-3.5 h-3.5 text-primary/60 shrink-0" />
           <span className="text-sm font-bold text-foreground/90 truncate">{node.name}</span>
         </div>
@@ -261,6 +300,7 @@ const RecordingNode = memo(function RecordingNode({
                 onSelect={onSelect}
                 checkedFilesSet={checkedFilesSet}
                 onToggleCheck={onToggleCheck}
+                onToggleFolder={onToggleFolder}
                 expandedAll={expandedAll}
               />
             ))}
@@ -280,6 +320,7 @@ export default function AnalysisTab() {
   } = useAppStore()
 
   useAnalysisWS()
+  useFuseWebSocket()
 
   const [selectionType, setSelectionType] = useState('all')
   const [activeTab, setActiveTab] = useState('audio')
@@ -308,6 +349,19 @@ export default function AnalysisTab() {
   const toggleExpand = useCallback(() => {
     setAnalysisExpandedAll(!isAllExpanded)
   }, [setAnalysisExpandedAll, isAllExpanded])
+
+  const toggleFolder = useCallback((node: any) => {
+    const files = getAllFilesUnderNode(node)
+    const allChecked = files.every(f => checkedFilesSet.has(f))
+    let nextChecked: string[]
+    if (allChecked) {
+      nextChecked = analysisCheckedFiles.filter(f => !files.includes(f))
+    } else {
+      const toAdd = files.filter(f => !analysisCheckedFiles.includes(f))
+      nextChecked = [...analysisCheckedFiles, ...toAdd]
+    }
+    useAppStore.setState({ analysisCheckedFiles: nextChecked })
+  }, [analysisCheckedFiles, checkedFilesSet])
 
   const SHOW_RECORDINGS_TABS = ['audio', 'metadata', 'tracking', 'time-selector', 'logic', 'occupant-time', 'misuse-logic'];
   const shouldShowRecordings = SHOW_RECORDINGS_TABS.includes(activeTab);
@@ -374,6 +428,7 @@ export default function AnalysisTab() {
                       onSelect={selectFile} 
                       checkedFilesSet={checkedFilesSet}
                       onToggleCheck={toggleAnalysisFile}
+                      onToggleFolder={toggleFolder}
                       expandedAll={analysisExpandedAll}
                     />
                   ))}
@@ -553,9 +608,7 @@ export default function AnalysisTab() {
                   transition={{ duration: 0.25, ease: "easeOut" }}
                   className="h-full w-full min-h-0 overflow-hidden flex flex-col"
                 >
-                  <ScrollArea className="flex-1">
-                    <LogTab />
-                  </ScrollArea>
+                  <LogTab />
                 </motion.div>
               )}
             </AnimatePresence>

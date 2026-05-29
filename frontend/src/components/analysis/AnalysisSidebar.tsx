@@ -106,7 +106,7 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
     fusionState
   } = useAppStore()
 
-  const isLogWriting = analysisChronosRunning || analysisBatchRunning || classifyProcessing || reportingProcessing
+  const isLogWriting = analysisChronosRunning || analysisBatchRunning || classifyProcessing || reportingProcessing || fusionState !== 'idle'
 
   return (
     <Sidebar collapsible="none" className="border-r border-border/50 bg-surface-2/50">

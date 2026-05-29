@@ -50,6 +50,12 @@ export function useFuseWebSocket() {
             setFusionState('idle')
             setGlobalProgress(1)
             addLog('--- Batch process finished ---')
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('Fusion Completed', {
+                body: 'The participant fusion process has finished successfully.',
+                icon: '/assets/logos/APPLUS+IDIADA.png'
+              })
+            }
             break
           case 'error':
             setFusionState('idle')
@@ -70,6 +76,12 @@ export function useFuseWebSocket() {
       ws.close()
     }
   }, [addLog, setGlobalProgress, updateParticipantProgress, updateParticipantStatus, setFusionState, setCleaningMem, setParticipants])
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
 
   useEffect(() => {
     mountedRef.current = true
