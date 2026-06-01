@@ -3,6 +3,7 @@ import glob
 import json
 import logging
 import os
+import shutil
 from threading import Thread
 
 from fastapi import APIRouter, WebSocket
@@ -35,6 +36,11 @@ class TrainMultimodalRequest(BaseModel):
 class AnalyzeRequest(BaseModel):
     tracking_mf4: str
     video_path: str = ""
+    model_path: str = ""
+
+
+class DeleteModelRequest(BaseModel):
+    path: str
 
 
 _active_training = None
@@ -72,13 +78,59 @@ async def list_models():
                 architecture = parts[0] if len(parts) > 0 else "unknown"
                 variant = parts[1] if len(parts) > 1 else ""
                 size = os.path.getsize(os.path.join(root, f))
-                result.append({
+                entry = {
                     "path": os.path.join(root, f),
                     "architecture": architecture,
                     "variant": variant,
                     "size_mb": round(size / (1024 * 1024), 2),
-                })
+                    "metadata": None,
+                }
+                # Try to load metadata from training_history.json
+                history_path = os.path.join(root, "training_history.json")
+                if os.path.exists(history_path):
+                    try:
+                        with open(history_path) as hf:
+                            entry["metadata"] = json.load(hf)
+                    except Exception:
+                        pass
+                # Try to load metadata from model.pkl (joblib)
+                elif f == "model.pkl":
+                    try:
+                        import joblib
+                        data = joblib.load(os.path.join(root, f))
+                        if isinstance(data, dict) and "metadata" in data:
+                            entry["metadata"] = data["metadata"]
+                    except Exception:
+                        pass
+                result.append(entry)
     return {"models": result}
+
+
+@router.delete("/models")
+async def delete_model(req: DeleteModelRequest):
+    """Delete a saved model file and its containing directory."""
+    model_path = req.path
+    if not os.path.exists(model_path):
+        return {"status": "not_found"}
+
+    # Safety: only allow deletion within the models directory
+    models_dir = resource_path("models")
+    try:
+        abs_model = os.path.abspath(model_path)
+        abs_models = os.path.abspath(models_dir)
+        if not abs_model.startswith(abs_models):
+            return {"status": "forbidden", "message": "Path outside models directory"}
+    except Exception:
+        return {"status": "error", "message": "Invalid path"}
+
+    try:
+        model_dir = os.path.dirname(model_path)
+        shutil.rmtree(model_dir)
+        logger.info(f"Deleted model directory: {model_dir}")
+        return {"status": "deleted"}
+    except Exception as e:
+        logger.error(f"Failed to delete model: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 @router.get("/history")
@@ -322,7 +374,7 @@ async def analyze_file(req: AnalyzeRequest):
             on_progress=lambda v: emit({"type": "progress", "value": v}),
         )
         try:
-            result = analyzer.analyze(req.tracking_mf4, req.video_path)
+            result = analyzer.analyze(req.tracking_mf4, req.video_path, req.model_path)
             emit({"type": "analysis_done", "markers": result})
         except Exception as e:
             emit({"type": "error", "message": str(e)})

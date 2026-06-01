@@ -144,6 +144,7 @@ export function GazeTimeTab() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [targetFile, setTargetFile] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   const videoFileName = useMemo(() => {
     if (!targetFile) return 'video.avi';
@@ -183,9 +184,9 @@ export function GazeTimeTab() {
       const h = hoverTimeRef.current;
       if (h == null) return;
       const now = performance.now();
-      if (now - last < 33) return;
+      if (now - last < 16) return;
       const cur = videoRef.current.currentTime;
-      if (Math.abs(cur - h) > 0.05) {
+      if (Math.abs(cur - h) > 0.015) {
         videoRef.current.currentTime = h;
         if (blurVideoRef.current) blurVideoRef.current.currentTime = h;
       }
@@ -379,7 +380,35 @@ export function GazeTimeTab() {
         else setMarks([]);
       });
       const baseName = targetFile.replace('_tracking.mf4', '').replace('.mf4', '');
-      setVideoUrl(`/api/analysis/media?path=${encodeURIComponent(`${baseName}_cam${analysisSelectedCamera}.avi`)}`);
+      const url = `/api/analysis/media?path=${encodeURIComponent(`${baseName}_cam${analysisSelectedCamera}.avi`)}`;
+      
+      setVideoUrl(null);
+      setVideoLoading(true);
+      setVideoError(null);
+
+      const abortController = new AbortController();
+      fetch(url, { signal: abortController.signal })
+        .then(res => {
+          if (!res.ok) throw new Error('Video not found');
+          return res.blob();
+        })
+        .then(blob => {
+          if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+          const blobUrl = URL.createObjectURL(blob);
+          objectUrlRef.current = blobUrl;
+          setVideoUrl(blobUrl);
+          setVideoLoading(false);
+        })
+        .catch(err => {
+          if (err.name === 'AbortError') return;
+          console.error('Failed to preload video:', err);
+          setVideoUrl(url);
+          setVideoLoading(false);
+        });
+
+      return () => {
+        abortController.abort();
+      };
     } else {
       setChannels([]);
       setTopSignal('');
@@ -388,11 +417,23 @@ export function GazeTimeTab() {
       setBottomData([[], []]);
       setMarks([]);
       setVideoUrl(null);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
       setIsPlaying(false);
       setDuration(100);
       setVideoZoom(1);
     }
   }, [targetFile, analysisSelectedCamera, analysisSourcePath]);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!targetFile) return;
@@ -919,7 +960,7 @@ export function GazeTimeTab() {
                              onCanPlay={() => setVideoLoading(false)}
                              onError={async () => {
                                  setVideoLoading(false);
-                                 if (videoUrl) {
+                                 if (videoUrl && !videoUrl.startsWith('blob:')) {
                                      try {
                                          const res = await fetch(videoUrl, { method: 'HEAD' });
                                          if (res.status === 404) {

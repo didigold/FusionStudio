@@ -133,6 +133,15 @@ export function TopNav() {
         .nav-entry-wrapper {
           transition: background-color 0.2s ease, border-color 0.2s ease;
         }
+        .nav-entry-wrapper .nav-clear-btn {
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease, color 0.2s ease;
+        }
+        .nav-entry-wrapper:hover .nav-clear-btn {
+          opacity: 1;
+          pointer-events: auto;
+        }
         .nav-entry-wrapper:has(.nav-clear-btn:hover) {
           background-color: rgba(239, 68, 68, 0.15) !important;
           border-color: rgba(239, 68, 68, 0.4) !important;
@@ -142,6 +151,8 @@ export function TopNav() {
         }
         .nav-entry-wrapper:has(.nav-clear-btn:hover) .nav-clear-btn {
           color: #ef4444 !important;
+          opacity: 1 !important;
+          pointer-events: auto !important;
         }
       `}</style>
       <header className="relative w-full h-16 border-b border-border bg-background flex items-center justify-between px-8 z-40 sticky top-0">

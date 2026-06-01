@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react"
 import { 
   Mic, FileText, Clock, GitBranch, Package,
   AlertTriangle, BrainCircuit, Tags, FileSpreadsheet,
-  Terminal, Eye, UserCheck, ChevronRight, Construction, ScanFace, Merge
+  Terminal, Eye, UserCheck, ChevronRight, Construction, ScanFace, Merge,
+  Brain
 } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { useAppStore } from "@/store/useAppStore"
@@ -164,14 +165,7 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
                 { value: "logic", label: "Gaze Logic", icon: GitBranch, showSpinner: analysisBatchRunning },
               ]}
             />
-            <ExpandableGroup
-              label="Models"
-              icon={Package}
-              activeTab={activeTab}
-              onTabChange={onTabChange}
-              children={[]}
-              emptyMessage="No models available"
-            />
+
             <ExpandableGroup
               label="Occupant Monitoring"
               icon={UserCheck}
@@ -216,6 +210,16 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
         <SidebarGroup>
           <SidebarGroupLabel>Others</SidebarGroupLabel>
           <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                variant={activeTab === "models" ? "active" : "default"}
+                size="sm"
+                onClick={() => onTabChange("models")}
+              >
+                <Brain className="w-4 h-4" />
+                <span>HuMind</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
                 variant={activeTab === "log" ? "active" : "default"}

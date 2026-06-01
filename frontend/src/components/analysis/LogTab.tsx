@@ -54,7 +54,7 @@ function getLogSource(msg: string): string {
     return 'Occupant Monitoring';
   }
   if (lower.includes('brain') || lower.includes('model') || lower.includes('training')) {
-    return 'Brain / Models';
+    return 'HuMind';
   }
   return 'System / General';
 }
@@ -314,7 +314,7 @@ export function LogTab() {
               <SelectItem value="Classification">Classification</SelectItem>
               <SelectItem value="Gaze Analysis">Gaze Analysis</SelectItem>
               <SelectItem value="Occupant Monitoring">Occupant Monitoring</SelectItem>
-              <SelectItem value="Brain / Models">Brain / Models</SelectItem>
+              <SelectItem value="HuMind">HuMind</SelectItem>
               <SelectItem value="System / General">System / General</SelectItem>
             </SelectContent>
           </Select>

@@ -18,7 +18,7 @@ class AIAnalyzer:
         self.on_error = on_error
         self.ml_engine = MLEngine(resource_path("models"))
 
-    def analyze(self, tracking_mf4, video_path):
+    def analyze(self, tracking_mf4, video_path, model_path=None):
         try:
             if self.on_log:
                 self.on_log("Starting AI Analysis pipeline...")
@@ -42,26 +42,42 @@ class AIAnalyzer:
                     self.on_log("Signal too short for analysis (< 2 samples).")
                 return []
 
-            multimodal_result = self._try_multimodal(t, h, v, tracking_mf4, video_path)
-            if multimodal_result is not None:
-                return multimodal_result
-
-            if self.ml_engine.model is not None:
-                if self.on_log:
-                    self.on_log("AI Brain (ML) is active. Using neural inference...")
-                if self.on_progress:
-                    self.on_progress(0.3)
-                ml_markers = self.ml_engine.predict_intervals(t, h, v)
-
-                if ml_markers:
-                    if self.on_log:
-                        self.on_log(f"ML Brain detected {len(ml_markers) // 2} distraction intervals.")
-                    if self.on_progress:
-                        self.on_progress(1.0)
-                    return ml_markers
+            # Determine active model path
+            active_model = model_path
+            if not active_model:
+                from backend.core.multimodal_engine import MultimodalTrainer
+                temp_trainer = MultimodalTrainer(resource_path("models"))
+                latest_pt = temp_trainer.find_latest_model()
+                if latest_pt:
+                    active_model = latest_pt
                 else:
+                    latest_pkl = self.ml_engine.find_latest_model()
+                    if latest_pkl:
+                        active_model = latest_pkl
+
+            # If we have a multimodal model, run joint inference
+            if active_model and active_model.endswith(".pt"):
+                multimodal_result = self._try_multimodal(t, h, v, tracking_mf4, video_path, active_model)
+                if multimodal_result is not None:
+                    return multimodal_result
+
+            # If we have a legacy MLP model, load it and run inference
+            if active_model and active_model.endswith(".pkl"):
+                if self.ml_engine.load_model(active_model):
                     if self.on_log:
-                        self.on_log("ML Brain found no events. Falling back to heuristic v3.0...")
+                        self.on_log("AI Brain (MLP) is active. Using neural inference...")
+                    if self.on_progress:
+                        self.on_progress(0.3)
+                    ml_markers = self.ml_engine.predict_intervals(t, h, v)
+                    if ml_markers:
+                        if self.on_log:
+                            self.on_log(f"ML Brain detected {len(ml_markers) // 2} distraction intervals.")
+                        if self.on_progress:
+                            self.on_progress(1.0)
+                        return ml_markers
+                    else:
+                        if self.on_log:
+                            self.on_log("ML Brain found no events. Falling back to heuristic v3.0...")
 
             if self.on_progress:
                 self.on_progress(0.2)
@@ -90,13 +106,14 @@ class AIAnalyzer:
                 self.on_error(str(e))
             return []
 
-    def _try_multimodal(self, timestamps, h_vals, v_vals, mf4_path, video_path):
+    def _try_multimodal(self, timestamps, h_vals, v_vals, mf4_path, video_path, model_path=None):
         try:
             from backend.core.multimodal_engine import MultimodalTrainer
             from backend.core.video_feature_extractor import VideoFeatureExtractor
 
             trainer = MultimodalTrainer(resource_path("models"))
-            model_path = trainer.find_latest_model()
+            if not model_path:
+                model_path = trainer.find_latest_model()
             if model_path is None:
                 return None
 
