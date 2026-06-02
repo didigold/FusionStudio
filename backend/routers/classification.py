@@ -139,9 +139,9 @@ async def scan_directory(req: ScanRequest):
 
         for r, _, files in os.walk(base_dir):
             for file in files:
-                if not file.endswith(".mf4"):
+                if not file.lower().endswith(".mf4"):
                     continue
-                clean_file = file.replace("_tracking", "")
+                clean_file = re.sub(r'_tracking', '', file, flags=re.IGNORECASE)
                 match = pattern.match(clean_file)
                 simple_match = pattern_simple.match(clean_file)
                 if not match and not simple_match:
@@ -163,12 +163,29 @@ async def scan_directory(req: ScanRequest):
 
                 occ_code = OCCLUSION_CODES.get(occ_val) if occ_val else None
 
+                base_src_name = re.sub(r'_tracking', '', os.path.splitext(file)[0], flags=re.IGNORECASE)
+                
+                has_report = False
+                for folder in [r, os.path.join(r, "Reports"), os.path.join(r, "reports")]:
+                    if os.path.exists(folder) and os.path.isdir(folder):
+                        pngs = [f for f in os.listdir(folder) if f.lower().endswith(".png") and f.lower().startswith(base_src_name.lower())]
+                        if pngs:
+                            has_report = True
+                            break
+
+                has_video = False
+                avis = [f for f in os.listdir(r) if f.lower().endswith(".avi") and f.lower().startswith(base_src_name.lower())]
+                if avis:
+                    has_video = True
+
                 file_data = {
                     "path": os.path.join(r, file),
                     "filename": file,
                     "case_key": case_key,
                     "attempt": attempt,
                     "occ_code": occ_code,
+                    "has_report": has_report,
+                    "has_video": has_video,
                 }
                 groups.setdefault(case_key, []).append(file_data)
 
@@ -194,6 +211,8 @@ async def scan_directory(req: ScanRequest):
                     "case_key": f_data["case_key"],
                     "attempt": f_data["attempt"],
                     "occ_code": f_data.get("occ_code"),
+                    "has_report": f_data.get("has_report", False),
+                    "has_video": f_data.get("has_video", False),
                     "checked": True,
                     "status": "pending",
                 })
@@ -262,10 +281,14 @@ async def run_classification(req: RunRequest):
     _active_worker = worker
 
     def _run():
-        worker.run()
-        loop.call_soon_threadsafe(
-            lambda: manager_classify.broadcast({"type": "finished"})
-        )
+        global _active_worker
+        try:
+            worker.run()
+        finally:
+            _active_worker = None
+            asyncio.run_coroutine_threadsafe(
+                manager_classify.broadcast({"type": "finished"}), loop
+            )
 
     _worker_thread = Thread(target=_run, daemon=True)
     _worker_thread.start()
@@ -280,6 +303,33 @@ async def stop_classification():
         _active_worker.stop()
         return {"status": "stopping"}
     return {"status": "no_worker"}
+
+
+class CheckCompletedRequest(BaseModel):
+    project_root: str
+    items: list[dict]
+
+
+@router.post("/check-completed")
+async def check_completed(req: CheckCompletedRequest):
+    results = {}
+    if not req.project_root:
+        return {"results": results}
+
+    for item in req.items:
+        item_ref = item["item_ref"]
+        case_full_name = item["case_full_name"]
+
+        case_dir = os.path.join(req.project_root, case_full_name)
+        mme_file = os.path.join(case_dir, f"{case_full_name}.mme")
+
+        if os.path.exists(case_dir) and os.path.isdir(case_dir) and os.path.exists(mme_file):
+            results[item_ref] = "done"
+        else:
+            results[item_ref] = "pending"
+
+    return {"results": results}
+
 
 
 @router.websocket("/ws")

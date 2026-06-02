@@ -35,7 +35,8 @@ export function useClassifyWS() {
           }
           case 'status': setClassifyStatus(data.message); break
           case 'item_done': {
-            const groups = groupsRef.current.map((g: any) => ({
+            const latestGroups = useAppStore.getState().classifyGroups
+            const groups = latestGroups.map((g: any) => ({
               ...g,
               files: g.files.map((f: any) =>
                 f.path === data.item_ref ? { ...f, status: data.success ? 'done' : 'error', error_msg: data.error || '' } : f

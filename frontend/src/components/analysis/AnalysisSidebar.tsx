@@ -191,6 +191,7 @@ export function AnalysisSidebar({ activeTab, onTabChange }: AnalysisSidebarProps
               >
                 <Tags className="w-4 h-4" />
                 <span>Classification</span>
+                {classifyProcessing && <Spinner className="size-3 text-primary/60 ml-auto" />}
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

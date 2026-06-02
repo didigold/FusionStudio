@@ -81,6 +81,8 @@ class ClassificationWorker:
             channel_idx = 1
 
             for sig in mdf.iter_channels():
+                if not self.is_running:
+                    return
                 if sig.samples.size == 0:
                     continue
 
@@ -167,16 +169,56 @@ Velocity lat test object 1  :NOVALUE
 Dimensions test object 1    :NOVALUE
 Profile-X test object 1     :-
 Profile-Y test object 1     :-
-Raw data filename           :{original_filename.replace('_tracking', '')}
+        raw_filename_clean = re.sub(r'_tracking', '', original_filename, flags=re.IGNORECASE)
+        content = f"""Data format edition number  :1.6
+Laboratory name             :IDIADA
+Laboratory contact name     :ADAS
+Laboratory contact phone    :+34 977 166 00
+Laboratory contact fax      :+34 977 166 007
+Laboratory contact email    :david.graells@idiada.com
+Laboratory test ref. number :{meta['year']}-{meta['oem']}-{meta['ref']}
+Customer name               :Euro NCAP
+Customer test ref. number   :{meta['case_name']}
+Customer project ref. number:{meta['year']}-{meta['oem']}-{meta['ref']}-{meta['protocol']}
+Customer order number       :-
+Customer cost unit          :EUR
+Customer test engineer name :Aled Williams
+Customer test engineer phone:-
+Customer test engineer fax  :-
+Customer test engineer email:aled_williams@euroencap.com
+Title                       :In-Cabin Monitoring 20{meta['year']}
+Medium No./number of media  :1/1
+Timestamp                   :{timestamp}
+Type of the test            :IN-CABIN
+Subtype of the test         :DSM
+Regulation                  :Euro NCAP
+Reference temperature       :25ºC
+Relative air humidity       :75%
+Date of the test            :{date_str}
+Number of test objects      :1
+Name of test object 1       :{meta['oem']} Vehicle
+Velocity test object 1      :0
+Mass test object 1          :0 kg
+Driver position object 1    :NOVALUE
+Impact side test object 1   :NOVALUE
+Type of test object 1       :M1 Vehicle
+Class of test object 1      :EV
+Code of test object 1       :{meta['oem']}_{meta['ref']}
+Ref. number of test object 1:{meta['ref']}
+Velocity lat test object 1  :NOVALUE
+Dimensions test object 1    :NOVALUE
+Profile-X test object 1     :-
+Profile-Y test object 1     :-
+Raw data filename           :{raw_filename_clean}
 """
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
     def copy_media_files(self, src_file, case_full_name, dir_movie, dir_report):
         src_dir = os.path.dirname(src_file)
-        base_src_name = os.path.splitext(os.path.basename(src_file))[0].replace("_tracking", "")
+        base_src_name = re.sub(r'_tracking', '', os.path.splitext(os.path.basename(src_file))[0], flags=re.IGNORECASE)
 
-        avis = [f for f in os.listdir(src_dir) if f.lower().endswith(".avi") and f.startswith(base_src_name)]
+        avis = [f for f in os.listdir(src_dir) if f.lower().endswith(".avi") and f.lower().startswith(base_src_name.lower())]
         avis.sort()
 
         for i, avi in enumerate(avis):
@@ -197,12 +239,17 @@ Raw data filename           :{original_filename.replace('_tracking', '')}
             except Exception:
                 pass
 
-        pngs = [f for f in os.listdir(src_dir) if f.lower().endswith(".png") and f.startswith(base_src_name)]
-        pngs.sort()
-        for i, png in enumerate(pngs):
-            src_png = os.path.join(src_dir, png)
+        matching_pngs = []
+        for folder in [src_dir, os.path.join(src_dir, "Reports"), os.path.join(src_dir, "reports")]:
+            if os.path.exists(folder) and os.path.isdir(folder):
+                for f in os.listdir(folder):
+                    if f.lower().endswith(".png") and f.lower().startswith(base_src_name.lower()):
+                        matching_pngs.append((os.path.join(folder, f), f))
+
+        matching_pngs.sort(key=lambda x: x[1])
+        for i, (src_png, png_filename) in enumerate(matching_pngs):
             suffix = ""
-            if len(pngs) > 1:
+            if len(matching_pngs) > 1:
                 suffix = f"_{i + 1}"
 
             dest_png = os.path.join(dir_report, f"{case_full_name}{suffix}.png")
