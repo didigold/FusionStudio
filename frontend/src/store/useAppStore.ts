@@ -18,6 +18,16 @@ export interface PassConfig {
   mask: number
 }
 
+export interface UnresponsivePhase {
+  phaseName: string
+  signal: string
+  operator?: string
+  value?: number | string
+  frequency?: number
+  threshold?: number
+  warningTime?: number
+}
+
 export interface GaugeConfig {
   min: number
   max: number
@@ -47,7 +57,10 @@ const DEFAULT_SIGNAL_LISTS: Record<string, SignalConfig[]> = {
   "Drowsiness": [
     { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
   ],
-  "Unresponsive driver": [
+  "Unresponsive driver (SLE)": [
+    { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+  ],
+  "Unresponsive driver (DTR)": [
     { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
   ],
   "High Speed": [
@@ -59,14 +72,15 @@ const DEFAULT_SIGNAL_LISTS: Record<string, SignalConfig[]> = {
 }
 
 const DEFAULT_PASS_CRITERIA: Record<string, PassConfig> = {
-  "Long Distraction (NDT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Long Distraction (DT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Short Distraction (NDT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Short Distraction (DT)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Microsleep": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Sleep": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Drowsiness": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
-  "Unresponsive driver": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Long Distraction (NDT)": { signal: 'SoundPressure', operator1: '>', value1: 3.0, operator2: '<', value2: 4.0, mask: 6.0 },
+  "Long Distraction (DT)": { signal: 'SoundPressure', operator1: '>', value1: 3.0, operator2: '<', value2: 4.0, mask: 6.0 },
+  "Short Distraction (NDT)": { signal: 'SoundPressure', operator1: '>', value1: 0.0, operator2: '<', value2: 12.0, mask: 6.0 },
+  "Short Distraction (DT)": { signal: 'SoundPressure', operator1: '>', value1: 0.0, operator2: '<', value2: 12.0, mask: 6.0 },
+  "Microsleep": { signal: 'SoundPressure', operator1: '>', value1: 1.0, operator2: '<', value2: 2.0, mask: 6.0 },
+  "Sleep": { signal: 'SoundPressure', operator1: '>', value1: 2.8, operator2: '<', value2: 3.2, mask: 6.0 },
+  "Drowsiness": { signal: 'SoundPressure', operator1: '>', value1: 0.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Unresponsive driver (SLE)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
+  "Unresponsive driver (DTR)": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
   "High Speed": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 },
   "Low Speed": { signal: 'SoundPressure', operator1: '<', value1: 3.0, operator2: 'None', value2: 0.0, mask: 6.0 }
 }
@@ -79,9 +93,23 @@ const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
   "Microsleep": { min: 0, max: 10 },
   "Sleep": { min: 0, max: 10 },
   "Drowsiness": { min: 0, max: 10 },
-  "Unresponsive driver": { min: 0, max: 10 },
+  "Unresponsive driver (SLE)": { min: 0, max: 10 },
+  "Unresponsive driver (DTR)": { min: 0, max: 10 },
   "High Speed": { min: 0, max: 10 },
   "Low Speed": { min: 0, max: 10 }
+}
+
+const DEFAULT_UNRESPONSIVE_CRITERIA: Record<string, UnresponsivePhase[]> = {
+  "Unresponsive driver (DTR)": [
+    { phaseName: "Distraction Warning", signal: "SoundPressure", frequency: 1000, threshold: 0.5 },
+    { phaseName: "Escalated Distraction Warning", signal: "SoundPressure", frequency: 1500, threshold: 0.5 },
+    { phaseName: "Emergency Function", signal: "SoundPressure", frequency: 2000, threshold: 0.5 }
+  ],
+  "Unresponsive driver (SLE)": [
+    { phaseName: "Sleep Warning", signal: "SoundPressure", frequency: 1000, threshold: 0.5, warningTime: 3.0 },
+    { phaseName: "Escalation Warning", signal: "SoundPressure", frequency: 1500, threshold: 0.5 },
+    { phaseName: "Emergency Function", signal: "SoundPressure", frequency: 2000, threshold: 0.5 }
+  ]
 }
 
 type Module = 'fuse' | 'analysis' | 'classification' | 'reporting' | 'om' | 'brain'
@@ -312,6 +340,8 @@ interface AppState {
   setSignalsConfig: (c: Record<string, SignalConfig[]>) => void
   passCriteria: Record<string, PassConfig>
   setPassCriteria: (pc: Record<string, PassConfig>) => void
+  unresponsiveCriteria: Record<string, UnresponsivePhase[]>
+  setUnresponsiveCriteria: (uc: Record<string, UnresponsivePhase[]>) => void
   gaugeRules: Record<string, GaugeConfig>
   setGaugeRules: (gr: Record<string, GaugeConfig>) => void
   loadedFiles: Record<string, string>
@@ -649,6 +679,8 @@ export const useAppStore = create<AppState>((set) => ({
   setSignalsConfig: (c) => set({ signalsConfig: c }),
   passCriteria: DEFAULT_PASS_CRITERIA,
   setPassCriteria: (pc) => set({ passCriteria: pc }),
+  unresponsiveCriteria: DEFAULT_UNRESPONSIVE_CRITERIA,
+  setUnresponsiveCriteria: (uc) => set({ unresponsiveCriteria: uc }),
   gaugeRules: DEFAULT_GAUGE_RULES,
   setGaugeRules: (gr) => set({ gaugeRules: gr }),
   loadedFiles: {},
@@ -684,7 +716,8 @@ export const useAppStore = create<AppState>((set) => ({
           "Microsleep",
           "Sleep",
           "Drowsiness",
-          "Unresponsive driver"
+          "Unresponsive driver (SLE)",
+          "Unresponsive driver (DTR)"
         ]
       : [
           "High Speed",
@@ -759,7 +792,8 @@ export const useAppStore = create<AppState>((set) => ({
         if (num === 1) return 'Microsleep'
         if (num === 2) return 'Sleep'
         if (num === 3) return 'Drowsiness'
-        if (num === 4 || num === 5) return 'Unresponsive driver'
+        if (num === 4) return 'Unresponsive driver (SLE)'
+        if (num === 5) return 'Unresponsive driver (DTR)'
       }
       
       return null
@@ -968,6 +1002,16 @@ export const useAppStore = create<AppState>((set) => ({
       }
       const mergedPassCriteria = { ...DEFAULT_PASS_CRITERIA, ...validatedPassCriteria }
 
+      const validatedUnresponsiveCriteria: Record<string, UnresponsivePhase[]> = {}
+      if (parsed.unresponsive_criteria && typeof parsed.unresponsive_criteria === 'object' && !Array.isArray(parsed.unresponsive_criteria)) {
+        for (const [catName, uc] of Object.entries(parsed.unresponsive_criteria)) {
+          if (Array.isArray(uc)) {
+            validatedUnresponsiveCriteria[catName] = uc as UnresponsivePhase[]
+          }
+        }
+      }
+      const mergedUnresponsiveCriteria = { ...DEFAULT_UNRESPONSIVE_CRITERIA, ...validatedUnresponsiveCriteria }
+
       const validatedGaugeRules: Record<string, GaugeConfig> = {}
       if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
         for (const [catName, gr] of Object.entries(parsed.gauge_rules)) {
@@ -1027,6 +1071,7 @@ export const useAppStore = create<AppState>((set) => ({
               set({
                 protocol: validatedProtocol,
                 passCriteria: mergedPassCriteria,
+                unresponsiveCriteria: mergedUnresponsiveCriteria,
                 gaugeRules: mergedGaugeRules,
                 pendingConfig: parsed,
                 pendingConfigName: fileName,
@@ -1042,6 +1087,7 @@ export const useAppStore = create<AppState>((set) => ({
             set({
               protocol: validatedProtocol,
               passCriteria: mergedPassCriteria,
+              unresponsiveCriteria: mergedUnresponsiveCriteria,
               gaugeRules: mergedGaugeRules,
               pendingConfig: parsed,
               pendingConfigName: fileName,
@@ -1058,6 +1104,7 @@ export const useAppStore = create<AppState>((set) => ({
           set({
             protocol: validatedProtocol,
             passCriteria: mergedPassCriteria,
+            unresponsiveCriteria: mergedUnresponsiveCriteria,
             gaugeRules: mergedGaugeRules,
             pendingConfig: parsed,
             pendingConfigName: fileName,
@@ -1073,6 +1120,7 @@ export const useAppStore = create<AppState>((set) => ({
       set({
         protocol: validatedProtocol,
         passCriteria: mergedPassCriteria,
+        unresponsiveCriteria: mergedUnresponsiveCriteria,
         gaugeRules: mergedGaugeRules,
         gaugeRulesPath: validatedGaugeRulesPath,
         importedConfigName: fileName,
@@ -1188,6 +1236,7 @@ export const useAppStore = create<AppState>((set) => ({
           set({
             protocol: parsed.protocol || 'Euro NCAP',
             passCriteria: { ...DEFAULT_PASS_CRITERIA, ...(parsed.pass_criteria || {}) },
+            unresponsiveCriteria: { ...DEFAULT_UNRESPONSIVE_CRITERIA, ...(parsed.unresponsive_criteria || {}) },
             gaugeRules: { ...DEFAULT_GAUGE_RULES, ...(parsed.gauge_rules || {}) },
             gaugeRulesPath: validatedGaugeRulesPath,
             importedConfigName: state.pendingConfigName || 'Imported Config',
@@ -1260,6 +1309,7 @@ export const useAppStore = create<AppState>((set) => ({
       analysis_source_path: state.analysisSourcePath,
       categories: state.signalsConfig,
       pass_criteria: state.passCriteria,
+      unresponsive_criteria: state.unresponsiveCriteria,
       gauge_rules: state.gaugeRules,
       gauge_rules_path: state.gaugeRulesPath,
       report: {
@@ -1318,6 +1368,7 @@ export const useAppStore = create<AppState>((set) => ({
     set({
       signalsConfig: DEFAULT_SIGNAL_LISTS,
       passCriteria: DEFAULT_PASS_CRITERIA,
+      unresponsiveCriteria: DEFAULT_UNRESPONSIVE_CRITERIA,
       gaugeRules: DEFAULT_GAUGE_RULES,
       gaugeRulesPath: null,
       protocol: 'Euro NCAP',

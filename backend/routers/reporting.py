@@ -275,8 +275,10 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                     target_category = "Sleep"
                 elif num == 3:
                     target_category = "Drowsiness"
-                elif num in [4, 5]:
-                    target_category = "Unresponsive driver"
+                elif num == 4:
+                    target_category = "Unresponsive driver (SLE)"
+                elif num == 5:
+                    target_category = "Unresponsive driver (DTR)"
 
     if not target_category:
         target_category = "Long Distraction (NDT)"
@@ -303,9 +305,22 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
         except:
             pass
 
+    target_signals_conf = dict(signals_conf)
+    unresponsive_phases = cat_conf.get('unresponsive_phases', [])
+    for phase in unresponsive_phases:
+        sig_name = phase.get('signal')
+        if sig_name and sig_name not in target_signals_conf:
+            is_audio = sig_name.lower().find("sound") >= 0 or sig_name.lower().find("audio") >= 0 or sig_name.lower().find("buzzer") >= 0
+            target_signals_conf[sig_name] = {
+                'checked': True,
+                'operator': phase.get('operator', '==') if not is_audio else '>=',
+                'threshold': phase.get('threshold') if is_audio else phase.get('value', 0.0),
+                'alias': sig_name
+            }
+
     signals = {}
     with MDF(file_path) as mdf:
-        for sig_name, sig_info in signals_conf.items():
+        for sig_name, sig_info in target_signals_conf.items():
             if not sig_info.get('checked', True):
                 continue
             mdf_sig = None
@@ -316,6 +331,20 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                     if ch.name.lower() == sig_name.lower():
                         mdf_sig = ch
                         break
+                if mdf_sig is None:
+                    norm_sig = re.sub(r'_[cde]3v_', '_', sig_name.lower())
+                    for ch in mdf.iter_channels():
+                        norm_ch = re.sub(r'_[cde]3v_', '_', ch.name.lower())
+                        if norm_ch == norm_sig:
+                            mdf_sig = ch
+                            logger.info(f"Fuzzy matched config signal '{sig_name}' to MDF channel '{ch.name}'")
+                            break
+                if mdf_sig is None:
+                    for ch in mdf.iter_channels():
+                        if sig_name.lower() in ch.name.lower() or ch.name.lower() in sig_name.lower():
+                            mdf_sig = ch
+                            logger.info(f"Substring fuzzy matched config signal '{sig_name}' to MDF channel '{ch.name}'")
+                            break
             if mdf_sig is None:
                 continue
 
@@ -355,6 +384,13 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                 'alias': sig_info.get('alias') or sig_name
             }
 
+    tgaze = mask_start
+    if driver_marks and len(driver_marks) > 0:
+        try:
+            tgaze = float(driver_marks[0])
+        except:
+            pass
+
     signal_times = {}
     for sig_name, sig_info in signals.items():
         timestamps = sig_info['timestamps']
@@ -362,6 +398,10 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
         operator = sig_info['operator']
         threshold = sig_info['threshold']
         first_match_time = None
+
+        eval_start = mask_start
+        if "Unresponsive" in target_category:
+            eval_start = tgaze
 
         if sig_name == "SoundPressure":
             try:
@@ -376,7 +416,6 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                         fs = len(samples) / dur if dur > 0 else 44100
                         nyq = 0.5 * fs
                         
-                        # Apply safety limits to normalized frequencies to avoid butterworth filter errors
                         low = max(1e-6, float(min_f) / nyq)
                         high = min(1.0 - 1e-6, float(max_f) / nyq)
                         if low >= high:
@@ -397,7 +436,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                         np.array(timestamps),
                         float(audio_thresh) if audio_thresh is not None else 0.0,
                         op,
-                        mask_start=mask_start
+                        mask_start=eval_start
                     )
             except Exception as e:
                 logger.error(f"Error calculating SoundPressure: {e}")
@@ -405,7 +444,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             try:
                 threshold_num = float(threshold)
                 for t, val in zip(timestamps, samples):
-                    if t < mask_start:
+                    if t < eval_start:
                         continue
                     val_num = float(val)
                     match = False
@@ -421,7 +460,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             except (ValueError, TypeError):
                 threshold_str = str(threshold)
                 for t, val in zip(timestamps, samples):
-                    if t < mask_start:
+                    if t < eval_start:
                         continue
                     val_str = str(val)
                     match = False
@@ -436,12 +475,100 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                         break
         signal_times[sig_name] = first_match_time
 
-    tgaze = mask_start
-    if driver_marks and len(driver_marks) > 0:
-        try:
-            tgaze = float(driver_marks[0])
-        except:
-            pass
+    if "Unresponsive" in target_category:
+        for idx, phase in enumerate(unresponsive_phases):
+            sig_name = phase.get('signal')
+            if not sig_name or sig_name not in signals:
+                signal_times[f"phase_{idx}"] = None
+                continue
+            
+            sig_info = signals[sig_name]
+            timestamps = sig_info['timestamps']
+            samples = sig_info['samples']
+            
+            is_audio = sig_name.lower().find("sound") >= 0 or sig_name.lower().find("audio") >= 0 or sig_name.lower().find("buzzer") >= 0
+            if is_audio:
+                operator = ">="
+                threshold = phase.get('threshold') if phase.get('threshold') is not None else 0.5
+            else:
+                operator = phase.get('operator', '==')
+                threshold = phase.get('value', 0)
+                
+            first_match_time = None
+            eval_start = tgaze
+            
+            if sig_name == "SoundPressure":
+                try:
+                    audio_thresh = threshold
+                    if len(samples) > 0 and len(timestamps) > 0:
+                        samples_numeric = samples
+                        try:
+                            min_f = phase.get('min_freq') or 230
+                            max_f = phase.get('max_freq') or phase.get('frequency') or 2000
+                            samples_np = np.array(samples, dtype=float)
+                            dur = timestamps[-1] - timestamps[0]
+                            fs = len(samples) / dur if dur > 0 else 44100
+                            nyq = 0.5 * fs
+                            
+                            low = max(1e-6, float(min_f) / nyq)
+                            high = min(1.0 - 1e-6, float(max_f) / nyq)
+                            if low >= high:
+                                high = low + 0.1
+                                if high >= 1.0:
+                                    low = 0.1
+                                    high = 0.9
+                            
+                            from scipy.signal import butter, filtfilt
+                            b, a = butter(4, [low, high], btype='band')
+                            samples_numeric = list(filtfilt(b, a, samples_np))
+                        except Exception as fe:
+                            logger.error(f"Error filtering SoundPressure for phase {idx}: {fe}")
+                        
+                        op = operator if operator and operator != 'None' else '>='
+                        first_match_time = find_first_valid_event(
+                            np.array(samples_numeric),
+                            np.array(timestamps),
+                            float(audio_thresh) if audio_thresh is not None else 0.0,
+                            op,
+                            mask_start=eval_start
+                        )
+                except Exception as e:
+                    logger.error(f"Error calculating SoundPressure for phase {idx}: {e}")
+            elif threshold is not None and operator and operator != 'None':
+                try:
+                    threshold_num = float(threshold)
+                    for t, val in zip(timestamps, samples):
+                        if t < eval_start:
+                            continue
+                        val_num = float(val)
+                        match = False
+                        if operator == '>': match = val_num > threshold_num
+                        elif operator == '<': match = val_num < threshold_num
+                        elif operator == '>=': match = val_num >= threshold_num
+                        elif operator == '<=': match = val_num <= threshold_num
+                        elif operator == '==': match = abs(val_num - threshold_num) < 1e-6
+                        elif operator == '!=': match = abs(val_num - threshold_num) >= 1e-6
+                        if match:
+                            first_match_time = t
+                            break
+                except (ValueError, TypeError):
+                    threshold_str = str(threshold)
+                    for t, val in zip(timestamps, samples):
+                        if t < eval_start:
+                            continue
+                        val_str = str(val)
+                        match = False
+                        if operator == '==': match = val_str == threshold_str
+                        elif operator == '!=': match = val_str != threshold_str
+                        elif operator == '>': match = val_str > threshold_str
+                        elif operator == '<': match = val_str < threshold_str
+                        elif operator == '>=': match = val_str >= threshold_str
+                        elif operator == '<=': match = val_str <= threshold_str
+                        if match:
+                            first_match_time = t
+                            break
+                            
+            signal_times[f"phase_{idx}"] = first_match_time
 
     t_event = "No warn"
     t_event_color = "red"
@@ -544,7 +671,8 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             'threshold': float(micro.get('threshold')) if (micro and micro.get('threshold') is not None) else (float(signals_conf.get('SoundPressure', {}).get('threshold')) if ('SoundPressure' in signals_conf and signals_conf.get('SoundPressure', {}).get('threshold') is not None) else 0.0)
         },
         'gauge_rules': normalized_gauge_rules,
-        'driver_marks': driver_marks
+        'driver_marks': driver_marks,
+        'unresponsive_phases': unresponsive_phases
     }
 
 

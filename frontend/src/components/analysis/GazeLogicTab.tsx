@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, useScroll } from "framer-motion";
+import { motion, useScroll, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +85,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { UnresponsiveTimelineEditor } from "./UnresponsiveTimelineEditor";
 
 const caseIdsMap: Record<string, string> = {
   "Long Distraction (NDT)": "Case IDs: D1-D9",
@@ -95,7 +96,8 @@ const caseIdsMap: Record<string, string> = {
   Microsleep: "Case IDs: F1",
   Sleep: "Case IDs: F2",
   Drowsiness: "Case IDs: F3",
-  "Unresponsive driver": "Case IDs: F4, F5",
+  "Unresponsive driver (SLE)": "Case IDs: F4",
+  "Unresponsive driver (DTR)": "Case IDs: F5",
   "High Speed": "Case IDs: ADDW High Speed",
   "Low Speed": "Case IDs: ADDW Low Speed",
 };
@@ -132,7 +134,8 @@ const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
   Microsleep: { min: 0, max: 10 },
   Sleep: { min: 0, max: 10 },
   Drowsiness: { min: 0, max: 10 },
-  "Unresponsive driver": { min: 0, max: 10 },
+  "Unresponsive driver (SLE)": { min: 0, max: 10 },
+  "Unresponsive driver (DTR)": { min: 0, max: 10 },
   "High Speed": { min: 0, max: 10 },
   "Low Speed": { min: 0, max: 10 },
 };
@@ -158,6 +161,8 @@ export function GazeLogicTab() {
     setSignalsConfig,
     passCriteria,
     setPassCriteria,
+    unresponsiveCriteria,
+    setUnresponsiveCriteria,
     gaugeRules,
     setGaugeRules,
     loadedFiles,
@@ -192,7 +197,8 @@ export function GazeLogicTab() {
           "Microsleep",
           "Sleep",
           "Drowsiness",
-          "Unresponsive driver",
+          "Unresponsive driver (SLE)",
+          "Unresponsive driver (DTR)",
         ]
       : ["High Speed", "Low Speed"];
 
@@ -993,6 +999,7 @@ export function GazeLogicTab() {
         value1: pass.value1,
         operator2: pass.operator2,
         value2: pass.value2,
+        unresponsive_phases: unresponsiveCriteria[cat] || [],
       };
     });
     return configs;
@@ -1191,7 +1198,7 @@ export function GazeLogicTab() {
           animation: marquee-path 14s linear infinite;
           animation-play-state: paused;
         }
-        .overflow-hidden:hover .animate-marquee-path,
+        .group:hover .animate-marquee-path,
         .animate-marquee-path:hover {
           animation-play-state: running;
         }
@@ -1241,6 +1248,20 @@ export function GazeLogicTab() {
         }
         .group:has(.pill-clear-btn:hover) .pill-clear-btn {
           color: #ef4444 !important;
+        }
+        .group:has(.pill-add-btn:hover) {
+          background-color: rgba(59, 130, 246, 0.15) !important;
+          border-color: rgba(59, 130, 246, 0.4) !important;
+          color: #3b82f6 !important;
+        }
+        .group:has(.pill-add-btn:hover) svg {
+          color: #3b82f6 !important;
+        }
+        .group:has(.pill-add-btn:hover) .pill-text {
+          color: #3b82f6 !important;
+        }
+        .group:has(.pill-add-btn:hover) .pill-add-btn {
+          color: #3b82f6 !important;
         }
       `}</style>
 
@@ -1398,14 +1419,11 @@ export function GazeLogicTab() {
               <Settings className="w-3.5 h-3.5 shrink-0" />
               <div className="relative flex items-center justify-center min-w-0">
                 <span
-                  className={cn(
-                    "pill-text transition-all duration-200 truncate",
-                    importedConfigName && "has-clear",
-                  )}
+                  className="pill-text transition-all duration-200 truncate has-clear"
                 >
                   {importedConfigName || "Default"}
                 </span>
-                {importedConfigName && (
+                {importedConfigName ? (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1415,6 +1433,17 @@ export function GazeLogicTab() {
                     title="Unmount configuration and revert to default"
                   >
                     <X className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      document.getElementById("import-config-input")?.click();
+                    }}
+                    className="pill-clear-btn pill-add-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
+                    title="Import configuration"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -1432,16 +1461,13 @@ export function GazeLogicTab() {
               <Gauge className="w-3.5 h-3.5 shrink-0" />
               <div className="relative flex items-center justify-center min-w-0">
                 <span
-                  className={cn(
-                    "pill-text transition-all duration-200 truncate",
-                    gaugeRulesPath && "has-clear",
-                  )}
+                  className="pill-text transition-all duration-200 truncate has-clear"
                 >
                   {gaugeRulesPath
                     ? gaugeRulesPath.split(/[/\\]/).pop() || gaugeRulesPath
                     : "Default"}
                 </span>
-                {gaugeRulesPath && (
+                {gaugeRulesPath ? (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1452,29 +1478,39 @@ export function GazeLogicTab() {
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGaugeRulesModalOpen(true);
+                    }}
+                    className="pill-clear-btn pill-add-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
+                    title="Set gauge limits"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
             </Badge>
 
             {/* Loaded MF4 File Badge Indicator */}
             <div className="flex items-center">
-              {loadedFiles[activeCategory] ? (
-                <Badge
-                  variant="outline"
-                  className="h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center group"
-                  onClick={() => setFileSelectorOpen(true)}
-                  title={loadedFiles[activeCategory]}
-                >
-                  <Box className="w-3.5 h-3.5 shrink-0" />
-                  <div className="relative flex items-center justify-center min-w-0">
-                    <span
-                      className={cn(
-                        "pill-text truncate max-w-[140px] leading-none flex items-center justify-center h-full transition-all duration-200",
-                        "has-clear",
-                      )}
-                    >
-                      {loadedFiles[activeCategory].split(/[/\\]/).pop()}
-                    </span>
+              <Badge
+                variant="outline"
+                className="h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center group"
+                onClick={() => setFileSelectorOpen(true)}
+                title={loadedFiles[activeCategory] || "No MF4 Loaded"}
+              >
+                <Box className="w-3.5 h-3.5 shrink-0" />
+                <div className="relative flex items-center justify-center min-w-0">
+                  <span
+                    className="pill-text truncate max-w-[140px] leading-none flex items-center justify-center h-full transition-all duration-200 has-clear"
+                  >
+                    {loadedFiles[activeCategory]
+                      ? loadedFiles[activeCategory].split(/[/\\]/).pop()
+                      : "No MF4 Loaded"}
+                  </span>
+                  {loadedFiles[activeCategory] ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1485,20 +1521,20 @@ export function GazeLogicTab() {
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
-                  </div>
-                </Badge>
-              ) : (
-                <Badge
-                  variant="outline"
-                  className="h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center"
-                  onClick={() => setFileSelectorOpen(true)}
-                >
-                  <Box className="w-3.5 h-3.5 shrink-0" />
-                  <span className="leading-none flex items-center justify-center h-full">
-                    No MF4 Loaded
-                  </span>
-                </Badge>
-              )}
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFileSelectorOpen(true);
+                      }}
+                      className="pill-clear-btn pill-add-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
+                      title="Load case file"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </Badge>
             </div>
           </div>
 
@@ -1869,230 +1905,258 @@ export function GazeLogicTab() {
             </Table>
           </div>
 
-          {/* BOTTOM SECTION: PASS CRITERIA CONFIG (Pass Criteria title & text-sm fields) */}
-          <div className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold uppercase text-muted-foreground tracking-widest text-left">
-                Pass Criteria
-              </span>
-            </div>
+          {/* BOTTOM SECTION: PASS CRITERIA CONFIG OR TIMELINE */}
+          <AnimatePresence mode="wait">
+            {activeCategory.includes("Unresponsive") ? (
+              <motion.div
+                key="unresponsive-timeline"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+              >
+                <UnresponsiveTimelineEditor
+                  activeCategory={activeCategory}
+                  unresponsiveCriteria={unresponsiveCriteria}
+                  setUnresponsiveCriteria={setUnresponsiveCriteria}
+                  availableSignals={currentSignalsList.map(s => s.name)}
+                  loadedFiles={loadedFiles}
+                  signalValuesCache={signalValuesCache}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="pass-criteria-config"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 p-5 flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold uppercase text-muted-foreground tracking-widest text-left">
+                    Pass Criteria
+                  </span>
+                </div>
 
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-3 text-sm text-foreground/80 font-medium text-left">
-              <span className="text-muted-foreground whitespace-nowrap">
-                The evaluation signal
-              </span>
-              <div className="w-[180px]">
-                <Select
-                  value={currentPassCriteria.signal}
-                  onValueChange={(val) =>
-                    updatePassCriteriaField(activeCategory, "signal", val)
-                  }
-                >
-                  <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
-                    <SelectValue placeholder="Signal" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                    {(() => {
-                      const seen = new Set<string>();
-                      const items = currentSignalsList
-                        .filter(
-                          (s) =>
-                            s &&
-                            typeof s.name === "string" &&
-                            s.name.trim() !== "",
-                        )
-                        .filter((s) => {
-                          if (seen.has(s.name)) return false;
-                          seen.add(s.name);
-                          return true;
-                        })
-                        .map((s) => s.name);
-
-                      if (
-                        currentPassCriteria.signal &&
-                        !seen.has(currentPassCriteria.signal)
-                      ) {
-                        items.push(currentPassCriteria.signal);
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-3 text-sm text-foreground/80 font-medium text-left">
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    The evaluation signal
+                  </span>
+                  <div className="w-[180px]">
+                    <Select
+                      value={currentPassCriteria.signal}
+                      onValueChange={(val) =>
+                        updatePassCriteriaField(activeCategory, "signal", val)
                       }
+                    >
+                      <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
+                        <SelectValue placeholder="Signal" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                        {(() => {
+                          const seen = new Set<string>();
+                          const items = currentSignalsList
+                            .filter(
+                              (s) =>
+                                s &&
+                                typeof s.name === "string" &&
+                                s.name.trim() !== "",
+                            )
+                            .filter((s) => {
+                              if (seen.has(s.name)) return false;
+                              seen.add(s.name);
+                              return true;
+                            })
+                            .map((s) => s.name);
 
-                      return items.map((name) => (
-                        <SelectItem key={name} value={name} className="text-sm">
-                          {name}
+                          if (
+                            currentPassCriteria.signal &&
+                            !seen.has(currentPassCriteria.signal)
+                          ) {
+                            items.push(currentPassCriteria.signal);
+                          }
+
+                          return items.map((name) => (
+                            <SelectItem key={name} value={name} className="text-sm">
+                              {name}
+                            </SelectItem>
+                          ));
+                        })()}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    must be
+                  </span>
+
+                  <div className="w-[85px]">
+                    <Select
+                      value={
+                        ["None", ">", "<", ">=", "<=", "==", "!="].includes(
+                          currentPassCriteria.operator1,
+                        )
+                          ? currentPassCriteria.operator1
+                          : "None"
+                      }
+                      onValueChange={(val) =>
+                        updatePassCriteriaField(activeCategory, "operator1", val)
+                      }
+                    >
+                      <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
+                        <SelectValue placeholder="Op1" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                        <SelectItem value="None" className="text-sm">
+                          None
                         </SelectItem>
-                      ));
-                    })()}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <span className="text-muted-foreground whitespace-nowrap">
-                must be
-              </span>
-
-              <div className="w-[85px]">
-                <Select
-                  value={
-                    ["None", ">", "<", ">=", "<=", "==", "!="].includes(
-                      currentPassCriteria.operator1,
-                    )
-                      ? currentPassCriteria.operator1
-                      : "None"
-                  }
-                  onValueChange={(val) =>
-                    updatePassCriteriaField(activeCategory, "operator1", val)
-                  }
-                >
-                  <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
-                    <SelectValue placeholder="Op1" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                    <SelectItem value="None" className="text-sm">
-                      None
-                    </SelectItem>
-                    <SelectItem value=">" className="text-sm">
-                      &gt;
-                    </SelectItem>
-                    <SelectItem value="<" className="text-sm">
-                      &lt;
-                    </SelectItem>
-                    <SelectItem value=">=" className="text-sm">
-                      &gt;=
-                    </SelectItem>
-                    <SelectItem value="<=" className="text-sm">
-                      &lt;=
-                    </SelectItem>
-                    <SelectItem value="==" className="text-sm">
-                      ==
-                    </SelectItem>
-                    <SelectItem value="!=" className="text-sm">
-                      !=
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <span className="text-muted-foreground whitespace-nowrap">
-                than
-              </span>
-
-              <div className="w-[75px]">
-                <Input
-                  type="number"
-                  value={currentPassCriteria.value1}
-                  onChange={(e) =>
-                    updatePassCriteriaField(
-                      activeCategory,
-                      "value1",
-                      parseFloat(e.target.value) || 0.0,
-                    )
-                  }
-                  className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                  step="0.1"
-                />
-              </div>
-
-              <span className="text-muted-foreground whitespace-nowrap">
-                and
-              </span>
-
-              <div className="w-[85px]">
-                <Select
-                  value={
-                    ["None", ">", "<", ">=", "<=", "==", "!="].includes(
-                      currentPassCriteria.operator2,
-                    )
-                      ? currentPassCriteria.operator2
-                      : "None"
-                  }
-                  onValueChange={(val) =>
-                    updatePassCriteriaField(activeCategory, "operator2", val)
-                  }
-                >
-                  <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
-                    <SelectValue placeholder="Op2" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                    <SelectItem value="None" className="text-sm">
-                      None
-                    </SelectItem>
-                    <SelectItem value=">" className="text-sm">
-                      &gt;
-                    </SelectItem>
-                    <SelectItem value="<" className="text-sm">
-                      &lt;
-                    </SelectItem>
-                    <SelectItem value=">=" className="text-sm">
-                      &gt;=
-                    </SelectItem>
-                    <SelectItem value="<=" className="text-sm">
-                      &lt;=
-                    </SelectItem>
-                    <SelectItem value="==" className="text-sm">
-                      ==
-                    </SelectItem>
-                    <SelectItem value="!=" className="text-sm">
-                      !=
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <span className="text-muted-foreground whitespace-nowrap">
-                than
-              </span>
-
-              <div className="w-[75px]">
-                <Input
-                  type="number"
-                  value={currentPassCriteria.value2}
-                  onChange={(e) =>
-                    updatePassCriteriaField(
-                      activeCategory,
-                      "value2",
-                      parseFloat(e.target.value) || 0.0,
-                    )
-                  }
-                  className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                  step="0.1"
-                />
-              </div>
-
-              <div className="h-5 w-[1px] bg-border mx-1 shrink-0" />
-
-              <HoverCard openDelay={10} closeDelay={100}>
-                <HoverCardTrigger asChild>
-                  <div className="cursor-help flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0 p-1 rounded-md hover:bg-white/5" title="Evaluation Mask Start">
-                    <Drama className="w-4 h-4 text-primary" />
+                        <SelectItem value=">" className="text-sm">
+                          &gt;
+                        </SelectItem>
+                        <SelectItem value="<" className="text-sm">
+                          &lt;
+                        </SelectItem>
+                        <SelectItem value=">=" className="text-sm">
+                          &gt;=
+                        </SelectItem>
+                        <SelectItem value="<=" className="text-sm">
+                          &lt;=
+                        </SelectItem>
+                        <SelectItem value="==" className="text-sm">
+                          ==
+                        </SelectItem>
+                        <SelectItem value="!=" className="text-sm">
+                          !=
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </HoverCardTrigger>
-                <HoverCardContent className="w-64 bg-popover border border-border text-popover-foreground p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl z-50">
-                  <div className="font-semibold text-primary mb-1">
-                    Evaluation Mask Start
-                  </div>
-                  <div>
-                    Specifies the start time of the evaluation mask in seconds. Data before this timestamp is ignored in calculations.
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
 
-              <div className="w-16">
-                <Input
-                  type="number"
-                  value={currentPassCriteria.mask}
-                  onChange={(e) =>
-                    updatePassCriteriaField(
-                      activeCategory,
-                      "mask",
-                      parseFloat(e.target.value) || 0.0,
-                    )
-                  }
-                  className="h-8 bg-surface-2/50 border border-border text-center text-sm rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                  step="0.1"
-                />
-              </div>
-              <span className="text-muted-foreground text-sm whitespace-nowrap">seconds</span>
-            </div>
-          </div>
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    than
+                  </span>
+
+                  <div className="w-[75px]">
+                    <Input
+                      type="number"
+                      value={currentPassCriteria.value1}
+                      onChange={(e) =>
+                        updatePassCriteriaField(
+                          activeCategory,
+                          "value1",
+                          parseFloat(e.target.value) || 0.0,
+                        )
+                      }
+                      className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
+                      step="0.1"
+                    />
+                  </div>
+
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    and
+                  </span>
+
+                  <div className="w-[85px]">
+                    <Select
+                      value={
+                        ["None", ">", "<", ">=", "<=", "==", "!="].includes(
+                          currentPassCriteria.operator2,
+                        )
+                          ? currentPassCriteria.operator2
+                          : "None"
+                      }
+                      onValueChange={(val) =>
+                        updatePassCriteriaField(activeCategory, "operator2", val)
+                      }
+                    >
+                      <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
+                        <SelectValue placeholder="Op2" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                        <SelectItem value="None" className="text-sm">
+                          None
+                        </SelectItem>
+                        <SelectItem value=">" className="text-sm">
+                          &gt;
+                        </SelectItem>
+                        <SelectItem value="<" className="text-sm">
+                          &lt;
+                        </SelectItem>
+                        <SelectItem value=">=" className="text-sm">
+                          &gt;=
+                        </SelectItem>
+                        <SelectItem value="<=" className="text-sm">
+                          &lt;=
+                        </SelectItem>
+                        <SelectItem value="==" className="text-sm">
+                          ==
+                        </SelectItem>
+                        <SelectItem value="!=" className="text-sm">
+                          !=
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    than
+                  </span>
+
+                  <div className="w-[75px]">
+                    <Input
+                      type="number"
+                      value={currentPassCriteria.value2}
+                      onChange={(e) =>
+                        updatePassCriteriaField(
+                          activeCategory,
+                          "value2",
+                          parseFloat(e.target.value) || 0.0,
+                        )
+                      }
+                      className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
+                      step="0.1"
+                    />
+                  </div>
+
+                  <div className="h-5 w-[1px] bg-border mx-1 shrink-0" />
+
+                  <HoverCard openDelay={10} closeDelay={100}>
+                    <HoverCardTrigger asChild>
+                      <div className="cursor-help flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0 p-1 rounded-md hover:bg-white/5" title="Evaluation Mask Start">
+                        <Drama className="w-4 h-4 text-primary" />
+                      </div>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-64 bg-popover border border-border text-popover-foreground p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl z-50">
+                      <div className="font-semibold text-primary mb-1">
+                        Evaluation Mask Start
+                      </div>
+                      <div>
+                        Specifies the start time of the evaluation mask in seconds. Data before this timestamp is ignored in calculations.
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
+
+                  <div className="w-16">
+                    <Input
+                      type="number"
+                      value={currentPassCriteria.mask}
+                      onChange={(e) =>
+                        updatePassCriteriaField(
+                          activeCategory,
+                          "mask",
+                          parseFloat(e.target.value) || 0.0,
+                        )
+                      }
+                      className="h-8 bg-surface-2/50 border border-border text-center text-sm rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
+                      step="0.1"
+                    />
+                  </div>
+                  <span className="text-muted-foreground text-sm whitespace-nowrap">seconds</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -2209,9 +2273,9 @@ export function GazeLogicTab() {
                           className="overflow-hidden w-full min-w-0 mt-0.5"
                           style={{
                             WebkitMaskImage:
-                              "linear-gradient(to right, black 85%, transparent 100%)",
+                              "linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)",
                             maskImage:
-                              "linear-gradient(to right, black 85%, transparent 100%)",
+                              "linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)",
                           }}
                         >
                           <span
