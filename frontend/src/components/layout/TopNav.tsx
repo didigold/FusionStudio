@@ -354,20 +354,20 @@ export function TopNav() {
 
       {/* CLEAR PATH CONFIRM DIALOG */}
       <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
-        <AlertDialogContent className="max-w-[340px] border border-white/10 bg-surface-2/80 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
+        <AlertDialogContent className="max-w-[340px] border border-border bg-popover/80 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl text-foreground">
           <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
             <Trash2 className="w-5 h-5" />
           </div>
           <AlertDialogHeader className="items-center text-center gap-1.5">
-            <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+            <AlertDialogTitle className="text-base font-bold text-foreground uppercase tracking-wider">
               Clear Project Folder?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-white/70 max-w-[280px]">
+            <AlertDialogDescription className="text-sm text-muted-foreground max-w-[280px]">
               This action will clear the loaded project path and reset all analysis results and cameras.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row items-center justify-center gap-3 w-full mt-2">
-            <AlertDialogCancel className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
+            <AlertDialogCancel className="flex-1 bg-secondary border border-border hover:bg-secondary/80 text-secondary-foreground rounded-xl py-2 px-4 text-xs font-bold transition-all">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction

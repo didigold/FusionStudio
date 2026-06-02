@@ -185,10 +185,17 @@ export function GazeTimeTab() {
       if (h == null) return;
       const now = performance.now();
       if (now - last < 16) return;
-      const cur = videoRef.current.currentTime;
-      if (Math.abs(cur - h) > 0.015) {
-        videoRef.current.currentTime = h;
-        if (blurVideoRef.current) blurVideoRef.current.currentTime = h;
+      if (!videoRef.current.seeking) {
+        const cur = videoRef.current.currentTime;
+        if (Math.abs(cur - h) > 0.015) {
+          videoRef.current.currentTime = h;
+        }
+      }
+      if (blurVideoRef.current && !blurVideoRef.current.seeking) {
+        const blurCur = blurVideoRef.current.currentTime;
+        if (Math.abs(blurCur - h) > 0.015) {
+          blurVideoRef.current.currentTime = h;
+        }
       }
       last = now;
     };
@@ -801,24 +808,28 @@ export function GazeTimeTab() {
   // Ref to throttle expensive React state updates from onTimeUpdate
   const lastStateUpdateRef = useRef<number>(0);
 
+  const updatePlayheadCursors = useCallback((time: number) => {
+    if (hoveringChartRef.current != null) return;
+    [topChartRef.current, bottomChartRef.current].forEach(u => {
+      if (u) {
+        const left = u.valToPos(time, 'x');
+        u.setCursor({ left, top: 0 });
+      }
+    });
+  }, []);
+
   useEffect(() => {
     const timer = setInterval(() => {
-      if (currentTimeRef.current !== currentTime) {
-        setCurrentTime(currentTimeRef.current);
+      const curT = currentTimeRef.current;
+      if (curT !== currentTime) {
+        setCurrentTime(curT);
       }
       if (isPlayingRef.current) {
-        topChartRef.current?.redraw();
-        bottomChartRef.current?.redraw();
+        updatePlayheadCursors(curT);
       }
     }, 100);
     return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Stable: no dependency on currentTime to avoid interval churn
-
-  useEffect(() => {
-    topChartRef.current?.redraw();
-    bottomChartRef.current?.redraw();
-  }, [currentTime]);
+  }, [currentTime, updatePlayheadCursors]);
 
   return (
     <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden" style={{ backgroundColor: isDark ? 'transparent' : '#ffffff' }}>
@@ -918,61 +929,84 @@ export function GazeTimeTab() {
 
         <div className="flex-1 bg-black overflow-hidden relative group flex flex-col h-full min-h-0">
             <div className="flex-1 relative min-h-0">
-                 {videoUrl ? (
-                     <>
-                         {showBlur && (
-                         <video
-                             ref={blurVideoRef}
-                             src={videoUrl}
-                             muted
-                             loop
-                             playsInline
-                             className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[60px] scale-125 pointer-events-none transition-opacity duration-500"
-                         />
-                         )}
-                         <video 
-                             ref={videoRef} 
-                             src={videoUrl} 
-                             className="w-full h-full object-contain relative z-10 transition-transform duration-200"
-                             style={{ transform: `scale(${videoZoom})`, transformOrigin: 'center center' }}
-                             onTimeUpdate={() => {
-                                 if (videoRef.current) {
-                                     const t = videoRef.current.currentTime;
-                                     currentTimeRef.current = t;
-                                     // Throttle React state updates to ~10fps to reduce render thrashing
-                                     const now = performance.now();
-                                     if (now - lastStateUpdateRef.current >= 100) {
-                                         lastStateUpdateRef.current = now;
-                                         setCurrentTime(t);
-                                     }
-                                     if (blurVideoRef.current && isPlaying && Math.abs(blurVideoRef.current.currentTime - t) > 0.15) {
-                                         blurVideoRef.current.currentTime = t;
-                                     }
-                                     topChartRef.current?.redraw();
-                                     bottomChartRef.current?.redraw();
-                                 }
-                             }}
-                             onPlay={() => { setIsPlaying(true); blurVideoRef.current?.play(); }}
-                             onPause={() => { setIsPlaying(false); blurVideoRef.current?.pause(); }}
-                             onEnded={() => { setIsPlaying(false); blurVideoRef.current?.pause(); }}
-                             onLoadStart={() => { setVideoLoading(true); setVideoError(null); }}
-                             onWaiting={() => setVideoLoading(true)}
-                             onCanPlay={() => setVideoLoading(false)}
-                             onError={async () => {
-                                 setVideoLoading(false);
-                                 if (videoUrl && !videoUrl.startsWith('blob:')) {
-                                     try {
+                 {videoError ? (
+                     <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20 p-6">
+                         <div className="bg-black/90 backdrop-blur-md rounded-2xl border border-red-500/10 p-6 max-w-md shadow-2xl flex flex-col items-center text-center">
+                             <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-4 border border-red-500/20">
+                                 <Video className="w-6 h-6" />
+                             </div>
+                             <h3 className="text-lg font-bold text-white uppercase tracking-wider">
+                                 {videoError === 'Video file not found' ? 'Video File Not Found' : 'Transcoding Error'}
+                             </h3>
+                             {videoError === 'Video file not found' ? (
+                                 <p className="text-sm text-neutral-400 mt-2 leading-relaxed">
+                                     The requested AVI video file could not be located in the current project source directory. Please verify that the file exists.
+                                 </p>
+                             ) : (
+                                 <p className="text-sm text-neutral-400 mt-2 leading-relaxed">
+                                     Failed to decode the video format. FusionStudio packages FFMPEG automatically via <code>imageio-ffmpeg</code>, so no manual installation is required. This failure may be due to an unsupported codec or a backend transcoding issue.
+                                 </p>
+                             )}
+                         </div>
+                     </div>
+                 ) : videoLoading && !videoUrl ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20">
+                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Preparing Media...</span>
+                      </div>
+                  ) : videoUrl ? (
+                      <>
+                          {showBlur && (
+                          <video
+                              ref={blurVideoRef}
+                              src={videoUrl}
+                              muted
+                              loop
+                              playsInline
+                              className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[60px] scale-125 pointer-events-none transition-opacity duration-500"
+                          />
+                          )}
+                          <video 
+                              ref={videoRef} 
+                              src={videoUrl} 
+                              className="w-full h-full object-contain relative z-10 transition-transform duration-200"
+                              style={{ transform: `scale(${videoZoom})`, transformOrigin: 'center center' }}
+                              onTimeUpdate={() => {
+                                  if (videoRef.current) {
+                                      const t = videoRef.current.currentTime;
+                                      currentTimeRef.current = t;
+                                      // Throttle React state updates to ~10fps to reduce render thrashing
+                                      const now = performance.now();
+                                      if (now - lastStateUpdateRef.current >= 100) {
+                                          lastStateUpdateRef.current = now;
+                                          setCurrentTime(t);
+                                      }
+                                      if (blurVideoRef.current && isPlaying && Math.abs(blurVideoRef.current.currentTime - t) > 0.15) {
+                                          blurVideoRef.current.currentTime = t;
+                                      }
+                                  }
+                              }}
+                              onPlay={() => { setIsPlaying(true); blurVideoRef.current?.play(); }}
+                              onPause={() => { setIsPlaying(false); blurVideoRef.current?.pause(); }}
+                              onEnded={() => { setIsPlaying(false); blurVideoRef.current?.pause(); }}
+                              onLoadStart={() => { setVideoLoading(true); setVideoError(null); }}
+                              onWaiting={() => setVideoLoading(true)}
+                              onCanPlay={() => setVideoLoading(false)}
+                              onError={async () => {
+                                  setVideoLoading(false);
+                                  if (videoUrl && !videoUrl.startsWith('blob:')) {
+                                      try {
                                          const res = await fetch(videoUrl, { method: 'HEAD' });
                                          if (res.status === 404) {
                                              setVideoError('Video file not found');
                                              return;
                                          }
-                                     } catch (err) {
-                                         console.error('Error fetching video URL details:', err);
-                                     }
-                                 }
-                                 setVideoError('Failed to decode video format');
-                             }}
+                                      } catch (err) {
+                                          console.error('Error fetching video URL details:', err);
+                                      }
+                                  }
+                                  setVideoError('Failed to decode video format');
+                              }}
                          />
                          {/* Zoom Level Indicator Overlay */}
                          <div className={cn(
@@ -986,34 +1020,13 @@ export function GazeTimeTab() {
                                  {Math.round(videoZoom * 100)}%
                              </div>
                          </div>
-                        {videoLoading && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20">
-                                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Preparing Media...</span>
-                            </div>
-                        )}
-                        {videoError && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20 p-6">
-                                <div className="bg-black/90 backdrop-blur-md rounded-2xl border border-red-500/10 p-6 max-w-md shadow-2xl flex flex-col items-center text-center">
-                                    <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-4 border border-red-500/20">
-                                        <Video className="w-6 h-6" />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-white uppercase tracking-wider">
-                                        {videoError === 'Video file not found' ? 'Video File Not Found' : 'Transcoding Error'}
-                                    </h3>
-                                    {videoError === 'Video file not found' ? (
-                                        <p className="text-sm text-neutral-400 mt-2 leading-relaxed">
-                                            The requested AVI video file could not be located in the current project source directory. Please verify that the file exists.
-                                        </p>
-                                    ) : (
-                                        <p className="text-sm text-neutral-400 mt-2 leading-relaxed">
-                                            Failed to decode the video format. FusionStudio packages FFMPEG automatically via <code>imageio-ffmpeg</code>, so no manual installation is required. This failure may be due to an unsupported codec or a backend transcoding issue.
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </>
+                         {videoLoading && (
+                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20">
+                                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                                 <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Preparing Media...</span>
+                             </div>
+                         )}
+                     </>
                 ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 animate-pulse-sync select-none">
                         {/* Ambient glow circle */}
@@ -1221,6 +1234,7 @@ export function GazeTimeTab() {
                                 setCurrentTime(v); 
                                 if (videoRef.current) videoRef.current.currentTime = v; 
                                 if (blurVideoRef.current) blurVideoRef.current.currentTime = v; 
+                                updatePlayheadCursors(v);
                             }} 
                             max={targetFile ? duration : 100} 
                             step={0.001} 
@@ -1250,8 +1264,7 @@ export function GazeTimeTab() {
                                 setCurrentTime(0);
                                 if (videoRef.current) videoRef.current.currentTime = 0;
                                 if (blurVideoRef.current) blurVideoRef.current.currentTime = 0;
-                                topChartRef.current?.redraw();
-                                bottomChartRef.current?.redraw();
+                                updatePlayheadCursors(0);
                             }}
                         >
                             <ArrowLeftToLine className="w-3.5 h-3.5" />
@@ -1268,8 +1281,7 @@ export function GazeTimeTab() {
                                 setCurrentTime(t);
                                 if (videoRef.current) videoRef.current.currentTime = t;
                                 if (blurVideoRef.current) blurVideoRef.current.currentTime = t;
-                                topChartRef.current?.redraw();
-                                bottomChartRef.current?.redraw();
+                                updatePlayheadCursors(t);
                             }}
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
@@ -1310,8 +1322,7 @@ export function GazeTimeTab() {
                                 setCurrentTime(t);
                                 if (videoRef.current) videoRef.current.currentTime = t;
                                 if (blurVideoRef.current) blurVideoRef.current.currentTime = t;
-                                topChartRef.current?.redraw();
-                                bottomChartRef.current?.redraw();
+                                updatePlayheadCursors(t);
                             }}
                         >
                             <RotateCw className="w-3.5 h-3.5" />

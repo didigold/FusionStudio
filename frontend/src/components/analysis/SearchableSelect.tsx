@@ -84,7 +84,7 @@ export function SearchableSelect({
         <ChevronDown className={cn("h-4 w-4 opacity-50 shrink-0 ml-2 transition-transform", open && "rotate-180")} />
       </div>
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-white/10 bg-surface-2/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-white/10 bg-surface-2/95 backdrop-blur-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-150 origin-top">
           <div className="p-1">
             <input
               ref={searchInputRef}
@@ -98,7 +98,7 @@ export function SearchableSelect({
               className="w-full rounded-md border border-white/5 bg-surface-2/80 px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none"
             />
           </div>
-          <div className="max-h-60 overflow-y-auto p-1">
+          <div className="max-h-[450px] overflow-y-auto p-1">
             {allowCustom && search.trim() !== "" && !hasExactMatch() && (
               <div
                 onClick={() => { onChange(search.trim()); setOpen(false) }}

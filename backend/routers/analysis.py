@@ -762,7 +762,11 @@ def get_media(path: str):
         raise HTTPException(status_code=404, detail="File not found")
     
     if path.lower().endswith(".avi"):
-        mp4_path = path[:-4] + ".mp4"
+        dir_name = os.path.dirname(path)
+        base_name = os.path.basename(path)
+        cache_dir = os.path.join(dir_name, "_video_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        mp4_path = os.path.join(cache_dir, os.path.splitext(base_name)[0] + ".mp4")
         if not os.path.exists(mp4_path):
             try:
                 import subprocess
@@ -784,6 +788,7 @@ def get_media(path: str):
                 cmd = [
                     ffmpeg_exe, "-y", "-i", path,
                     "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-preset", "veryfast", "-g", "1",
                     "-c:a", "aac", "-movflags", "faststart",
                     mp4_path
                 ]

@@ -1247,7 +1247,7 @@ export function GazeLogicTab() {
       {/* MAIN CONFIGURATION CARD */}
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
         {/* MERGED CARD HEADER: Title, Scenario, Filter Bar, & Settings Dropdown */}
-        <div className="pb-4 border-b border-white/5 bg-surface-3/95 flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 lg:px-6 shrink-0">
+        <div className="pb-4 border-b border-border/50 bg-surface-2/50 flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 lg:px-6 shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-left">
             <div className="flex items-center gap-3">
               {/* Setup Actions Dropdown using GazeTimeTab style trigger button & menu */}
@@ -1372,7 +1372,7 @@ export function GazeLogicTab() {
                       <HelpCircle className="w-4 h-4" />
                     </Button>
                   </HoverCardTrigger>
-                  <HoverCardContent className="w-64 bg-[#1e1d1c] border border-white/5 text-white p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl">
+                  <HoverCardContent className="w-64 bg-popover border border-border text-popover-foreground p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl z-50">
                     <div className="font-semibold text-primary mb-1">
                       {activeCategory}
                     </div>
@@ -1389,7 +1389,7 @@ export function GazeLogicTab() {
             <Badge
               variant="outline"
               className={cn(
-                "h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center border transition-colors group text-primary border-primary/20",
+                "h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center border transition-colors group text-primary border-primary/20",
               )}
               onClick={() =>
                 document.getElementById("import-config-input")?.click()
@@ -1424,7 +1424,7 @@ export function GazeLogicTab() {
             <Badge
               variant="outline"
               className={cn(
-                "h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center border transition-colors group text-primary border-primary/20",
+                "h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center border transition-colors group text-primary border-primary/20",
               )}
               onClick={() => setGaugeRulesModalOpen(true)}
               title={gaugeRulesPath || "Default Gauge Limits"}
@@ -1461,7 +1461,7 @@ export function GazeLogicTab() {
               {loadedFiles[activeCategory] ? (
                 <Badge
                   variant="outline"
-                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center group"
+                  className="h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center group"
                   onClick={() => setFileSelectorOpen(true)}
                   title={loadedFiles[activeCategory]}
                 >
@@ -1490,7 +1490,7 @@ export function GazeLogicTab() {
               ) : (
                 <Badge
                   variant="outline"
-                  className="h-9 px-3 bg-surface-3 hover:bg-surface-3/80 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center"
+                  className="h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-primary border-primary/20 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center"
                   onClick={() => setFileSelectorOpen(true)}
                 >
                   <Box className="w-3.5 h-3.5 shrink-0" />
@@ -1509,7 +1509,7 @@ export function GazeLogicTab() {
                 placeholder="Filter signals..."
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
-                className="h-9 w-[160px] bg-surface-3 border-white/10 text-sm pl-8 pr-8 rounded-lg placeholder:text-muted-foreground/60"
+                className="h-9 w-[160px] bg-surface-2/50 border border-border hover:bg-surface-2/70 focus:bg-background text-sm pl-8 pr-8 rounded-lg placeholder:text-muted-foreground/60 transition-colors text-foreground"
               />
               <Filter className="w-4 h-4 text-muted-foreground/60 absolute left-2.5 pointer-events-none" />
               {filterQuery && (
@@ -1523,7 +1523,7 @@ export function GazeLogicTab() {
             </div>
 
             {/* Preview and Run Batch Button Group */}
-            <div className="flex flex-row h-9 bg-surface-3 border border-white/10 rounded-lg shadow-xl backdrop-blur-md overflow-hidden">
+            <div className="flex flex-row h-9 bg-surface-2/50 border border-border rounded-lg shadow-xl backdrop-blur-md overflow-hidden">
               <div
                 title={
                   !analysisSelectedFile
@@ -1537,7 +1537,7 @@ export function GazeLogicTab() {
                   size="icon"
                   disabled={!isPreviewEnabled}
                   onClick={triggerPreview}
-                  className="h-9 w-9 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none border-none bg-transparent"
+                  className="h-9 w-9 p-0 rounded-none text-muted-foreground hover:text-foreground hover:bg-surface-2/70 disabled:opacity-30 disabled:pointer-events-none border-none bg-transparent"
                 >
                   {isPreviewLoading ? (
                     <Clock className="w-5 h-5 text-primary animate-spin" />
@@ -1546,7 +1546,7 @@ export function GazeLogicTab() {
                   )}
                 </Button>
               </div>
-              <div className="h-full w-[1px] bg-white/10" />
+              <div className="h-full w-[1px] bg-border" />
               {analysisBatchRunning ? (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -1559,12 +1559,12 @@ export function GazeLogicTab() {
                       <Square className="w-4 h-4 fill-white text-white" />
                     </Button>
                   </AlertDialogTrigger>
-                  <AlertDialogContent className="sm:max-w-md bg-surface-2 border border-white/10 text-white rounded-2xl shadow-2xl p-6">
+                  <AlertDialogContent className="sm:max-w-md bg-popover border border-border text-foreground rounded-2xl shadow-2xl p-6">
                     <AlertDialogHeader className="gap-2">
                       <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
                         <AlertCircle className="w-6 h-6" />
                       </div>
-                      <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+                      <AlertDialogTitle className="text-base font-bold text-foreground uppercase tracking-wider">
                         Stop Batch Generation?
                       </AlertDialogTitle>
                       <AlertDialogDescription className="text-sm text-muted-foreground">
@@ -1573,7 +1573,7 @@ export function GazeLogicTab() {
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="flex-row items-center justify-end gap-3 mt-4">
-                      <AlertDialogCancel className="bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
+                      <AlertDialogCancel className="bg-secondary border border-border hover:bg-secondary/80 text-secondary-foreground rounded-xl py-2 px-4 text-xs font-bold transition-all">
                         Cancel
                       </AlertDialogCancel>
                       <AlertDialogAction
@@ -1591,7 +1591,7 @@ export function GazeLogicTab() {
                   size="icon"
                   disabled={!isBatchEnabled}
                   onClick={triggerBatchGeneration}
-                  className="h-9 w-9 p-0 rounded-none text-white hover:bg-white/10 hover:text-white disabled:opacity-30 border-none bg-transparent"
+                  className="h-9 w-9 p-0 rounded-none text-muted-foreground hover:text-foreground hover:bg-surface-2/70 disabled:opacity-30 border-none bg-transparent"
                   title={`Run Batch (${analysisCheckedFiles.length})`}
                 >
                   <Play className="w-5 h-5 text-primary fill-primary ml-0.5" />
@@ -1630,19 +1630,19 @@ export function GazeLogicTab() {
             <Table>
               <TableHeader>
                 <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-16 text-sm uppercase font-bold text-center h-10 sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">
+                  <TableHead className="w-16 text-sm uppercase font-bold text-center h-10 sticky top-0 z-20 bg-surface-2 border-b border-border/50">
                     {checkedCount}/5
                   </TableHead>
-                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">
+                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
                     Signal
                   </TableHead>
-                  <TableHead className="w-32 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">
+                  <TableHead className="w-32 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
                     Operator
                   </TableHead>
-                  <TableHead className="w-56 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">
+                  <TableHead className="w-56 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
                     Threshold
                   </TableHead>
-                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-3/90 backdrop-blur-xl border-b border-white/5">
+                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
                     Alias
                   </TableHead>
                 </TableRow>
@@ -1651,7 +1651,10 @@ export function GazeLogicTab() {
                 {filteredSignals.map((sig) => (
                   <TableRow
                     key={sig.name}
-                    className="border-white/5 hover:bg-white/[0.02] transition-colors"
+                    className={cn(
+                      "border-white/5 hover:bg-white/[0.02] transition-all duration-200",
+                      sig.checked ? "opacity-100" : "opacity-50"
+                    )}
                   >
                     <TableCell className="py-2.5 text-center">
                       <Checkbox
@@ -1694,10 +1697,10 @@ export function GazeLogicTab() {
                             )
                           }
                         >
-                          <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2.5">
+                          <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70">
                             <SelectValue placeholder="Op" />
                           </SelectTrigger>
-                          <SelectContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl text-sm">
+                          <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
                             <SelectItem value="None" className="text-sm">
                               None
                             </SelectItem>
@@ -1779,10 +1782,10 @@ export function GazeLogicTab() {
                                   );
                                 }}
                               >
-                                <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2.5">
+                                <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70">
                                   <SelectValue placeholder="Value" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-surface-2/90 border-white/5 text-white backdrop-blur-xl text-sm max-h-48 overflow-y-auto">
+                                <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm max-h-48 overflow-y-auto">
                                   {allVals.map((v) => (
                                     <SelectItem
                                       key={String(v)}
@@ -1827,7 +1830,7 @@ export function GazeLogicTab() {
                                   );
                                 }
                               }}
-                              className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-2.5"
+                              className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground"
                               step="0.1"
                             />
                           );
@@ -1845,7 +1848,7 @@ export function GazeLogicTab() {
                             e.target.value,
                           )
                         }
-                        className="h-8 bg-surface-3 border-white/5 text-sm rounded-lg px-2.5"
+                        className="h-8 bg-surface-2/50 border border-border text-sm rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground"
                       />
                     </TableCell>
                   </TableRow>
@@ -1867,7 +1870,7 @@ export function GazeLogicTab() {
           </div>
 
           {/* BOTTOM SECTION: PASS CRITERIA CONFIG (Pass Criteria title & text-sm fields) */}
-          <div className="bg-surface-3/60 backdrop-blur-md border-t border-white/5 p-5 flex flex-col gap-4">
+          <div className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold uppercase text-muted-foreground tracking-widest text-left">
                 Pass Criteria
@@ -1885,10 +1888,10 @@ export function GazeLogicTab() {
                     updatePassCriteriaField(activeCategory, "signal", val)
                   }
                 >
-                  <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2">
+                  <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
                     <SelectValue placeholder="Signal" />
                   </SelectTrigger>
-                  <SelectContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl text-sm">
+                  <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
                     {(() => {
                       const seen = new Set<string>();
                       const items = currentSignalsList
@@ -1939,10 +1942,10 @@ export function GazeLogicTab() {
                     updatePassCriteriaField(activeCategory, "operator1", val)
                   }
                 >
-                  <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2">
+                  <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
                     <SelectValue placeholder="Op1" />
                   </SelectTrigger>
-                  <SelectContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl text-sm">
+                  <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
                     <SelectItem value="None" className="text-sm">
                       None
                     </SelectItem>
@@ -1983,7 +1986,7 @@ export function GazeLogicTab() {
                       parseFloat(e.target.value) || 0.0,
                     )
                   }
-                  className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-2"
+                  className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
                   step="0.1"
                 />
               </div>
@@ -2005,10 +2008,10 @@ export function GazeLogicTab() {
                     updatePassCriteriaField(activeCategory, "operator2", val)
                   }
                 >
-                  <SelectTrigger className="h-8 bg-surface-3 border-white/5 text-sm text-foreground rounded-lg px-2">
+                  <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
                     <SelectValue placeholder="Op2" />
                   </SelectTrigger>
-                  <SelectContent className="bg-surface-2/40 border-white/5 text-white backdrop-blur-xl text-sm">
+                  <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
                     <SelectItem value="None" className="text-sm">
                       None
                     </SelectItem>
@@ -2049,12 +2052,12 @@ export function GazeLogicTab() {
                       parseFloat(e.target.value) || 0.0,
                     )
                   }
-                  className="h-8 bg-surface-3 border-white/5 text-sm text-center rounded-lg px-2"
+                  className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
                   step="0.1"
                 />
               </div>
 
-              <div className="h-5 w-[1px] bg-border dark:bg-white/10 mx-1 shrink-0" />
+              <div className="h-5 w-[1px] bg-border mx-1 shrink-0" />
 
               <HoverCard openDelay={10} closeDelay={100}>
                 <HoverCardTrigger asChild>
@@ -2062,7 +2065,7 @@ export function GazeLogicTab() {
                     <Drama className="w-4 h-4 text-primary" />
                   </div>
                 </HoverCardTrigger>
-                <HoverCardContent className="w-64 bg-[#1e1d1c] border border-white/5 text-white p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl z-50">
+                <HoverCardContent className="w-64 bg-popover border border-border text-popover-foreground p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl z-50">
                   <div className="font-semibold text-primary mb-1">
                     Evaluation Mask Start
                   </div>
@@ -2083,7 +2086,7 @@ export function GazeLogicTab() {
                       parseFloat(e.target.value) || 0.0,
                     )
                   }
-                  className="h-8 bg-surface-3 border-white/5 text-center text-sm rounded-lg px-2"
+                  className="h-8 bg-surface-2/50 border border-border text-center text-sm rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
                   step="0.1"
                 />
               </div>
@@ -2702,17 +2705,17 @@ export function GazeLogicTab() {
           if (!open) setResetConfirmType(null);
         }}
       >
-        <AlertDialogContent className="max-w-[400px] border border-white/10 bg-surface-2/95 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
+        <AlertDialogContent className="max-w-[400px] border border-border bg-popover/95 backdrop-blur-xl p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
           <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-2">
             <AlertCircle className="w-6 h-6" />
           </div>
           <AlertDialogHeader className="items-center text-center gap-1.5">
-            <AlertDialogTitle className="text-base font-bold text-white uppercase tracking-wider">
+            <AlertDialogTitle className="text-base font-bold text-foreground uppercase tracking-wider">
               {resetConfirmType === "config" && "Reset Configuration?"}
               {resetConfirmType === "gauge" && "Reset Gauge Limits?"}
               {resetConfirmType === "case" && "Unload Case File?"}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-white/70 max-w-[340px] leading-relaxed">
+            <AlertDialogDescription className="text-sm text-muted-foreground max-w-[340px] leading-relaxed">
               {resetConfirmType === "config" &&
                 "This will unmount the active configuration file. It affects multiple parts of the application, resetting all signals selection, pass criteria formulas, and custom gauge limits back to default system templates."}
               {resetConfirmType === "gauge" &&
@@ -2722,7 +2725,7 @@ export function GazeLogicTab() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row items-center justify-center gap-3 w-full mt-2">
-            <AlertDialogCancel className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all">
+            <AlertDialogCancel className="flex-1 bg-secondary border border-border hover:bg-secondary/80 text-secondary-foreground rounded-xl py-2 px-4 text-xs font-bold transition-all">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
