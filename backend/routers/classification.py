@@ -258,13 +258,14 @@ async def run_classification(req: RunRequest):
             manager_classify.broadcast({"type": "status", "message": msg}), loop
         )
 
-    def on_item(item_ref_str, success, error_msg):
+    def on_item(item_ref_str, success, error_msg, case_full_name=""):
         asyncio.run_coroutine_threadsafe(
             manager_classify.broadcast({
                 "type": "item_done",
                 "item_ref": item_ref_str,
                 "success": success,
                 "error": error_msg,
+                "case_full_name": case_full_name,
             }), loop
         )
 

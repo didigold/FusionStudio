@@ -62,7 +62,7 @@ import { useTheme } from '@/hooks/useTheme';
 const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: string }) => {
   const strokeColor = colorClass.includes('#00AAFF') ? 'rgba(0, 170, 255, 0.3)' : 'rgba(0, 255, 136, 0.3)';
   return (
-    <div className="flex-1 min-h-[90px] bg-white dark:bg-surface-1/10 rounded-xl border border-border dark:border-white/5 relative overflow-hidden flex flex-col justify-between p-4 select-none">
+    <div className="flex-1 min-h-[90px] bg-white dark:bg-surface-1 rounded-xl border border-border dark:border-white/5 relative overflow-hidden flex flex-col justify-between p-4 select-none">
       <div className="absolute top-2 left-2 z-10">
         <div className="h-5 px-2 bg-black/40 backdrop-blur-md rounded-md border border-white/5 flex items-center justify-center">
           <span className={cn("text-[9px] font-bold uppercase tracking-wider", colorClass)}>{title}</span>
@@ -832,7 +832,7 @@ export function GazeTimeTab() {
   }, [currentTime, updatePlayheadCursors]);
 
   return (
-    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden" style={{ backgroundColor: isDark ? 'transparent' : '#ffffff' }}>
+    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden" style={{ backgroundColor: isDark ? 'var(--background)' : '#ffffff' }}>
       <style>{`
         .uplot .u-over { cursor: crosshair !important; }
         .uplot .u-select { background: rgba(0, 170, 255, 0.2) !important; }
@@ -872,13 +872,13 @@ export function GazeTimeTab() {
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
         <div 
           className="flex-[2] flex flex-col gap-2 p-4 overflow-hidden h-full min-h-0 justify-center border-r border-border"
-          style={{ backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : '#ffffff' }}
+          style={{ backgroundColor: isDark ? 'var(--surface-ink)' : '#ffffff' }}
         >
           {targetFile ? (
             <>
               <div 
                 className="flex-1 min-h-[90px] rounded-xl border border-border relative overflow-hidden group"
-                style={{ backgroundColor: isDark ? 'rgba(22, 21, 20, 0.3)' : '#ffffff' }}
+                style={{ backgroundColor: isDark ? 'var(--surface-1)' : '#ffffff' }}
                 onMouseEnter={() => setHoveringChart('top')}
                 onMouseLeave={() => { setHoveringChart(null); if (topTooltipRef.current) topTooltipRef.current.style.display = 'none'; }}
               >
@@ -899,7 +899,7 @@ export function GazeTimeTab() {
               </div>
               <div 
                 className="flex-1 min-h-[90px] rounded-xl border border-border relative overflow-hidden group"
-                style={{ backgroundColor: isDark ? 'rgba(22, 21, 20, 0.3)' : '#ffffff' }}
+                style={{ backgroundColor: isDark ? 'var(--surface-1)' : '#ffffff' }}
                 onMouseEnter={() => setHoveringChart('bottom')}
                 onMouseLeave={() => { setHoveringChart(null); if (bottomTooltipRef.current) bottomTooltipRef.current.style.display = 'none'; }}
               >
@@ -951,8 +951,8 @@ export function GazeTimeTab() {
                      </div>
                  ) : videoLoading && !videoUrl ? (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20">
-                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Preparing Media...</span>
+                          <Loader2 className="w-8 h-8 text-white animate-spin" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-white">Preparing Media...</span>
                       </div>
                   ) : videoUrl ? (
                       <>
@@ -1022,8 +1022,8 @@ export function GazeTimeTab() {
                          </div>
                          {videoLoading && (
                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 z-20">
-                                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                                 <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Preparing Media...</span>
+                                 <Loader2 className="w-8 h-8 text-white animate-spin" />
+                                 <span className="text-[10px] font-bold uppercase tracking-widest text-white">Preparing Media...</span>
                              </div>
                          )}
                      </>
@@ -1222,9 +1222,9 @@ export function GazeTimeTab() {
                     </div>
                 </div>
             </div>
-            <div className="h-24 bg-surface-2 border-t border-border p-3 shrink-0 flex flex-col justify-between">
+            <div className="h-24 border-t border-border p-3 shrink-0 flex flex-col justify-between" style={{ backgroundColor: isDark ? 'var(--surface-ink)' : '#ffffff' }}>
                 <div className="flex items-center gap-3 w-full">
-                    <span className="text-xs font-bold text-black dark:text-muted-foreground/60 font-mono">{currentTime.toFixed(2)}s</span>
+                    <span className="text-xs font-bold text-muted-foreground dark:text-white font-mono">{currentTime.toFixed(2)}s</span>
                     <div className="flex-1 relative py-2 flex items-center">
                         <Slider 
                             value={[currentTime]} 
@@ -1247,7 +1247,7 @@ export function GazeTimeTab() {
                             )}
                         />
                     </div>
-                    <span className={cn("font-bold text-black dark:text-muted-foreground/60", targetFile ? "text-xs font-mono" : "text-xl font-sans relative -top-[1.5px]")}>
+                    <span className={cn("font-bold text-muted-foreground dark:text-white", targetFile ? "text-xs font-mono" : "text-xl font-sans relative -top-[1.5px]")}>
                         {targetFile ? `${duration.toFixed(2)}s` : "∞"}
                     </span>
                 </div>

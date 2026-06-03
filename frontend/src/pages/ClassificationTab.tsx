@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
-import { useClassifyWS } from '../hooks/useClassifyWS'
 import { 
   Tags, FolderSearch, Settings, PlayCircle, Square,
   CheckCircle2, AlertCircle, FileText, Calendar, Building, Hash, Activity, Hourglass,
@@ -10,6 +9,17 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from 'framer-motion'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function ClassificationTab() {
   const {
@@ -27,8 +37,6 @@ export default function ClassificationTab() {
     setClassifyStatus,
     addLog
   } = useAppStore()
-
-  useClassifyWS()
 
   const [previewNames, setPreviewNames] = useState<Record<string, string>>({})
   const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({})
@@ -57,9 +65,16 @@ export default function ClassificationTab() {
     }
   }, [analysisSourcePath, classifyGroups.length, classifyProcessing])
 
+  // Stable dependency key for checking if file paths or nc_codes have changed
+  const filesKey = useMemo(() => {
+    return classifyGroups.map((g: any) => 
+      `${g.nc_code || ''}:${(g.files || []).map((f: any) => `${f.path}:${f.attempt}`).join(',')}`
+    ).join(';');
+  }, [classifyGroups])
+
   // Check completed cases on output path or metadata changes
   useEffect(() => {
-    if (classifyGroups.length === 0 || !classifyOutputPath.trim()) return
+    if (classifyGroups.length === 0 || !classifyOutputPath.trim() || classifyProcessing) return
 
     const year = classifyYear || 'YY'
     const oem = classifyOem || 'OEM'
@@ -70,13 +85,13 @@ export default function ClassificationTab() {
     const items: any[] = []
     classifyGroups.forEach((g: any) => {
       g.files?.forEach((f: any) => {
-        const proposedName = previewNames[f.path]
-        if (proposedName) {
-          items.push({
-            item_ref: f.path,
-            case_full_name: proposedName
-          })
-        }
+        const refCode = classifyRef || '0000'
+        const nc_code = g.nc_code || `UNDEF_${f.case_key}`
+        const proposedName = `${refCode}-${nc_code}_${String(f.attempt).padStart(2, '0')}`
+        items.push({
+          item_ref: f.path,
+          case_full_name: proposedName
+        })
       })
     })
 
@@ -92,17 +107,27 @@ export default function ClassificationTab() {
         const data = await res.json()
         
         const latestGroups = useAppStore.getState().classifyGroups
-        const updated = latestGroups.map((g: any) => ({
-          ...g,
-          files: g.files?.map((f: any) => {
+        let hasChanges = false
+        const updated = latestGroups.map((g: any) => {
+          let groupChanged = false
+          const updatedFiles = g.files?.map((f: any) => {
             const status = data.results?.[f.path]
-            if (status && f.status !== 'running') {
+            if (status && f.status !== 'running' && f.status !== status) {
+              groupChanged = true
+              hasChanges = true
               return { ...f, status }
             }
             return f
           }) || []
-        }))
-        setClassifyGroups(updated)
+          if (groupChanged) {
+            return { ...g, files: updatedFiles }
+          }
+          return g
+        })
+        
+        if (hasChanges) {
+          setClassifyGroups(updated)
+        }
       } catch (err) {
         console.error("Error checking completed:", err)
       }
@@ -110,7 +135,7 @@ export default function ClassificationTab() {
 
     const timer = setTimeout(check, 300)
     return () => clearTimeout(timer)
-  }, [classifyGroups.length, classifyOutputPath, classifyYear, classifyOem, classifyRef, classifyProtocol, previewNames])
+  }, [filesKey, classifyOutputPath, classifyYear, classifyOem, classifyRef, classifyProtocol, classifyProcessing])
 
   const handleScan = async () => {
     if (!analysisSourcePath) return
@@ -305,15 +330,33 @@ export default function ClassificationTab() {
               <button 
                 onClick={handleProcessAll} 
                 disabled={classifyGroups.length === 0} 
-                className="bg-primary text-background px-8 h-10 rounded-lg font-bold flex items-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/10 disabled:opacity-50 text-xs"
+                className="bg-primary text-background w-44 h-10 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/10 disabled:opacity-50 text-xs"
               >
                 <PlayCircle className="w-4 h-4" /> PROCESS ALL
               </button>
             ) : (
               <div className="flex items-center gap-3">
-                <button onClick={handleStop} className="bg-destructive text-destructive-foreground px-6 h-10 rounded-lg font-bold flex items-center gap-2 hover:bg-destructive/90 transition-all text-xs">
-                  <Square className="w-4 h-4" /> STOP
-                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button className="bg-destructive text-destructive-foreground w-44 h-10 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-destructive/90 transition-all text-xs">
+                      <Square className="w-4 h-4" /> STOP
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Estás seguro de que deseas detener el proceso?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta acción detendrá la clasificación actual. Las tareas incompletas no se procesarán.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleStop} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                        Detener
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </div>
@@ -414,32 +457,32 @@ export default function ClassificationTab() {
                                 <div className="flex items-center gap-1.5 ml-2">
                                   {/* Box (MF4) */}
                                   <span 
-                                    className="inline-flex items-center justify-center rounded-md p-1 size-5 bg-emerald-500/10 text-emerald-400"
+                                    className="inline-flex items-center justify-center rounded-md p-1 size-6 bg-emerald-500/10 text-emerald-400"
                                     title="MF4 file present"
                                   >
-                                    <Box className="w-3.5 h-3.5" />
+                                    <Box className="w-4 h-4" />
                                   </span>
 
                                   {/* Image (Report) */}
                                   <span 
                                     className={cn(
-                                      "inline-flex items-center justify-center rounded-md p-1 size-5 transition-colors",
+                                      "inline-flex items-center justify-center rounded-md p-1 size-6 transition-colors",
                                       file.has_report ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
                                     )}
                                     title={file.has_report ? "Report plots present" : "Report plots missing"}
                                   >
-                                    <Image className="w-3.5 h-3.5" />
+                                    <Image className="w-4 h-4" />
                                   </span>
 
                                   {/* Film (Video) */}
                                   <span 
                                     className={cn(
-                                      "inline-flex items-center justify-center rounded-md p-1 size-5 transition-colors",
+                                      "inline-flex items-center justify-center rounded-md p-1 size-6 transition-colors",
                                       file.has_video ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
                                     )}
                                     title={file.has_video ? "Video recording present" : "Video recording missing"}
                                   >
-                                    <Film className="w-3.5 h-3.5" />
+                                    <Film className="w-4 h-4" />
                                   </span>
                                 </div>
                               </div>

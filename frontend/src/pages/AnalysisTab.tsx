@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useAnalysisWS } from '../hooks/useAnalysisWS'
 import { useFuseWebSocket } from '../hooks/useFuseWebSocket'
+import { useClassifyWS } from '../hooks/useClassifyWS'
 import { 
   ChevronRight, ChevronDown, Folder, File,
   ListChevronsUpDown, ListChevronsDownUp,
@@ -325,6 +326,7 @@ export default function AnalysisTab() {
 
   useAnalysisWS()
   useFuseWebSocket()
+  useClassifyWS()
 
   const [selectionType, setSelectionType] = useState('all')
   const [activeTab, setActiveTab] = useState('audio')

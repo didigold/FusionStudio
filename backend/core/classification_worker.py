@@ -29,16 +29,16 @@ class ClassificationWorker:
             try:
                 self.process_single_task(task)
                 if self.on_item:
-                    self.on_item(task['item_ref'], True, "")
+                    self.on_item(task['item_ref'], True, "", task['case_full_name'])
             except OSError as e:
                 err_msg = str(e)
                 if e.errno == 28 or getattr(e, 'winerror', 0) == 112:
                     err_msg = "Disk Full / No Space Left"
                 if self.on_item:
-                    self.on_item(task['item_ref'], False, err_msg)
+                    self.on_item(task['item_ref'], False, err_msg, task['case_full_name'])
             except Exception as e:
                 if self.on_item:
-                    self.on_item(task['item_ref'], False, str(e))
+                    self.on_item(task['item_ref'], False, str(e), task['case_full_name'])
 
             if self.on_progress:
                 self.on_progress(int(((idx + 1) / total) * 100))
@@ -130,45 +130,6 @@ Number of samples           :{len(sig.samples)}
     def generate_mme(self, output_path, meta, original_filename):
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         date_str = datetime.now().strftime("%d/%m/%Y")
-        content = f"""Data format edition number  :1.6
-Laboratory name             :IDIADA
-Laboratory contact name     :ADAS
-Laboratory contact phone    :+34 977 166 00
-Laboratory contact fax      :+34 977 166 007
-Laboratory contact email    :david.graells@idiada.com
-Laboratory test ref. number :{meta['year']}-{meta['oem']}-{meta['ref']}
-Customer name               :Euro NCAP
-Customer test ref. number   :{meta['case_name']}
-Customer project ref. number:{meta['year']}-{meta['oem']}-{meta['ref']}-{meta['protocol']}
-Customer order number       :-
-Customer cost unit          :EUR
-Customer test engineer name :Aled Williams
-Customer test engineer phone:-
-Customer test engineer fax  :-
-Customer test engineer email:aled_williams@euroencap.com
-Title                       :In-Cabin Monitoring 20{meta['year']}
-Medium No./number of media  :1/1
-Timestamp                   :{timestamp}
-Type of the test            :IN-CABIN
-Subtype of the test         :DSM
-Regulation                  :Euro NCAP
-Reference temperature       :25ºC
-Relative air humidity       :75%
-Date of the test            :{date_str}
-Number of test objects      :1
-Name of test object 1       :{meta['oem']} Vehicle
-Velocity test object 1      :0
-Mass test object 1          :0 kg
-Driver position object 1    :NOVALUE
-Impact side test object 1   :NOVALUE
-Type of test object 1       :M1 Vehicle
-Class of test object 1      :EV
-Code of test object 1       :{meta['oem']}_{meta['ref']}
-Ref. number of test object 1:{meta['ref']}
-Velocity lat test object 1  :NOVALUE
-Dimensions test object 1    :NOVALUE
-Profile-X test object 1     :-
-Profile-Y test object 1     :-
         raw_filename_clean = re.sub(r'_tracking', '', original_filename, flags=re.IGNORECASE)
         content = f"""Data format edition number  :1.6
 Laboratory name             :IDIADA

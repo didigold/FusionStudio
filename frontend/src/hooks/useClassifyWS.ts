@@ -2,12 +2,15 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 
 export function useClassifyWS() {
-  const { addLog, setClassifyProgress, setClassifyStatus, setClassifyProcessing, classifyGroups, setClassifyGroups } = useAppStore()
+  const addLog = useAppStore(state => state.addLog)
+  const setClassifyProgress = useAppStore(state => state.setClassifyProgress)
+  const setClassifyStatus = useAppStore(state => state.setClassifyStatus)
+  const setClassifyProcessing = useAppStore(state => state.setClassifyProcessing)
+  const setClassifyGroups = useAppStore(state => state.setClassifyGroups)
+
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
-  const groupsRef = useRef(classifyGroups)
-  groupsRef.current = classifyGroups
   const lastProgressTimeRef = useRef(0) // throttle progress to ~10fps
 
   const connect = useCallback(() => {
@@ -43,6 +46,11 @@ export function useClassifyWS() {
               ),
             }))
             setClassifyGroups(groups)
+            if (data.success) {
+              addLog(`Successfully classified, renamed and moved case: ${data.case_full_name}`)
+            } else {
+              addLog(`Failed to process case ${data.case_full_name || data.item_ref}: ${data.error || 'Unknown error'}`)
+            }
             break
           }
           case 'finished': setClassifyProcessing(false); setClassifyProgress(100); setClassifyStatus('Done'); addLog('Classification complete'); break
