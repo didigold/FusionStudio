@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowRight, Activity, Volume2 } from "lucide-react";
 import type { UnresponsivePhase } from '@/store/useAppStore';
 
@@ -56,9 +57,9 @@ export function UnresponsiveTimelineEditor({
 
   const getTimelineArrows = (category: string) => {
     if (category.includes('DTR')) {
-      return ["3-4s", "3s", "≤6s"];
+      return ["3-4s", "4s", "≤5s"];
     } else {
-      return ["Time to sleep warning", "≤3s", "≤6s"];
+      return ["Time to sleep warning", "≤3s", "≤5s"];
     }
   };
 
@@ -98,18 +99,20 @@ export function UnresponsiveTimelineEditor({
         {/* Render Phases */}
         {phases.map((phase, idx) => {
           const isAudio = isAudioSignal(phase.signal);
+          const isEnabled = phase.enabled !== false;
           return (
             <React.Fragment key={idx}>
-              <div className="flex flex-col items-center justify-center px-1 shrink-0">
+              <div className={`flex flex-col items-center justify-center px-1 shrink-0 transition-opacity duration-200 ${!isEnabled ? 'opacity-40' : ''}`}>
                 {activeCategory.includes("SLE") && idx === 0 ? (
                   <div className="flex flex-col items-center gap-0.5 mb-1">
                     <div className="flex items-center gap-0.5 bg-surface-3 px-3 py-1 rounded-full border border-border/80 hover:border-primary/40 transition-colors shadow-sm">
                       <input
+                        disabled={!isEnabled}
                         type="number"
                         step="0.1"
                         min="2.8"
                         max="3.2"
-                        className="w-8 bg-transparent text-center text-sm font-bold font-mono text-foreground focus:outline-none"
+                        className="w-8 bg-transparent text-center text-sm font-bold font-mono text-foreground focus:outline-none disabled:opacity-50"
                         value={phase.warningTime ?? 3.0}
                         onChange={(e) => updatePhaseField(idx, "warningTime", parseFloat(e.target.value) || 3.0)}
                       />
@@ -124,9 +127,23 @@ export function UnresponsiveTimelineEditor({
                 <ArrowRight className="text-muted-foreground/30 w-4 h-4" />
               </div>
 
-              <div className="flex flex-col gap-2 w-[240px] shrink-0 bg-surface-2/80 rounded-xl border border-border/50 p-4 shadow-sm relative group hover:border-primary/50 transition-colors">
-                <div className={`absolute -top-3 left-4 px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shadow-sm ${
-                  isAudio
+              <div className={`flex flex-col gap-2 w-[240px] shrink-0 bg-surface-2/80 rounded-xl border border-border/50 p-4 shadow-sm relative group transition-all duration-200 ${
+                !isEnabled ? 'opacity-40 bg-surface-2/30 border-border/20' : 'hover:border-primary/50'
+              }`}>
+                {/* Active/Enabled Toggle Checkbox */}
+                <div className="absolute top-2.5 right-2.5 z-10 flex items-center">
+                  <Checkbox
+                    id={`phase-toggle-${idx}`}
+                    checked={isEnabled}
+                    onCheckedChange={(checked) => updatePhaseField(idx, "enabled", !!checked)}
+                    className="h-4 w-4 border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                  />
+                </div>
+
+                <div className={`absolute -top-3 left-4 px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shadow-sm transition-colors duration-200 ${
+                  !isEnabled
+                    ? "bg-surface-3 text-muted-foreground border-border/30"
+                    : isAudio
                     ? "bg-[#ebf3fe] text-blue-600 border-blue-500/30 dark:bg-blue-300 dark:text-blue-950 dark:border-blue-400/80"
                     : "bg-[#eafaf1] text-emerald-600 border-emerald-500/30 dark:bg-emerald-300 dark:text-emerald-950 dark:border-emerald-400/80"
                 }`}>
@@ -143,6 +160,7 @@ export function UnresponsiveTimelineEditor({
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Signal</label>
                     <Select
+                      disabled={!isEnabled}
                       value={phase.signal}
                       onValueChange={(val) => updatePhaseField(idx, "signal", val)}
                     >
@@ -164,6 +182,7 @@ export function UnresponsiveTimelineEditor({
                       <div className="flex flex-col gap-1 flex-1">
                         <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Freq (Hz)</label>
                         <Input
+                          disabled={!isEnabled}
                           type="number"
                           className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-2 font-mono"
                           value={phase.frequency ?? 1000}
@@ -173,6 +192,7 @@ export function UnresponsiveTimelineEditor({
                       <div className="flex flex-col gap-1 flex-1">
                         <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Thresh (dB)</label>
                         <Input
+                          disabled={!isEnabled}
                           type="number"
                           step="0.1"
                           className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-2 font-mono"
@@ -186,6 +206,7 @@ export function UnresponsiveTimelineEditor({
                       <div className="flex flex-col gap-1 flex-[0.4]">
                         <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Op</label>
                         <Select
+                          disabled={!isEnabled}
                           value={phase.operator || ">"}
                           onValueChange={(val) => updatePhaseField(idx, "operator", val)}
                         >
@@ -232,6 +253,7 @@ export function UnresponsiveTimelineEditor({
 
                             return (
                               <Select
+                                disabled={!isEnabled}
                                 value={String(currentVal)}
                                 onValueChange={(val) => {
                                   const parsed = parseFloat(val);
@@ -258,6 +280,7 @@ export function UnresponsiveTimelineEditor({
                           }
                           return (
                             <Input
+                              disabled={!isEnabled}
                               type={typeof phase.value === "number" ? "number" : "text"}
                               value={phase.value !== null && phase.value !== undefined ? String(phase.value) : ""}
                               onChange={(e) => {

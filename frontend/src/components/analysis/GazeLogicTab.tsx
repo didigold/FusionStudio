@@ -975,17 +975,20 @@ export function GazeLogicTab() {
         mask: 6.0,
       };
 
+      const isUnresponsive = cat.toLowerCase().includes("unresponsive");
+
       const signalsMap: Record<string, any> = {};
       signalsList.forEach((sig) => {
         if (sig && sig.name) {
           signalsMap[sig.name] = {
             checked: !!sig.checked,
-            operator: sig.operator || "None",
-            threshold:
-              typeof sig.threshold === "number" ||
-              typeof sig.threshold === "string"
-                ? sig.threshold
-                : 0.0,
+            operator: isUnresponsive ? "None" : (sig.operator || "None"),
+            threshold: isUnresponsive
+              ? 0.0
+              : typeof sig.threshold === "number" ||
+                typeof sig.threshold === "string"
+              ? sig.threshold
+              : 0.0,
             alias: sig.alias || sig.name,
           };
         }
@@ -993,12 +996,12 @@ export function GazeLogicTab() {
 
       configs[cat] = {
         signals: signalsMap,
-        pass_signal_name: pass.signal,
+        pass_signal_name: isUnresponsive ? "" : pass.signal,
         mask_start: pass.mask,
-        operator1: pass.operator1,
-        value1: pass.value1,
-        operator2: pass.operator2,
-        value2: pass.value2,
+        operator1: isUnresponsive ? "None" : pass.operator1,
+        value1: isUnresponsive ? 0.0 : pass.value1,
+        operator2: isUnresponsive ? "None" : pass.operator2,
+        value2: isUnresponsive ? 0.0 : pass.value2,
         unresponsive_phases: unresponsiveCriteria[cat] || [],
       };
     });
@@ -1709,18 +1712,20 @@ export function GazeLogicTab() {
                     </TableCell>
                     <TableCell className="py-2.5 text-base font-semibold text-foreground/90">
                       {sig.name}
-                    </TableCell>
-                    <TableCell className="py-2.5">
+                    </TableCel                    <TableCell className="py-2.5">
                       {sig.name === "SoundPressure" ? (
                         <span className="text-sm text-muted-foreground/60 px-2 font-medium">
                           Bandpass
                         </span>
                       ) : (
                         <Select
+                          disabled={activeCategory.toLowerCase().includes("unresponsive")}
                           value={
-                            ["None", ">", "<", ">=", "<=", "==", "!="].includes(
-                              sig.operator,
-                            )
+                            activeCategory.toLowerCase().includes("unresponsive")
+                              ? "None"
+                              : ["None", ">", "<", ">=", "<=", "==", "!="].includes(
+                                  sig.operator,
+                                )
                               ? sig.operator
                               : "None"
                           }
@@ -1763,7 +1768,7 @@ export function GazeLogicTab() {
                       )}
                     </TableCell>
                     <TableCell className="py-2.5">
-                      {sig.name === "SoundPressure" ? (
+                      {sig.name === "SoundPressure" || activeCategory.toLowerCase().includes("unresponsive") ? (
                         <span className="text-sm text-muted-foreground/60 text-center block">
                           —
                         </span>
@@ -1800,7 +1805,7 @@ export function GazeLogicTab() {
                               const numA = Number(a);
                               const numB = Number(b);
                               if (!isNaN(numA) && !isNaN(numB)) {
-                                return numA - numB;
+                                  return numA - numB;
                               }
                               return String(a).localeCompare(String(b));
                             });
@@ -1871,7 +1876,7 @@ export function GazeLogicTab() {
                             />
                           );
                         })()
-                      )}
+                      )}    )}
                     </TableCell>
                     <TableCell className="py-2.5">
                       <Input

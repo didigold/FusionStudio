@@ -19,6 +19,19 @@ def resource_path(relative_path):
     project_root = os.path.dirname(os.path.dirname(current_dir))
     return os.path.join(project_root, relative_path)
 
+def shared_asset_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        pass
+
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(base_path, "frontend", "public", "assets", relative_path)
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(current_dir))
+    return os.path.join(project_root, "frontend", "public", "assets", relative_path)
+
 def clone_file_metadata(src, dst):
     if not os.path.exists(src) or not os.path.exists(dst):
         return

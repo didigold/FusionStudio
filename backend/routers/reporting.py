@@ -572,43 +572,149 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
 
     t_event = "No warn"
     t_event_color = "red"
-    warn_time = signal_times.get(pass_signal_name) if pass_signal_name else None
-
-    if warn_time is not None:
-        is_scenario2 = any(kw in target_category for kw in ["Short Distraction", "Phone Use"])
-        if is_scenario2 and driver_marks and len(driver_marks) >= 2:
-            marks_sorted = sorted([float(m) for m in driver_marks])
-            accumulated = 0.0
-            for i in range(0, len(marks_sorted) - 1, 2):
-                start = marks_sorted[i]
-                end = marks_sorted[i+1]
-                if warn_time < start:
-                    break
-                elif warn_time <= end:
-                    accumulated += (warn_time - start)
-                    break
+    
+    if "Unresponsive" in target_category:
+        # 1. Compute t_event
+        active_phases_with_trigger = []
+        for idx, phase in enumerate(unresponsive_phases):
+            enabled = phase.get('enabled', True)
+            if enabled:
+                t_trig = signal_times.get(f"phase_{idx}")
+                if t_trig is not None:
+                    active_phases_with_trigger.append((idx, phase, t_trig))
+                    
+        if len(active_phases_with_trigger) > 0:
+            last_idx, last_phase, last_trig_time = active_phases_with_trigger[-1]
+            t_event = last_trig_time - tgaze
+            
+            # 2. Compute t_event_color (PASS/FAIL validation based on active milestones)
+            is_unresponsive_pass = True
+            is_dtr = "DTR" in target_category
+            num_milestones = len(unresponsive_phases) + 1
+            
+            for i in range(num_milestones - 1):
+                step_enabled = unresponsive_phases[i].get('enabled', True)
+                if not step_enabled:
+                    continue
+                
+                t_next = signal_times.get(f"phase_{i}")
+                if i == 0:
+                    t_curr = tgaze
                 else:
-                    accumulated += (end - start)
-            t_event = accumulated
+                    t_curr = signal_times.get(f"phase_{i-1}") if unresponsive_phases[i-1].get('enabled', True) else None
+                
+                delta = None
+                if t_curr is not None and t_next is not None:
+                    delta = t_next - t_curr
+                
+                ok = False
+                if is_dtr:
+                    if i == 0:
+                        ok = delta is not None and 3.0 <= delta <= 4.0
+                    elif i == 1:
+                        ok = delta is not None and delta <= 4.0
+                    elif i == 2:
+                        if num_milestones == 4:
+                            ok = delta is not None and delta <= 5.0
+                        else:
+                            ok = delta is not None and delta < 1.0
+                    elif i == 3:
+                        ok = delta is not None and delta <= 5.0
+                else:
+                    if i == 0:
+                        p0 = unresponsive_phases[0] if unresponsive_phases else {}
+                        custom_limit = p0.get('warningTime', 3.0)
+                        if abs(custom_limit - 3.0) < 0.05:
+                            ok = delta is not None and delta <= 3.0
+                        else:
+                            ok = delta is not None and delta <= custom_limit
+                    elif i == 1:
+                        ok = delta is not None and delta <= 3.0
+                    elif i == 2:
+                        ok = delta is not None and delta <= 5.0
+                
+                if not ok:
+                    is_unresponsive_pass = False
+            
+            # Evaluate compound brackets
+            if is_dtr:
+                if len(unresponsive_phases) >= 2 and unresponsive_phases[1].get('enabled', True):
+                    t0 = tgaze
+                    t2 = signal_times.get("phase_1")
+                    ok_m02 = False
+                    if t0 is not None and t2 is not None:
+                        ok_m02 = 7.0 <= (t2 - t0) <= 8.0
+                    if not ok_m02:
+                        is_unresponsive_pass = False
+                
+                target_idx = 2 if len(unresponsive_phases) == 3 else 3
+                if len(unresponsive_phases) > target_idx and unresponsive_phases[target_idx].get('enabled', True):
+                    t0 = tgaze
+                    t_end = signal_times.get(f"phase_{target_idx}")
+                    ok_end = False
+                    if t0 is not None and t_end is not None:
+                        if len(unresponsive_phases) == 3:
+                            ok_end = (t_end - t0) <= 13.0
+                        else:
+                            ok_end = 13.0 <= (t_end - t0) <= 14.0
+                    if not ok_end:
+                        is_unresponsive_pass = False
+            else:
+                target_idx = 2 if len(unresponsive_phases) == 3 else len(unresponsive_phases) - 1
+                if len(unresponsive_phases) > target_idx and unresponsive_phases[target_idx].get('enabled', True):
+                    t0 = tgaze
+                    t3 = signal_times.get(f"phase_{target_idx}")
+                    p0 = unresponsive_phases[0] if unresponsive_phases else {}
+                    custom_limit = p0.get('warningTime', 3.0)
+                    max_limit = custom_limit + 3.0 + 5.0
+                    ok_m03 = False
+                    if t0 is not None and t3 is not None:
+                        ok_m03 = (t3 - t0) <= max_limit
+                    if not ok_m03:
+                        is_unresponsive_pass = False
+            
+            t_event_color = "green" if is_unresponsive_pass else "red"
         else:
-            t_event = warn_time - tgaze
+            t_event = "No warn"
+            t_event_color = "red"
+    else:
+        # Standard scenario calculation
+        warn_time = signal_times.get(pass_signal_name) if pass_signal_name else None
+        if warn_time is not None:
+            is_scenario2 = any(kw in target_category for kw in ["Short Distraction", "Phone Use"])
+            if is_scenario2 and driver_marks and len(driver_marks) >= 2:
+                marks_sorted = sorted([float(m) for m in driver_marks])
+                accumulated = 0.0
+                for i in range(0, len(marks_sorted) - 1, 2):
+                    start = marks_sorted[i]
+                    end = marks_sorted[i+1]
+                    if warn_time < start:
+                        break
+                    elif warn_time <= end:
+                        accumulated += (warn_time - start)
+                        break
+                    else:
+                        accumulated += (end - start)
+                t_event = accumulated
+            else:
+                t_event = warn_time - tgaze
 
-        if conditions:
-            all_met = True
-            for op, limit in conditions:
-                if op == '>': match = t_event > limit
-                elif op == '<': match = t_event < limit
-                elif op == '>=': match = t_event >= limit
-                elif op == '<=': match = t_event <= limit
-                elif op == '==': match = abs(t_event - limit) < 1e-6
-                elif op == '!=': match = abs(t_event - limit) >= 1e-6
-                else: match = True
-                if not match:
-                    all_met = False
-                    break
-            t_event_color = "green" if all_met else "red"
-        else:
-            t_event_color = "green" if t_event < 3.0 else "red"
+            if conditions:
+                all_met = True
+                for op, limit in conditions:
+                    if op == '>': match = t_event > limit
+                    elif op == '<': match = t_event < limit
+                    elif op == '>=': match = t_event >= limit
+                    elif op == '<=': match = t_event <= limit
+                    elif op == '==': match = abs(t_event - limit) < 1e-6
+                    elif op == '!=': match = abs(t_event - limit) >= 1e-6
+                    else: match = True
+                    if not match:
+                        all_met = False
+                        break
+                t_event_color = "green" if all_met else "red"
+            else:
+                t_event_color = "green" if t_event < 3.0 else "red"
 
     relative_path = os.path.basename(file_path)
     try:
