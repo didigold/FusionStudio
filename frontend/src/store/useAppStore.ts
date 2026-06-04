@@ -114,6 +114,22 @@ const DEFAULT_UNRESPONSIVE_CRITERIA: Record<string, UnresponsivePhase[]> = {
   ]
 }
 
+function cleanUnresponsiveCriteria(criteria: any): Record<string, UnresponsivePhase[]> {
+  const result: Record<string, UnresponsivePhase[]> = {}
+  if (criteria && typeof criteria === 'object' && !Array.isArray(criteria)) {
+    for (const [catName, uc] of Object.entries(criteria)) {
+      if (Array.isArray(uc)) {
+        let filtered = uc as UnresponsivePhase[]
+        if (catName.toLowerCase().includes('sle')) {
+          filtered = filtered.filter(p => p.phaseName !== 'Sleep Warning')
+        }
+        result[catName] = filtered
+      }
+    }
+  }
+  return result;
+}
+
 type Module = 'fuse' | 'analysis' | 'classification' | 'reporting' | 'om' | 'brain'
 
 interface SystemStats {
@@ -1004,14 +1020,7 @@ export const useAppStore = create<AppState>((set) => ({
       }
       const mergedPassCriteria = { ...DEFAULT_PASS_CRITERIA, ...validatedPassCriteria }
 
-      const validatedUnresponsiveCriteria: Record<string, UnresponsivePhase[]> = {}
-      if (parsed.unresponsive_criteria && typeof parsed.unresponsive_criteria === 'object' && !Array.isArray(parsed.unresponsive_criteria)) {
-        for (const [catName, uc] of Object.entries(parsed.unresponsive_criteria)) {
-          if (Array.isArray(uc)) {
-            validatedUnresponsiveCriteria[catName] = uc as UnresponsivePhase[]
-          }
-        }
-      }
+      const validatedUnresponsiveCriteria = cleanUnresponsiveCriteria(parsed.unresponsive_criteria)
       const mergedUnresponsiveCriteria = { ...DEFAULT_UNRESPONSIVE_CRITERIA, ...validatedUnresponsiveCriteria }
 
       const validatedGaugeRules: Record<string, GaugeConfig> = {}
@@ -1238,7 +1247,7 @@ export const useAppStore = create<AppState>((set) => ({
           set({
             protocol: parsed.protocol || 'Euro NCAP',
             passCriteria: { ...DEFAULT_PASS_CRITERIA, ...(parsed.pass_criteria || {}) },
-            unresponsiveCriteria: { ...DEFAULT_UNRESPONSIVE_CRITERIA, ...(parsed.unresponsive_criteria || {}) },
+            unresponsiveCriteria: { ...DEFAULT_UNRESPONSIVE_CRITERIA, ...cleanUnresponsiveCriteria(parsed.unresponsive_criteria) },
             gaugeRules: { ...DEFAULT_GAUGE_RULES, ...(parsed.gauge_rules || {}) },
             gaugeRulesPath: validatedGaugeRulesPath,
             importedConfigName: state.pendingConfigName || 'Imported Config',

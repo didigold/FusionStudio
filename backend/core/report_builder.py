@@ -857,15 +857,7 @@ class MatplotlibReportBuilder:
                 _t = _sig_times.get(f'phase_{_pi}')
                 if _t is not None:
                     _clr = _phase_colors[_pi % len(_phase_colors)]
-                    _short = _phase_shorts[_pi] if _pi < len(_phase_shorts) else f'P{_pi}'
-                    ax.axvline(x=_t, color=_clr, linestyle='--', linewidth=0.7, alpha=0.9)
-                    try:
-                        _ylim = ax.get_ylim()
-                        _label_y = _ylim[0] + (_ylim[1] - _ylim[0]) * 0.97
-                        ax.text(_t, _label_y, _short, fontsize=4.5, color=_clr,
-                                ha='center', va='top', fontweight='bold')
-                    except Exception:
-                        pass
+                    ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
         ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
         ax.set_ylabel(unt, fontsize=6, color=self.COLORS['text_light'])
         if not is_ns and vmap:
@@ -887,7 +879,7 @@ class MatplotlibReportBuilder:
                 # Alternate between two x columns: close and far from axis
                 x_offset = -0.02 - (0.07 * (i % 2))
                 ax.text(x_offset, y, lbl, transform=ax.get_yaxis_transform(),
-                        ha='right', va='center', fontsize=5, color=self.COLORS['text_light'],
+                        ha='center', va='center', fontsize=5, color=self.COLORS['text_light'],
                         rotation=90, rotation_mode='anchor')
         ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
                        direction='in', color=self.COLORS['border_light'])
@@ -1084,16 +1076,6 @@ class MatplotlibReportBuilder:
             
             sigs_conf = self.config.get('signals', {})
             
-            # Build common prefix of VALUES (not aliases) for non-audio phases
-            phase_raw_vals = []
-            for phase in phases:
-                sig = phase.get('signal', '')
-                is_audio_ph = sig.lower().find('sound') >= 0 or sig.lower().find('audio') >= 0 or sig.lower().find('buzzer') >= 0
-                if not is_audio_ph:
-                    rv = phase.get('value', 0)
-                    phase_raw_vals.append(str(rv) if rv is not None else '')
-            val_common = os.path.commonprefix(phase_raw_vals) if len(phase_raw_vals) > 1 else ""
-            
             for idx, phase in enumerate(phases):
                 pname = phase.get('phaseName')
                 if pname == "Escalation Warning" or pname == "Escalated Distraction Warning" or pname == "Sleep Warning":
@@ -1116,9 +1098,24 @@ class MatplotlibReportBuilder:
                 else:
                     raw_val = phase.get('value', 0)
                     val_str = str(raw_val) if raw_val is not None else ''
-                    # Strip common prefix from value string
-                    if len(val_common) > 2 and val_str.startswith(val_common):
-                        val_str = val_str[len(val_common):].strip()
+                    
+                    # Strip common prefix calculated from all unique values of the signal samples
+                    sig_data = sigs_conf.get(sig, {})
+                    smp = sig_data.get('samples', [])
+                    try:
+                        str_smp = []
+                        for s in smp:
+                            if isinstance(s, bytes):
+                                str_smp.append(s.decode('utf-8'))
+                            elif s is not None:
+                                str_smp.append(str(s))
+                        uv = list(set(str_smp))
+                        sig_common = os.path.commonprefix(uv) if len(uv) > 1 else ""
+                        if len(sig_common) > 2 and val_str.startswith(sig_common):
+                            val_str = val_str[len(sig_common):].strip()
+                    except Exception:
+                        pass
+                    
                     sig_desc = f"{alias} {phase.get('operator', '==')} {val_str}"
                     
                 milestones.append({
@@ -1242,7 +1239,7 @@ class MatplotlibReportBuilder:
                     tax.annotate("", xy=(x_coords[2], 0.22), xytext=(x_coords[0], 0.22),
                                  arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
                     tax.text((x_coords[0] + x_coords[2])/2, 0.25, "7 - 8s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                    tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=5.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                    tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
                     tax.text((x_coords[0] + x_coords[2])/2, 0.22, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
                              bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
 
@@ -1263,7 +1260,7 @@ class MatplotlibReportBuilder:
                     tax.annotate("", xy=(x_coords[target_idx], 0.10), xytext=(x_coords[0], 0.10),
                                  arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
                     tax.text((x_coords[0] + x_coords[target_idx])/2, 0.13, target_limit_lbl, fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.05, lbl_end, fontsize=5.5, color=self.COLORS['primary'] if ok_end else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.05, lbl_end, fontsize=6.5, color=self.COLORS['primary'] if ok_end else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
                     tax.text((x_coords[0] + x_coords[target_idx])/2, 0.10, "OK" if ok_end else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
                              bbox=dict(facecolor=self.COLORS['pass'] if ok_end else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
             else:
@@ -1281,7 +1278,7 @@ class MatplotlibReportBuilder:
                     tax.annotate("", xy=(x_coords[target_idx], 0.16), xytext=(x_coords[0], 0.16),
                                  arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
                     tax.text((x_coords[0] + x_coords[target_idx])/2, 0.19, "\u2264 12s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=5.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
                     tax.text((x_coords[0] + x_coords[target_idx])/2, 0.16, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
                              bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
         except Exception as e:
@@ -1291,7 +1288,9 @@ class MatplotlibReportBuilder:
 
     def _add_footer(self):
         fax = self.fig.add_axes([self.MARGIN_X, 0.02, self.CONTENT_WIDTH, 0.04]); fax.axis('off')
-        fax.axhline(y=0.9, xmin=0, xmax=1, color=self.COLORS['border_light'], linewidth=1)
+        category = self.config.get('target_category', '')
+        if not (category and "Unresponsive" in category):
+            fax.axhline(y=0.9, xmin=0, xmax=1, color=self.COLORS['border_light'], linewidth=1)
         test_date = self.config.get('test_date', datetime.now())
         lt = f"Date: {test_date.strftime('%d-%b-%Y')}"
         if self.config.get('filename'): lt += f" | File: {self.config.get('filename')}"
