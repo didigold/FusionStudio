@@ -219,11 +219,15 @@ __marimo__/
 report_preview.png
 
 # GSR Local Assets
-assets/gsr/local/
+backend/assets/gsr/local/
 
 # Node modules
 node_modules/
 **/node_modules/
+
+# Frontend builds
+frontend/dist/
+dist/
 
 # OS specific files
 .DS_Store
@@ -237,7 +241,6 @@ desktop.ini
 *.pkl
 *.parquet
 *.jsonl
-!marks.json
 !package.json
 !package-lock.json
 !tsconfig.json

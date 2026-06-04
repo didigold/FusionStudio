@@ -7,17 +7,23 @@ from ctypes import wintypes
 IDIADA_ORANGE = '#F39200'
 
 def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        pass
-
     if hasattr(sys, '_MEIPASS'):
-        return os.path.join(base_path, relative_path)
+        base_path = sys._MEIPASS
+    else:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        base_path = os.path.dirname(os.path.dirname(current_dir))
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(current_dir))
-    return os.path.join(project_root, relative_path)
+    # Redirect legacy root paths to their new organized subdirectories
+    if relative_path.startswith('assets/'):
+        relative_path = 'backend/' + relative_path
+    elif relative_path == 'models' or relative_path.startswith('models/'):
+        relative_path = 'backend/' + relative_path
+    elif relative_path == 'config' or relative_path.startswith('config/'):
+        relative_path = 'backend/' + relative_path
+    elif not relative_path.startswith('backend/'):
+        relative_path = 'backend/assets/' + relative_path
+
+    return os.path.join(base_path, relative_path)
 
 def shared_asset_path(relative_path):
     try:
