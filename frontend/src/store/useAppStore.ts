@@ -24,6 +24,8 @@ export interface UnresponsivePhase {
   operator?: string
   value?: number | string
   frequency?: number
+  min_freq?: number
+  max_freq?: number
   threshold?: number
   warningTime?: number
   enabled?: boolean
@@ -102,14 +104,13 @@ const DEFAULT_GAUGE_RULES: Record<string, GaugeConfig> = {
 
 const DEFAULT_UNRESPONSIVE_CRITERIA: Record<string, UnresponsivePhase[]> = {
   "Unresponsive driver (DTR)": [
-    { phaseName: "Distraction Warning", signal: "SoundPressure", frequency: 1000, threshold: 0.5, enabled: true },
-    { phaseName: "Distinct Warning", signal: "SoundPressure", frequency: 1500, threshold: 0.5, enabled: true },
-    { phaseName: "Emergency Function", signal: "SoundPressure", frequency: 2000, threshold: 0.5, enabled: true }
+    { phaseName: "Distraction Warning", signal: "SoundPressure", min_freq: 800, max_freq: 1200, threshold: 0.5, enabled: true },
+    { phaseName: "Distinct Warning", signal: "SoundPressure", min_freq: 1300, max_freq: 1700, threshold: 0.5, enabled: true },
+    { phaseName: "Emergency Function", signal: "SoundPressure", min_freq: 1800, max_freq: 2200, threshold: 0.5, enabled: true }
   ],
   "Unresponsive driver (SLE)": [
-    { phaseName: "Sleep Warning", signal: "SoundPressure", frequency: 1000, threshold: 0.5, warningTime: 3.0, enabled: true },
-    { phaseName: "Distinct Warning", signal: "SoundPressure", frequency: 1500, threshold: 0.5, enabled: true },
-    { phaseName: "Emergency Function", signal: "SoundPressure", frequency: 2000, threshold: 0.5, enabled: true }
+    { phaseName: "Distinct Warning", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true },
+    { phaseName: "Emergency Function", signal: "SoundPressure", min_freq: 1500, max_freq: 3000, threshold: 0.5, enabled: true }
   ]
 }
 

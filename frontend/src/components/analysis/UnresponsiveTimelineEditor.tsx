@@ -59,7 +59,8 @@ export function UnresponsiveTimelineEditor({
     if (category.includes('DTR')) {
       return ["3-4s", "4s", "≤5s"];
     } else {
-      return ["Time to sleep warning", "≤3s", "≤5s"];
+      // SLE: 2 phases only — Distinct Warning (≤7s) + Emergency Function (≤5s)
+      return ["≤7s", "≤5s"];
     }
   };
 
@@ -103,27 +104,9 @@ export function UnresponsiveTimelineEditor({
           return (
             <React.Fragment key={idx}>
               <div className={`flex flex-col items-center justify-center px-1 shrink-0 transition-opacity duration-200 ${!isEnabled ? 'opacity-40' : ''}`}>
-                {activeCategory.includes("SLE") && idx === 0 ? (
-                  <div className="flex flex-col items-center gap-0.5 mb-1">
-                    <div className="flex items-center gap-0.5 bg-surface-3 px-3 py-1 rounded-full border border-border/80 hover:border-primary/40 transition-colors shadow-sm">
-                      <input
-                        disabled={!isEnabled}
-                        type="number"
-                        step="0.1"
-                        min="2.8"
-                        max="3.2"
-                        className="w-8 bg-transparent text-center text-sm font-bold font-mono text-foreground focus:outline-none disabled:opacity-50"
-                        value={phase.warningTime ?? 3.0}
-                        onChange={(e) => updatePhaseField(idx, "warningTime", parseFloat(e.target.value) || 3.0)}
-                      />
-                      <span className="text-xs font-bold font-mono text-muted-foreground">s</span>
-                    </div>
-                  </div>
-                ) : (
-                  <span className="text-sm font-semibold text-foreground mb-1 bg-surface-3 px-3.5 py-1 rounded-full border border-border/80 shadow-sm">
-                    {arrows[idx] || "next"}
-                  </span>
-                )}
+                <span className="text-sm font-semibold text-foreground mb-1 bg-surface-3 px-3.5 py-1 rounded-full border border-border/80 shadow-sm">
+                  {arrows[idx] || "next"}
+                </span>
                 <ArrowRight className="text-muted-foreground/30 w-4 h-4" />
               </div>
 
@@ -178,24 +161,34 @@ export function UnresponsiveTimelineEditor({
                   </div>
 
                   {isAudio ? (
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5">
                       <div className="flex flex-col gap-1 flex-1">
-                        <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Freq (Hz)</label>
+                        <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Min Hz</label>
                         <Input
                           disabled={!isEnabled}
                           type="number"
-                          className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-2 font-mono"
-                          value={phase.frequency ?? 1000}
-                          onChange={(e) => updatePhaseField(idx, "frequency", parseFloat(e.target.value))}
+                          className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-1.5 font-mono"
+                          value={phase.min_freq ?? phase.frequency ?? 800}
+                          onChange={(e) => updatePhaseField(idx, "min_freq", parseFloat(e.target.value) || 0)}
                         />
                       </div>
                       <div className="flex flex-col gap-1 flex-1">
-                        <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Thresh (dB)</label>
+                        <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Max Hz</label>
+                        <Input
+                          disabled={!isEnabled}
+                          type="number"
+                          className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-1.5 font-mono"
+                          value={phase.max_freq ?? 2000}
+                          onChange={(e) => updatePhaseField(idx, "max_freq", parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1 flex-1">
+                        <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Thresh</label>
                         <Input
                           disabled={!isEnabled}
                           type="number"
                           step="0.1"
-                          className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-2 font-mono"
+                          className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-1.5 font-mono"
                           value={phase.threshold ?? 0.5}
                           onChange={(e) => updatePhaseField(idx, "threshold", parseFloat(e.target.value))}
                         />
@@ -261,19 +254,55 @@ export function UnresponsiveTimelineEditor({
                                   updatePhaseField(idx, "value", finalVal);
                                 }}
                               >
-                                <SelectTrigger className="h-8 bg-surface-3/50 border border-border text-xs text-foreground rounded-lg px-2 hover:bg-surface-3 hover:border-primary/20">
-                                  <SelectValue placeholder="Value" />
+                                <SelectTrigger className="h-8 bg-surface-3/50 border border-border text-xs text-foreground rounded-lg px-2 hover:bg-surface-3 hover:border-primary/20 max-w-full">
+                                  {(() => {
+                                    // Compute common prefix for display-only label shortening
+                                    const strVals = allVals.map((v) => String(v));
+                                    const pfxLen = strVals.length > 1
+                                      ? (() => {
+                                          let len = 0;
+                                          const first = strVals[0];
+                                          for (let ci = 0; ci < first.length; ci++) {
+                                            if (strVals.every((s) => s[ci] === first[ci])) len = ci + 1;
+                                            else break;
+                                          }
+                                          return len > 2 ? len : 0;
+                                        })()
+                                      : 0;
+                                    const display = pfxLen > 0
+                                      ? String(currentVal).slice(pfxLen).trimStart()
+                                      : String(currentVal);
+                                    return <SelectValue>{display || String(currentVal)}</SelectValue>;
+                                  })()}
                                 </SelectTrigger>
                                 <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-xs max-h-48 overflow-y-auto">
-                                  {allVals.map((v) => (
-                                    <SelectItem
-                                      key={String(v)}
-                                      value={String(v)}
-                                      className="text-xs font-mono"
-                                    >
-                                      {String(v)}
-                                    </SelectItem>
-                                  ))}
+                                  {(() => {
+                                    const strVals2 = allVals.map((v) => String(v));
+                                    const pfxLen2 = strVals2.length > 1
+                                      ? (() => {
+                                          let len = 0;
+                                          const first = strVals2[0];
+                                          for (let ci = 0; ci < first.length; ci++) {
+                                            if (strVals2.every((s) => s[ci] === first[ci])) len = ci + 1;
+                                            else break;
+                                          }
+                                          return len > 2 ? len : 0;
+                                        })()
+                                      : 0;
+                                    return allVals.map((v) => {
+                                      const full = String(v);
+                                      const label = pfxLen2 > 0 ? full.slice(pfxLen2).trimStart() : full;
+                                      return (
+                                        <SelectItem
+                                          key={full}
+                                          value={full}
+                                          className="text-xs font-mono"
+                                        >
+                                          {label || full}
+                                        </SelectItem>
+                                      );
+                                    });
+                                  })()}
                                 </SelectContent>
                               </Select>
                             );

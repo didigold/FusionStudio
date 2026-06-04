@@ -761,7 +761,8 @@ class MatplotlibReportBuilder:
                 if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
         ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
         ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
-        ax.tick_params(labelsize=6, colors=self.COLORS['text_light'])
+        ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
+                       direction='in', color=self.COLORS['border_light'])
         for s in ['top', 'right']: ax.spines[s].set_visible(False)
         for s in ['bottom', 'left']: ax.spines[s].set_color(self.COLORS['border_light'])
     
@@ -805,7 +806,10 @@ class MatplotlibReportBuilder:
                     sn = signal.filtfilt(b, a, sn); suf = f" ({minf}-{maxf} Hz)"
                  except Exception: pass
              ax.set_title(dn + suf, fontsize=8, fontweight='bold', color=self.COLORS['text'])
-             if th > 0: ax.axhline(y=th, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
+             # Only draw horizontal threshold line for non-Unresponsive scenarios
+             _category = self.config.get('target_category', '')
+             if th > 0 and 'Unresponsive' not in _category:
+                 ax.axhline(y=th, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
         ax.plot(tsn, sn, color=self.COLORS['primary'], linewidth=0.8)
         if self.config.get('om_plot_show_marks'):
             marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if isinstance(t, (int, float))])
@@ -828,13 +832,40 @@ class MatplotlibReportBuilder:
                         if s1 > s0: ax.axvspan(s0, s1, color=self.COLORS['primary'], alpha=0.12)
                     except Exception: pass
         fmt = self.signal_times.get(name)
+        _category = self.config.get('target_category', '')
+        _is_unresponsive = 'Unresponsive' in _category
+        # For Unresponsive + SoundPressure: suppress the default first-match vertical line
         if fmt is not None and not self._is_first_match_line_hidden(name):
-            ax.axvline(x=fmt, color=self._get_first_match_line_color(name), linestyle='-', linewidth=0.8)
+            if not (_is_unresponsive and name == 'SoundPressure'):
+                ax.axvline(x=fmt, color=self._get_first_match_line_color(name), linestyle='-', linewidth=0.8)
         for _x, _c, _ls, _lw, _a in self._get_extra_axvlines(name): ax.axvline(x=_x, color=_c, linestyle=_ls, linewidth=_lw, alpha=_a)
         psig = self.config.get('pass_signal_name')
         if psig and psig != name:
             pt = self.signal_times.get(psig)
             if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
+        # For Unresponsive: draw vertical lines for each phase detection time (all plots)
+        if _is_unresponsive:
+            _phase_colors = [self.COLORS.get('primary', '#3B82F6'), '#F59E0B', self.COLORS.get('fail', '#EF4444')]
+            _is_dtr = 'DTR' in _category
+            _phase_shorts = ['DW', 'DW2', 'EF'] if _is_dtr else ['DW', 'EF']
+            _sig_times = self.config.get('signal_times', {})
+            _phases = self.config.get('unresponsive_phases', [])
+            _ymax = ax.get_ylim()[1] if ax.get_ylim()[1] != ax.get_ylim()[0] else 1.0
+            for _pi, _ph in enumerate(_phases):
+                if not _ph.get('enabled', True):
+                    continue
+                _t = _sig_times.get(f'phase_{_pi}')
+                if _t is not None:
+                    _clr = _phase_colors[_pi % len(_phase_colors)]
+                    _short = _phase_shorts[_pi] if _pi < len(_phase_shorts) else f'P{_pi}'
+                    ax.axvline(x=_t, color=_clr, linestyle='--', linewidth=0.7, alpha=0.9)
+                    try:
+                        _ylim = ax.get_ylim()
+                        _label_y = _ylim[0] + (_ylim[1] - _ylim[0]) * 0.97
+                        ax.text(_t, _label_y, _short, fontsize=4.5, color=_clr,
+                                ha='center', va='top', fontweight='bold')
+                    except Exception:
+                        pass
         ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
         ax.set_ylabel(unt, fontsize=6, color=self.COLORS['text_light'])
         if not is_ns and vmap:
@@ -849,14 +880,17 @@ class MatplotlibReportBuilder:
                 cleaned_lbls = raw_lbls
                 
             ax.set_yticks(y_vals)
-            ax.set_yticklabels([]) # Hide default tick labels
+            ax.set_yticklabels([])  # Hide default tick labels
             
-            # Draw staggered labels to prevent overlap
+            # Draw labels rotated 90° at two vertical offset levels to avoid overlap
             for i, (y, lbl) in enumerate(zip(y_vals, cleaned_lbls)):
-                x_offset = -0.01 - (0.05 * (i % 2))
+                # Alternate between two x columns: close and far from axis
+                x_offset = -0.02 - (0.07 * (i % 2))
                 ax.text(x_offset, y, lbl, transform=ax.get_yaxis_transform(),
-                        ha='right', va='center', fontsize=5, color=self.COLORS['text_light'])
-        ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'])
+                        ha='right', va='center', fontsize=5, color=self.COLORS['text_light'],
+                        rotation=90, rotation_mode='anchor')
+        ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
+                       direction='in', color=self.COLORS['border_light'])
         ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
         for s in ['top', 'right']: ax.spines[s].set_visible(False)
         ax.spines['bottom'].set_color(self.COLORS['border_light'])
@@ -1027,7 +1061,7 @@ class MatplotlibReportBuilder:
             import matplotlib.pyplot as plt
             import matplotlib.patches as patches
             
-            mx, tb, th = float(self.MARGIN_X), 0.07, 0.15
+            mx, tb, th = float(self.MARGIN_X), 0.055, 0.15
             fax = self.fig.add_axes([mx, tb, float(self.CONTENT_WIDTH), th])
             fax.axis('off')
             
@@ -1050,38 +1084,42 @@ class MatplotlibReportBuilder:
             
             sigs_conf = self.config.get('signals', {})
             
-            # Extract common prefix of aliases
-            phase_aliases = []
+            # Build common prefix of VALUES (not aliases) for non-audio phases
+            phase_raw_vals = []
             for phase in phases:
                 sig = phase.get('signal', '')
-                alias = sigs_conf.get(sig, {}).get('alias') or sig
-                phase_aliases.append(alias)
-            
-            import os
-            common = os.path.commonprefix(phase_aliases) if len(phase_aliases) > 1 else ""
+                is_audio_ph = sig.lower().find('sound') >= 0 or sig.lower().find('audio') >= 0 or sig.lower().find('buzzer') >= 0
+                if not is_audio_ph:
+                    rv = phase.get('value', 0)
+                    phase_raw_vals.append(str(rv) if rv is not None else '')
+            val_common = os.path.commonprefix(phase_raw_vals) if len(phase_raw_vals) > 1 else ""
             
             for idx, phase in enumerate(phases):
                 pname = phase.get('phaseName')
-                if pname == "Escalation Warning" or pname == "Escalated Distraction Warning":
-                    pname = "Distinct Warning"
+                if pname == "Escalation Warning" or pname == "Escalated Distraction Warning" or pname == "Sleep Warning":
+                    # Normalize legacy phase names
+                    if pname != "Sleep Warning":
+                        pname = "Distinct Warning"
                 sig = phase.get('signal')
                 t_trig = signal_times.get(f"phase_{idx}")
                 if t_trig is None:
                     t_trig = signal_times.get(sig)
                 
-                alias = phase_aliases[idx]
-                if len(common) > 2:
-                    alias = alias[len(common):].strip()
+                # Always show full alias as signal label
+                alias = sigs_conf.get(sig, {}).get('alias') or sig
                 
                 enabled = phase.get('enabled', True)
                 
                 is_audio = sig.lower().find("sound") >= 0 or sig.lower().find("audio") >= 0 or sig.lower().find("buzzer") >= 0
                 if is_audio:
-                    sig_desc = f"{alias} ({phase.get('frequency', 1000)}Hz, \u2265{phase.get('threshold', 0.5)}dB)"
+                    sig_desc = f"{alias} ({phase.get('frequency', phase.get('min_freq', 1000))}-{phase.get('max_freq', phase.get('frequency', 2000))}Hz, \u2265{phase.get('threshold', 0.5)}dB)"
                 else:
                     raw_val = phase.get('value', 0)
-                    cleaned_val = self._clean_single_value(sig, raw_val)
-                    sig_desc = f"{alias} {phase.get('operator', '==')} {cleaned_val}"
+                    val_str = str(raw_val) if raw_val is not None else ''
+                    # Strip common prefix from value string
+                    if len(val_common) > 2 and val_str.startswith(val_common):
+                        val_str = val_str[len(val_common):].strip()
+                    sig_desc = f"{alias} {phase.get('operator', '==')} {val_str}"
                     
                 milestones.append({
                     "label": pname,
@@ -1166,18 +1204,9 @@ class MatplotlibReportBuilder:
                         ok = delta is not None and delta <= 5.0
                 else:
                     if i == 0:
-                        p0 = phases[0] if phases else {}
-                        custom_limit = p0.get('warningTime', 3.0)
-                        if abs(custom_limit - 3.0) < 0.05:
-                            limit_lbl = "3s"
-                            ok = delta is not None and delta <= 3.0
-                        else:
-                            limit_lbl = f"\u2264 {custom_limit:.1f}s"
-                            ok = delta is not None and delta <= custom_limit
+                        limit_lbl = "\u2264 7s"
+                        ok = delta is not None and delta <= 7.0
                     elif i == 1:
-                        limit_lbl = "\u2264 3s"
-                        ok = delta is not None and delta <= 3.0
-                    elif i == 2:
                         limit_lbl = "\u2264 5s"
                         ok = delta is not None and delta <= 5.0
                 
@@ -1238,26 +1267,23 @@ class MatplotlibReportBuilder:
                     tax.text((x_coords[0] + x_coords[target_idx])/2, 0.10, "OK" if ok_end else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
                              bbox=dict(facecolor=self.COLORS['pass'] if ok_end else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
             else:
-                # SLE: M0 -> M3
-                target_idx = 3 if num_m > 3 else num_m - 1
-                if milestones[target_idx].get('enabled', True):
+                # SLE: M0 -> M2 compound bracket (≤ 12s)
+                target_idx = 2 if num_m > 2 else num_m - 1
+                if num_m > target_idx and milestones[target_idx].get('enabled', True):
                     t0 = milestones[0]['time']
-                    t3 = milestones[3]['time'] if num_m > 3 else None
-                    p0 = phases[0] if phases else {}
-                    custom_limit = p0.get('warningTime', 3.0)
-                    max_limit = custom_limit + 3.0 + 5.0
+                    t_end = milestones[target_idx]['time'] if num_m > target_idx else None
                     
-                    ok_m03 = False
-                    if t0 is not None and t3 is not None:
-                        ok_m03 = (t3 - t0) <= max_limit
-                    lbl_m03 = f"{(t3 - t0):.2f}s" if (t0 is not None and t3 is not None) else "--"
+                    ok_m02 = False
+                    if t0 is not None and t_end is not None:
+                        ok_m02 = (t_end - t0) <= 12.0
+                    lbl_m02 = f"{(t_end - t0):.2f}s" if (t0 is not None and t_end is not None) else "--"
                     
-                    tax.annotate("", xy=(x_coords[3] if num_m > 3 else x_coords[-1], 0.16), xytext=(x_coords[0], 0.16),
+                    tax.annotate("", xy=(x_coords[target_idx], 0.16), xytext=(x_coords[0], 0.16),
                                  arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                    tax.text((x_coords[0] + (x_coords[3] if num_m > 3 else x_coords[-1]))/2, 0.19, f"\u2264 {max_limit:.1f}s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                    tax.text((x_coords[0] + (x_coords[3] if num_m > 3 else x_coords[-1]))/2, 0.11, lbl_m03, fontsize=5.5, color=self.COLORS['primary'] if ok_m03 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                    tax.text((x_coords[0] + (x_coords[3] if num_m > 3 else x_coords[-1]))/2, 0.16, "OK" if ok_m03 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
-                             bbox=dict(facecolor=self.COLORS['pass'] if ok_m03 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.19, "\u2264 12s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=5.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.16, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                             bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
         except Exception as e:
             import traceback
             traceback.print_exc()

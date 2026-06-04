@@ -622,15 +622,8 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                         ok = delta is not None and delta <= 5.0
                 else:
                     if i == 0:
-                        p0 = unresponsive_phases[0] if unresponsive_phases else {}
-                        custom_limit = p0.get('warningTime', 3.0)
-                        if abs(custom_limit - 3.0) < 0.05:
-                            ok = delta is not None and delta <= 3.0
-                        else:
-                            ok = delta is not None and delta <= custom_limit
+                        ok = delta is not None and delta <= 7.0
                     elif i == 1:
-                        ok = delta is not None and delta <= 3.0
-                    elif i == 2:
                         ok = delta is not None and delta <= 5.0
                 
                 if not ok:
@@ -660,17 +653,15 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                     if not ok_end:
                         is_unresponsive_pass = False
             else:
-                target_idx = 2 if len(unresponsive_phases) == 3 else len(unresponsive_phases) - 1
-                if len(unresponsive_phases) > target_idx and unresponsive_phases[target_idx].get('enabled', True):
+                # SLE: compound M0->M_last must be <= 12s
+                target_idx = len(unresponsive_phases) - 1
+                if len(unresponsive_phases) > target_idx and target_idx >= 0 and unresponsive_phases[target_idx].get('enabled', True):
                     t0 = tgaze
-                    t3 = signal_times.get(f"phase_{target_idx}")
-                    p0 = unresponsive_phases[0] if unresponsive_phases else {}
-                    custom_limit = p0.get('warningTime', 3.0)
-                    max_limit = custom_limit + 3.0 + 5.0
-                    ok_m03 = False
-                    if t0 is not None and t3 is not None:
-                        ok_m03 = (t3 - t0) <= max_limit
-                    if not ok_m03:
+                    t_end = signal_times.get(f"phase_{target_idx}")
+                    ok_sle_total = False
+                    if t0 is not None and t_end is not None:
+                        ok_sle_total = (t_end - t0) <= 12.0
+                    if not ok_sle_total:
                         is_unresponsive_pass = False
             
             t_event_color = "green" if is_unresponsive_pass else "red"
