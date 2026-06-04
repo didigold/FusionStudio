@@ -237,7 +237,7 @@ def _resolve_gsr_image_path(filename: str) -> str | None:
     return None
 
 
-def build_report_config(file_path: str, protocol: str, metadata: dict, category_configs: dict, gauge_rules: dict, driver_marks: list, micro: dict = None) -> dict:
+def build_report_config(file_path: str, protocol: str, metadata: dict, category_configs: dict, gauge_rules: dict, driver_marks: list, micro: dict = None, show_thresholds: bool = False) -> dict:
     import re
     import numpy as np
     from asammdf import MDF
@@ -792,7 +792,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
         'relative_path': relative_path,
         'target_category': target_category,
         'pass_signal_name': pass_signal_name,
-        'show_thresholds': False,
+        'show_thresholds': show_thresholds,
         'oem_name': metadata.get('oem_name', ''),
         'vehicle': metadata.get('vehicle', ''),
         'protocol': protocol,
@@ -929,7 +929,8 @@ async def gaze_preview(req: GazePreviewRequest):
             category_configs=req.category_configs,
             gauge_rules=req.gauge_rules,
             driver_marks=driver_marks,
-            micro=req.micro
+            micro=req.micro,
+            show_thresholds=True
         )
         
         temp_dir = os.path.abspath("temp")
@@ -1021,7 +1022,8 @@ async def gaze_generate(req: GazeGenerateRequest):
                         category_configs=req.category_configs,
                         gauge_rules=req.gauge_rules,
                         driver_marks=driver_marks,
-                        micro=req.micro
+                        micro=req.micro,
+                        show_thresholds=False
                     )
                     
                     base_dir = os.path.dirname(file_path)

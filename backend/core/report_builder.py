@@ -823,8 +823,13 @@ class MatplotlibReportBuilder:
              ax.set_title(dn + suf, fontsize=8, fontweight='bold', color=self.COLORS['text'])
              # Only draw horizontal threshold line for non-Unresponsive scenarios
              _category = self.config.get('target_category', '')
-             if th > 0 and 'Unresponsive' not in _category:
+             if self.config.get('show_thresholds', False) and th > 0 and 'Unresponsive' not in _category:
                  ax.axhline(y=th, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
+        else:
+             # Only draw horizontal threshold line for non-Unresponsive scenarios if enabled
+             _category = self.config.get('target_category', '')
+             if self.config.get('show_thresholds', False) and is_nt and op and op != 'None' and 'Unresponsive' not in _category:
+                 ax.axhline(y=tn, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
         ax.plot(tsn, sn, color=self.COLORS['primary'], linewidth=0.8)
         if self.config.get('om_plot_show_marks'):
             marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if isinstance(t, (int, float))])
@@ -949,7 +954,7 @@ class MatplotlibReportBuilder:
             import matplotlib.pyplot as plt
             
             sigs = self.config.get('signals', {})
-            snames = list(sigs.keys())
+            snames = [n for n in sigs.keys() if sigs[n].get('operator') not in (None, 'None', '')]
             msl, ms = self.config.get('movement_start_label', 'T_gaze'), self.config.get('movement_start', self.config.get('tgaze'))
             tgs = f"{ms:.2f}" if ms is not None else "NaN"
             
