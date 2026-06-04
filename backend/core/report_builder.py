@@ -1000,7 +1000,7 @@ class MatplotlibReportBuilder:
                     if v is not None:
                         tc.append(f"{v:.2f}")
                         if warn_time is not None:
-                            ttw_val = v - warn_time
+                            ttw_val = warn_time - v
                             ttw_cols.append(f"{ttw_val:+.2f}" if ttw_val != 0.0 else "0.00")
                         else:
                             ttw_cols.append("NaN")
@@ -1009,7 +1009,7 @@ class MatplotlibReportBuilder:
                         ttw_cols.append("NaN")
                 
                 if ms is not None and warn_time is not None:
-                    gaze_ttw = ms - warn_time
+                    gaze_ttw = warn_time - ms
                     gaze_ttw_str = f"{gaze_ttw:+.2f}" if gaze_ttw != 0.0 else "0.00"
                 else:
                     gaze_ttw_str = "NaN"
