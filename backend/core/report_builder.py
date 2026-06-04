@@ -995,7 +995,33 @@ class MatplotlibReportBuilder:
                         cond_cols.append("N/A")
                     else:
                         op_str = "" if (op == 'None' or op is None) else str(op)
-                        cond_cols.append(f"{op_str} {thresh}".strip())
+                        thresh_val = thresh
+                        if isinstance(thresh_val, bytes):
+                            thresh_val = thresh_val.decode('utf-8')
+                        elif thresh_val and isinstance(thresh_val, str):
+                            if thresh_val.startswith("b'") and thresh_val.endswith("'"):
+                                thresh_val = thresh_val[2:-1]
+                        
+                        thresh_str = str(thresh_val) if thresh_val is not None else ""
+                        
+                        sig_data = sigs.get(n, {})
+                        smp = sig_data.get('samples', [])
+                        try:
+                            import os
+                            str_smp = []
+                            for s in smp:
+                                if isinstance(s, bytes):
+                                    str_smp.append(s.decode('utf-8'))
+                                elif s is not None:
+                                    str_smp.append(str(s))
+                            uv = list(set(str_smp))
+                            sig_common = os.path.commonprefix(uv) if len(uv) > 1 else ""
+                            if len(sig_common) > 2 and thresh_str.startswith(sig_common):
+                                thresh_str = thresh_str[len(sig_common):].strip()
+                        except Exception:
+                            pass
+                        
+                        cond_cols.append(f"{op_str} {thresh_str}".strip())
                     
                     if v is not None:
                         tc.append(f"{v:.2f}")
