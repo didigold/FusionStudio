@@ -763,7 +763,8 @@ class MatplotlibReportBuilder:
             # For Unresponsive: draw vertical lines for each phase detection time
             _category = self.config.get('target_category', '')
             if 'Unresponsive' in _category:
-                _phase_colors = [self.COLORS.get('primary', '#3B82F6'), '#F59E0B', self.COLORS.get('fail', '#EF4444')]
+                _is_dtr = 'DTR' in _category
+                _phase_colors = ['#8E24AA', '#F59E0B', self.COLORS.get('fail', '#EF4444')] if _is_dtr else ['#F59E0B', self.COLORS.get('fail', '#EF4444')]
                 _sig_times = self.config.get('signal_times', {})
                 _phases = self.config.get('unresponsive_phases', [])
                 for _pi, _ph in enumerate(_phases):
@@ -859,8 +860,8 @@ class MatplotlibReportBuilder:
             if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
         # For Unresponsive: draw vertical lines for each phase detection time (all plots)
         if _is_unresponsive:
-            _phase_colors = [self.COLORS.get('primary', '#3B82F6'), '#F59E0B', self.COLORS.get('fail', '#EF4444')]
             _is_dtr = 'DTR' in _category
+            _phase_colors = ['#8E24AA', '#F59E0B', self.COLORS.get('fail', '#EF4444')] if _is_dtr else ['#F59E0B', self.COLORS.get('fail', '#EF4444')]
             _phase_shorts = ['DW', 'DW2', 'EF'] if _is_dtr else ['DW', 'EF']
             _sig_times = self.config.get('signal_times', {})
             _phases = self.config.get('unresponsive_phases', [])
@@ -1306,7 +1307,7 @@ class MatplotlibReportBuilder:
         if not (category and "Unresponsive" in category):
             fax.axhline(y=0.9, xmin=0, xmax=1, color=self.COLORS['border_light'], linewidth=1)
         test_date = self.config.get('test_date', datetime.now())
-        lt = f"Date: {test_date.strftime('%d-%b-%Y')}"
+        lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}"
         if self.config.get('filename'): lt += f" | File: {self.config.get('filename')}"
         if self.config.get('vehicle'): lt += f" | Vehicle: {self.config.get('vehicle')}"
         fax.text(0.0, 0.4, lt, fontsize=6, color=self.COLORS['text_light'], ha='left', va='center')

@@ -781,6 +781,12 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                 r['ticks'] = [round(min_v + i * (diff / count), 2) for i in range(count + 1)]
         normalized_gauge_rules[cat_key] = r
 
+    try:
+        mtime = os.path.getmtime(file_path)
+        test_date = datetime.fromtimestamp(mtime)
+    except Exception:
+        test_date = datetime.now()
+
     return {
         'filename': os.path.basename(file_path),
         'relative_path': relative_path,
@@ -793,7 +799,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
         'engineer': metadata.get('engineer', ''),
         'analyst': metadata.get('analyst', ''),
         'track': metadata.get('track', ''),
-        'test_date': datetime.now(),
+        'test_date': test_date,
         'signals': signals,
         'signal_times': signal_times,
         'camera_image_path': camera_image_path,
