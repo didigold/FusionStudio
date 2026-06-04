@@ -954,7 +954,7 @@ class MatplotlibReportBuilder:
             import matplotlib.pyplot as plt
             
             sigs = self.config.get('signals', {})
-            snames = [n for n in sigs.keys() if sigs[n].get('operator') not in (None, 'None', '')]
+            snames = [n for n in sigs.keys() if sigs[n].get('operator') not in (None, 'None', '') or n.lower() == 'soundpressure']
             msl, ms = self.config.get('movement_start_label', 'T_gaze'), self.config.get('movement_start', self.config.get('tgaze'))
             tgs = f"{ms:.2f}" if ms is not None else "NaN"
             
