@@ -29,6 +29,7 @@ export interface UnresponsivePhase {
   threshold?: number
   warningTime?: number
   enabled?: boolean
+  mask?: number | string
 }
 
 export interface GaugeConfig {
@@ -120,9 +121,22 @@ function cleanUnresponsiveCriteria(criteria: any): Record<string, UnresponsivePh
     for (const [catName, uc] of Object.entries(criteria)) {
       if (Array.isArray(uc)) {
         let filtered = uc as UnresponsivePhase[]
-        if (catName.toLowerCase().includes('sle')) {
+        const isSle = catName.toLowerCase().includes('sle')
+        const isDtr = catName.toLowerCase().includes('dtr')
+        if (isSle) {
           filtered = filtered.filter(p => p.phaseName !== 'Sleep Warning')
         }
+        
+        // Normalize names to standard ones to prevent UI pill mismatch
+        const stdNames = isDtr
+          ? ["Distraction Warning", "Distinct Warning", "Emergency Function"]
+          : (isSle ? ["Distinct Warning", "Emergency Function"] : [])
+        
+        filtered = filtered.map((p, idx) => ({
+          ...p,
+          phaseName: stdNames[idx] || p.phaseName
+        }))
+        
         result[catName] = filtered
       }
     }

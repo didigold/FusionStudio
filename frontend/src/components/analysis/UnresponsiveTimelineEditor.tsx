@@ -328,6 +328,43 @@ export function UnresponsiveTimelineEditor({
                       </div>
                     </div>
                   )}
+                  
+                  {/* Configurable Mask Start */}
+                  <div className="flex flex-col gap-1 mt-1">
+                    <label className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider text-left">Mask Start</label>
+                    <div className="flex gap-1.5">
+                      <Select
+                        disabled={!isEnabled}
+                        value={phase.mask !== undefined && phase.mask !== null && phase.mask !== 'previous' ? "custom" : "previous"}
+                        onValueChange={(val) => {
+                          if (val === "previous") {
+                            updatePhaseField(idx, "mask", "previous");
+                          } else {
+                            updatePhaseField(idx, "mask", 0);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-2 hover:bg-surface-3 hover:border-primary/20 flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-xs">
+                          <SelectItem value="previous" className="text-xs">From prev phase</SelectItem>
+                          <SelectItem value="custom" className="text-xs">Custom time</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {phase.mask !== undefined && phase.mask !== null && phase.mask !== 'previous' && (
+                        <Input
+                          disabled={!isEnabled}
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          className="h-8 bg-surface-3/50 border border-border/50 text-xs text-foreground rounded-lg px-1.5 font-mono w-[80px]"
+                          value={phase.mask ?? 0}
+                          onChange={(e) => updatePhaseField(idx, "mask", parseFloat(e.target.value) || 0)}
+                        />
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </React.Fragment>

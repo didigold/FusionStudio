@@ -495,7 +495,46 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                 threshold = phase.get('value', 0)
                 
             first_match_time = None
-            eval_start = tgaze
+            
+            # Determine evaluation start time (eval_start)
+            mask_val = phase.get('mask')
+            is_custom_mask = False
+            custom_mask_time = None
+            if mask_val is not None and str(mask_val).strip().lower() != 'previous' and str(mask_val).strip() != '':
+                try:
+                    custom_mask_time = float(mask_val)
+                    is_custom_mask = True
+                except ValueError:
+                    pass
+            
+            if is_custom_mask:
+                eval_start = custom_mask_time
+            else:
+                # Default: from previous phase
+                if idx == 0:
+                    eval_start = tgaze
+                else:
+                    # Find last enabled phase before idx
+                    prev_t = None
+                    found_active_prev = False
+                    for p_idx in range(idx - 1, -1, -1):
+                        p_prev = unresponsive_phases[p_idx]
+                        if p_prev.get('enabled', True):
+                            found_active_prev = True
+                            prev_t = signal_times.get(f"phase_{p_idx}")
+                            break
+                    if found_active_prev:
+                        if prev_t is not None:
+                            eval_start = prev_t
+                        else:
+                            # Previous active phase didn't trigger, so this one can't trigger
+                            eval_start = None
+                    else:
+                        eval_start = tgaze
+
+            if eval_start is None:
+                signal_times[f"phase_{idx}"] = None
+                continue
             
             if sig_name == "SoundPressure":
                 try:

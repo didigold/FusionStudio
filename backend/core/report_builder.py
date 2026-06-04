@@ -759,6 +759,20 @@ class MatplotlibReportBuilder:
             if psig:
                 pt = self.signal_times.get(psig)
                 if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
+            
+            # For Unresponsive: draw vertical lines for each phase detection time
+            _category = self.config.get('target_category', '')
+            if 'Unresponsive' in _category:
+                _phase_colors = [self.COLORS.get('primary', '#3B82F6'), '#F59E0B', self.COLORS.get('fail', '#EF4444')]
+                _sig_times = self.config.get('signal_times', {})
+                _phases = self.config.get('unresponsive_phases', [])
+                for _pi, _ph in enumerate(_phases):
+                    if not _ph.get('enabled', True):
+                        continue
+                    _t = _sig_times.get(f'phase_{_pi}')
+                    if _t is not None:
+                        _clr = _phase_colors[_pi % len(_phase_colors)]
+                        ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
         ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
         ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
         ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
