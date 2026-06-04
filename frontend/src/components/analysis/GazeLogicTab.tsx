@@ -1712,7 +1712,8 @@ export function GazeLogicTab() {
                     </TableCell>
                     <TableCell className="py-2.5 text-base font-semibold text-foreground/90">
                       {sig.name}
-                    </TableCel                    <TableCell className="py-2.5">
+                    </TableCell>
+                    <TableCell className="py-2.5">
                       {sig.name === "SoundPressure" ? (
                         <span className="text-sm text-muted-foreground/60 px-2 font-medium">
                           Bandpass
@@ -1876,7 +1877,7 @@ export function GazeLogicTab() {
                             />
                           );
                         })()
-                      )}    )}
+                      )}
                     </TableCell>
                     <TableCell className="py-2.5">
                       <Input
