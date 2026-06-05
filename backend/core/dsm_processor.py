@@ -623,6 +623,10 @@ class DSMProcessor:
             if not isinstance(warning_value, (int, float)) and not pd.isna(warning_value):
                 continue
 
+            score_value = row.get("Score")
+            if pd.isna(score_value):
+                score_value = ""
+
             sheet_type, main_id, noisevar_id = self.get_ids(file_name, 
                 sheet_type="OCCLUSION" if filtered_folder.lower() == "occlusions" else None)
             if not sheet_type:
@@ -691,6 +695,8 @@ class DSMProcessor:
                 if not col_index: continue
                 val_to_write = '-' if pd.isna(warning_value) else warning_value
                 sheet.range((row_index, col_index)).value = val_to_write
+                if score_value:
+                    sheet.range((row_index, col_index + 1)).value = score_value
 
             # ---------- FATIGUE ----------
             elif sheet_type == "FATIGUE":
@@ -708,6 +714,8 @@ class DSMProcessor:
                 if not col_index: continue
                 val_to_write = '-' if pd.isna(warning_value) else warning_value
                 sheet.range((row_index, col_index)).value = val_to_write
+                if score_value:
+                    sheet.range((row_index, col_index + 1)).value = score_value
 
             # ---------- OCCLUSION ----------
             elif sheet_type == "OCCLUSION":
@@ -752,3 +760,5 @@ class DSMProcessor:
                 if not col_index: continue
                 val_to_write = '-' if pd.isna(warning_value) else warning_value
                 sheet.range((row_index, col_index)).value = val_to_write
+                if score_value:
+                    sheet.range((row_index, col_index + 1)).value = score_value
