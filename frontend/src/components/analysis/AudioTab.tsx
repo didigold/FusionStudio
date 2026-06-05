@@ -5,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Minus, Plus, Activity, Mic, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore } from '@/store/useAppStore';
+import { useTheme } from '@/hooks/useTheme';
+import DotField from './DotField';
 
 // Custom hook for hold-to-repeat behavior with acceleration
 function useHoldRepeat(callback: () => void, delay = 400) {
@@ -68,6 +70,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
     audioThreshold: threshold,
     setAudioThreshold: setThreshold
   } = useAppStore();
+  const { isDark } = useTheme();
   const [isDetecting, setIsDetecting] = useState(false);
   const [peakFreq, setPeakFreq] = useState<number | null>(null);
 
@@ -136,47 +139,25 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
     <div className="relative flex items-center justify-center h-full min-h-0 overflow-y-auto p-8 bg-background">
       
       {/* Background Grid & Animation Layer */}
-      <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
-        {/* Pulsing Grid Backdrop - centered to align coordinates mathematically */}
-        <div 
-          className="absolute inset-0 w-full h-full pointer-events-none" 
-          style={{ 
-            maskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)', 
-            WebkitMaskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)' 
-          }}
-        >
-          {/* Base faint grid — pure CSS */}
-          <div
-            className="absolute inset-0 pointer-events-none opacity-40"
-            style={{
-              backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
-              backgroundSize: '32px 32px',
-            }}
-          />
-          {/* Pulsing brighter grid */}
-          <div
-            className="absolute inset-0 pointer-events-none animate-pulse-sync opacity-80"
-            style={{
-              backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
-              backgroundSize: '32px 32px',
-            }}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <DotField
+            dotRadius={1.5}
+            dotSpacing={14}
+            bulgeStrength={67}
+            glowRadius={160}
+            sparkle={false}
+            waveAmplitude={0}
+            cursorRadius={500}
+            cursorForce={0.1}
+            bulgeOnly
+            darkGradientFrom="rgba(255, 255, 255, 0.75)"
+            darkGradientTo="rgba(255, 255, 255, 0.45)"
+            lightGradientFrom="rgba(80, 80, 80, 0.6)"
+            lightGradientTo="rgba(100, 100, 100, 0.4)"
+            glowColor="transparent"
           />
         </div>
-
-        {/* Soft orange glowing core — pure CSS breathing animation */}
-        <style>{`
-          @keyframes audioBreathe {
-            0%, 100% { transform: scale(0.9); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 1.0; }
-          }
-          .audio-breathe { animation: audioBreathe 4s ease-in-out infinite; }
-        `}</style>
-        <div
-          className="absolute w-[400px] h-[400px] rounded-full pointer-events-none audio-breathe"
-          style={{
-            background: 'radial-gradient(circle, rgba(249, 115, 22, 0.05) 0%, rgba(249, 115, 22, 0) 70%)'
-          }}
-        />
       </div>
 
       <div className="w-full max-w-sm space-y-6 relative z-10">

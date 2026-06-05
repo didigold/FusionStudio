@@ -201,6 +201,25 @@ export function TopNav() {
           opacity: 1;
           pointer-events: auto;
         }
+        .nav-fade-right {
+          position: absolute;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          width: 40px;
+          pointer-events: none;
+          z-index: 1;
+          border-radius: 0 6px 6px 0;
+        }
+        .nav-input-area {
+          position: relative;
+          flex: 1;
+          min-width: 0;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          overflow: hidden;
+        }
         .nav-entry-wrapper:has(.nav-clear-btn:hover) {
           background-color: rgba(239, 68, 68, 0.15) !important;
           border-color: rgba(239, 68, 68, 0.4) !important;
@@ -257,36 +276,45 @@ export function TopNav() {
                     : "border-border",
               )}
             >
-              <input
-                type="text"
-                value={localPath}
-                onChange={(e) => setLocalPath(e.target.value)}
-                onFocus={() => {
-                  setIsFocused(true);
-                  setDropdownOpen(true);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    setDropdownOpen(false);
-                    if (pendingConfig) {
-                      confirmPromptedPath(localPath);
-                    } else {
-                      setAnalysisSourcePath(localPath);
-                      triggerScanForPath(localPath);
+              <div className="nav-input-area">
+                <input
+                  type="text"
+                  value={localPath}
+                  onChange={(e) => setLocalPath(e.target.value)}
+                  onFocus={() => {
+                    setIsFocused(true);
+                    setDropdownOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setDropdownOpen(false);
+                      if (pendingConfig) {
+                        confirmPromptedPath(localPath);
+                      } else {
+                        setAnalysisSourcePath(localPath);
+                        triggerScanForPath(localPath);
+                      }
                     }
-                  }
-                }}
-                onBlur={() => {
-                  // Delay so mousedown on dropdown items fires before we hide the dropdown
-                  setTimeout(() => {
-                    setIsFocused(false);
-                    setDropdownOpen(false);
-                  }, 150);
-                }}
-                placeholder="Select project folder..."
-                style={{ outline: "none", border: "none", boxShadow: "none" }}
-                className="bg-transparent text-xs text-foreground/90 placeholder:text-muted-foreground/50 w-full pl-2 pr-2"
-              />
+                  }}
+                  onBlur={() => {
+                    // Delay so mousedown on dropdown items fires before we hide the dropdown
+                    setTimeout(() => {
+                      setIsFocused(false);
+                      setDropdownOpen(false);
+                    }, 150);
+                  }}
+                  placeholder="Select project folder..."
+                  style={{ outline: "none", border: "none", boxShadow: "none" }}
+                  className="bg-transparent text-xs text-foreground/90 placeholder:text-muted-foreground/50 w-full pl-2 pr-2 relative z-0"
+                />
+                {/* Fade overlay — right edge */}
+                <div
+                  className="nav-fade-right"
+                  style={{
+                    background: "linear-gradient(to right, transparent, var(--surface-2))",
+                  }}
+                />
+              </div>
               {analysisSourcePath && (
                 <button
                   type="button"
