@@ -62,7 +62,7 @@ import { useTheme } from '@/hooks/useTheme';
 const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: string }) => {
   const strokeColor = colorClass.includes('#00AAFF') ? 'rgba(0, 170, 255, 0.3)' : 'rgba(0, 255, 136, 0.3)';
   return (
-    <div className="flex-1 min-h-[90px] bg-white dark:bg-surface-1 rounded-xl border border-border dark:border-white/5 relative overflow-hidden flex flex-col justify-between p-4 select-none">
+    <div className="flex-1 min-h-[90px] bg-white dark:bg-surface-1 rounded-none border-b border-border dark:border-white/5 last:border-b-0 relative overflow-hidden flex flex-col justify-between p-4 select-none">
       <div className="absolute top-2 left-2 z-10">
         <div className="h-5 px-2 bg-black/40 backdrop-blur-md rounded-md border border-white/5 flex items-center justify-center">
           <span className={cn("text-[9px] font-bold uppercase tracking-wider", colorClass)}>{title}</span>
@@ -213,6 +213,93 @@ export function GazeTimeTab() {
   const zoomIn = useCallback(() => setVideoZoom(z => Math.min(3, parseFloat((z + 0.25).toFixed(2)))), []);
   const zoomOut = useCallback(() => setVideoZoom(z => Math.max(1, parseFloat((z - 0.25).toFixed(2)))), []);
   const [showBlur, setShowBlur] = useState(true);
+
+  // Panning and Wheel Zoom logic
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const videoPanRef = useRef({ x: 0, y: 0 });
+  const [videoPan, setVideoPan] = useState({ x: 0, y: 0 });
+  const isDraggingVideoRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+
+  useEffect(() => {
+    videoPanRef.current = videoPan;
+  }, [videoPan]);
+
+  useEffect(() => {
+    if (videoZoom <= 1) {
+      setVideoPan({ x: 0, y: 0 });
+      if (videoRef.current) {
+        videoRef.current.style.transform = `translate(0px, 0px) scale(1)`;
+        videoRef.current.style.cursor = 'default';
+      }
+    } else {
+      if (videoRef.current) {
+        videoRef.current.style.cursor = 'grab';
+      }
+    }
+  }, [videoZoom]);
+
+  useEffect(() => {
+    const container = videoContainerRef.current;
+    if (!container || !videoUrl) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = 0.1;
+      setVideoZoom(z => {
+        if (e.deltaY < 0) {
+          return Math.min(3, parseFloat((z + zoomFactor).toFixed(2)));
+        } else {
+          return Math.max(1, parseFloat((z - zoomFactor).toFixed(2)));
+        }
+      });
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [videoUrl]);
+
+  const handleVideoMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0 || videoZoom <= 1 || !videoUrl) return;
+    e.preventDefault();
+    isDraggingVideoRef.current = true;
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: videoPanRef.current.x,
+      panY: videoPanRef.current.y
+    };
+    if (videoRef.current) {
+      videoRef.current.style.transition = 'none';
+      videoRef.current.style.cursor = 'grabbing';
+    }
+  };
+
+  const handleVideoMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingVideoRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    const nextX = dragStartRef.current.panX + dx;
+    const nextY = dragStartRef.current.panY + dy;
+    
+    videoPanRef.current = { x: nextX, y: nextY };
+    
+    if (videoRef.current) {
+      videoRef.current.style.transform = `translate(${nextX}px, ${nextY}px) scale(${videoZoom})`;
+    }
+  };
+
+  const handleVideoMouseUp = () => {
+    if (!isDraggingVideoRef.current) return;
+    isDraggingVideoRef.current = false;
+    if (videoRef.current) {
+      videoRef.current.style.transition = 'transform 0.2s ease';
+      videoRef.current.style.cursor = videoZoom > 1 ? 'grab' : 'default';
+    }
+    setVideoPan(videoPanRef.current);
+  };
 
   // Zoom overlay timer logic
   const [showZoomOverlay, setShowZoomOverlay] = useState(false);
@@ -526,6 +613,7 @@ export function GazeTimeTab() {
       if (e.ctrlKey && e.key.toLowerCase() === 'd') { e.preventDefault(); clearLastMark(); }
       if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undoLastAction(); }
       if (e.ctrlKey && e.key.toLowerCase() === 'a') { e.preventDefault(); resetZoom(); }
+      if (e.ctrlKey && e.key.toLowerCase() === 'b') { e.preventDefault(); setShowBlur(v => !v); }
       if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         if (e.shiftKey) { e.preventDefault(); goToPrevCase(); }
         else { e.preventDefault(); goToNextCase(); }
@@ -533,7 +621,7 @@ export function GazeTimeTab() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [targetFile, clearAllMarks, clearLastMark, undoLastAction, goToNextCase, goToPrevCase, resetZoom]);
+  }, [targetFile, clearAllMarks, clearLastMark, undoLastAction, goToNextCase, goToPrevCase, resetZoom, setShowBlur]);
 
   const addMarkAtTime = useCallback((t: number) => {
     if (marksRef.current.includes(t)) return;
@@ -880,13 +968,13 @@ export function GazeTimeTab() {
 
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
         <div 
-          className="flex-[2] flex flex-col gap-2 p-4 overflow-hidden h-full min-h-0 justify-center border-r border-border"
+          className="flex-[2] flex flex-col gap-0 p-0 overflow-hidden h-full min-h-0 justify-center border-r border-border"
           style={{ backgroundColor: isDark ? 'var(--surface-ink)' : '#ffffff' }}
         >
           {targetFile ? (
             <>
               <div 
-                className="flex-1 min-h-[90px] rounded-xl border border-border relative overflow-hidden group"
+                className="flex-1 min-h-[90px] rounded-none border-b border-border relative overflow-hidden group"
                 style={{ backgroundColor: isDark ? 'var(--surface-1)' : '#ffffff' }}
                 onMouseEnter={() => setHoveringChart('top')}
                 onMouseLeave={() => { setHoveringChart(null); if (topTooltipRef.current) topTooltipRef.current.style.display = 'none'; }}
@@ -907,7 +995,7 @@ export function GazeTimeTab() {
                 </div>
               </div>
               <div 
-                className="flex-1 min-h-[90px] rounded-xl border border-border relative overflow-hidden group"
+                className="flex-1 min-h-[90px] rounded-none relative overflow-hidden group"
                 style={{ backgroundColor: isDark ? 'var(--surface-1)' : '#ffffff' }}
                 onMouseEnter={() => setHoveringChart('bottom')}
                 onMouseLeave={() => { setHoveringChart(null); if (bottomTooltipRef.current) bottomTooltipRef.current.style.display = 'none'; }}
@@ -937,7 +1025,14 @@ export function GazeTimeTab() {
         </div>
 
         <div className="flex-1 bg-black overflow-hidden relative group flex flex-col h-full min-h-0">
-            <div className="flex-1 relative min-h-0">
+            <div 
+                ref={videoContainerRef}
+                className="flex-1 relative min-h-0 overflow-hidden"
+                onMouseDown={handleVideoMouseDown}
+                onMouseMove={handleVideoMouseMove}
+                onMouseUp={handleVideoMouseUp}
+                onMouseLeave={handleVideoMouseUp}
+            >
                  {videoError ? (
                      <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20 p-6">
                          <div className="bg-black/90 backdrop-blur-md rounded-2xl border border-red-500/10 p-6 max-w-md shadow-2xl flex flex-col items-center text-center">
@@ -979,7 +1074,10 @@ export function GazeTimeTab() {
                               ref={videoRef} 
                               src={videoUrl} 
                               className="w-full h-full object-contain relative z-10 transition-transform duration-200"
-                              style={{ transform: `scale(${videoZoom})`, transformOrigin: 'center center' }}
+                              style={{ 
+                                  transform: `translate(${videoPan.x}px, ${videoPan.y}px) scale(${videoZoom})`, 
+                                  transformOrigin: 'center center' 
+                              }}
                               onTimeUpdate={() => {
                                   if (videoRef.current) {
                                       const t = videoRef.current.currentTime;
@@ -1175,6 +1273,11 @@ export function GazeTimeTab() {
                                 <Maximize className="w-3.5 h-3.5" /> Autorange
                                 <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+A</DropdownMenuShortcut>
                             </DropdownMenuItem>
+                            <DropdownMenuItem className="text-sm" onClick={() => setShowBlur(v => !v)}>
+                                <Sparkles className="w-3.5 h-3.5" /> Ambient light
+                                {showBlur && <span className="text-xs font-bold ml-2">✓</span>}
+                                <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+B</DropdownMenuShortcut>
+                            </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
@@ -1339,29 +1442,12 @@ export function GazeTimeTab() {
                         <Button 
                             disabled={!targetFile}
                             size="icon" 
-                            variant="outline" 
+                            variant="ghost" 
                             onClick={toggleSync} 
-                            className={cn(
-                                'h-7 w-7 rounded-lg border-border transition-all disabled:opacity-30',
-                                isSynced ? 'bg-primary/10 border-primary/30 text-foreground' : 'bg-surface-3 hover:bg-surface-2 text-foreground'
-                            )} 
+                            className="h-7 w-7 rounded-lg hover:bg-accent text-foreground flex items-center justify-center disabled:opacity-30"
                             title={isSynced ? 'Disable Mouse Sync' : 'Enable Mouse Sync'}
                         >
                             {isSynced ? <Mouse className="w-3.5 h-3.5" /> : <MouseOff className="w-3.5 h-3.5" />}
-                        </Button>
-                        <Button 
-                            size="icon" 
-                            variant="ghost"
-                            onClick={() => setShowBlur(v => !v)} 
-                            className={cn(
-                                'h-7 w-7 rounded-lg transition-all disabled:opacity-30 border',
-                                showBlur 
-                                  ? 'bg-primary/10 border-primary/30 text-foreground' 
-                                  : 'bg-surface-3 hover:bg-surface-2 text-foreground border-border'
-                            )} 
-                            title={showBlur ? 'Disable ambient blur' : 'Enable ambient blur'}
-                        >
-                            <Sparkles className="w-3.5 h-3.5" />
                         </Button>
                     </div>
                     <div className="bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider truncate max-w-[200px]" title={targetFile ? videoFileName : "No project loaded"}>
