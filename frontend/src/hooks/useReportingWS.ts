@@ -22,12 +22,12 @@ export function useReportingWS() {
       try {
         const data = JSON.parse(e.data)
         switch (data.type) {
-          case 'progress': setReportingStatus(data.message); addLog(data.message); break
+          case 'progress': setReportingStatus(data.message); addLog(`[Reporting] ${data.message}`); break
           case 'finished': {
             setReportingProcessing(false)
             setReportingStatus('Done!')
             setReportingOutputPath(data.output_path || '')
-            addLog('Report generated successfully!')
+            addLog('[Reporting] Report generated successfully!')
             // Option B: re-scan the analysis directory so has_report badges refresh
             // in the sidebar. This is lightweight (filesystem walk only, no MDF reads).
             const { analysisSourcePath, setAnalysisResults } = useAppStore.getState()
@@ -45,7 +45,7 @@ export function useReportingWS() {
             }
             break
           }
-          case 'error': setReportingProcessing(false); setReportingStatus('Error'); addLog(`Error: ${data.message}`); break
+          case 'error': setReportingProcessing(false); setReportingStatus('Error'); addLog(`[Reporting] Error: ${data.message}`); break
         }
       } catch { /* ignore */ }
     }
