@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -289,39 +290,46 @@ export function TopNav() {
             </div>
 
             {/* Recent Projects Dropdown */}
-            {dropdownOpen && recentProjects.length > 0 && (
-              <div className="absolute left-0 top-full mt-1.5 w-full bg-surface-2/95 backdrop-blur-md border border-border rounded-xl shadow-2xl z-[100] text-foreground overflow-hidden">
-                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 border-b border-border/40 select-none flex items-center gap-1.5">
-                  <Clock className="w-3 h-3" />
-                  Recent Projects
-                </div>
-                <div className="p-1 flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
-                  {recentProjects.map((path) => (
-                    <button
-                      key={path}
-                      type="button"
-                      onMouseDown={(e) => {
-                        // Prevent blur from firing before click
-                        e.preventDefault();
-                        setLocalPath(path);
-                        setDropdownOpen(false);
-                        setIsFocused(false);
-                        if (pendingConfig) {
-                          confirmPromptedPath(path);
-                        } else {
-                          setAnalysisSourcePath(path);
-                          triggerScanForPath(path);
-                        }
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
-                    >
-                      <Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60 group-hover:text-primary transition-colors" />
-                      <span className="truncate font-mono text-xs opacity-90">{path}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            <AnimatePresence>
+              {dropdownOpen && recentProjects.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="absolute left-0 top-full mt-1.5 w-full bg-surface-2/95 backdrop-blur-md border border-border rounded-xl shadow-2xl z-[100] text-foreground overflow-hidden"
+                >
+                  <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 border-b border-border/40 select-none flex items-center gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    Recent Projects
+                  </div>
+                  <div className="p-1 flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
+                    {recentProjects.map((path) => (
+                      <button
+                        key={path}
+                        type="button"
+                        onMouseDown={(e) => {
+                          // Prevent blur from firing before click
+                          e.preventDefault();
+                          setLocalPath(path);
+                          setDropdownOpen(false);
+                          setIsFocused(false);
+                          if (pendingConfig) {
+                            confirmPromptedPath(path);
+                          } else {
+                            setAnalysisSourcePath(path);
+                            triggerScanForPath(path);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
+                      >
+                        <span className="truncate font-mono text-xs opacity-90">{path}</span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Browse button */}
