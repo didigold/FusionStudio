@@ -1241,7 +1241,7 @@ export function GazeTimeTab() {
                             </DropdownMenuItem>
                             <AlertDialog open={confirmClearAll} onOpenChange={setConfirmClearAll}>
                                 <DropdownMenuItem className="text-sm" variant="destructive" disabled={marks.length === 0} onSelect={(e) => { e.preventDefault(); setConfirmClearAll(true); }}>
-                                    <Trash2 className="w-3 h-3 text-red-500" /> Clear All
+                                    <Trash2 className="w-3 h-3" /> Clear All
                                     <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+Space</DropdownMenuShortcut>
                                 </DropdownMenuItem>
                                 <AlertDialogContent className="max-w-[340px] border border-border bg-surface-2 p-6 text-center flex flex-col items-center gap-4 rounded-3xl shadow-2xl">
