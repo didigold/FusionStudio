@@ -324,7 +324,7 @@ class DSMProcessor:
         parts = file_name.split("_")
         for part in parts:
             if part.startswith("O") or part.startswith("B"):
-                return "NOISE VARIABLES"
+                return "BEHAVIOURS"
 
         if file_name.startswith("D"):
             return "DISTRACTION"
@@ -363,7 +363,7 @@ class DSMProcessor:
         try:
             if sheet_type in ["DISTRACTION", "FATIGUE"]:
                 repetition = int(file_name.split("_")[1])
-            elif sheet_type == "NOISE VARIABLES":
+            elif sheet_type == "BEHAVIOURS":
                 repetition = int(file_name.split("_")[2])
             elif sheet_type == "OCCLUSION":
                 repetition = int(file_name.split("_")[2])
@@ -640,8 +640,8 @@ class DSMProcessor:
 
             row_id = file_name.split("_")[0]
 
-            # ---------- NOISE VARIABLES ----------
-            if sheet_type == "NOISE VARIABLES":
+            # ---------- BEHAVIOURS ----------
+            if sheet_type == "BEHAVIOURS":
                 if not noisevar_id: continue
                 main_prefix = file_name[0].upper() if len(file_name) > 0 else None
                 if main_prefix not in ["D", "F"]: continue

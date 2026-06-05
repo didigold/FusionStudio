@@ -20,7 +20,7 @@ TEMPLATE_OPTIONS: dict[str, list[tuple[str, str, bool]]] = {
         ("Distractions", "Distractions", True),
         ("Fatigue", "Fatigue", True),
         ("Occlusions", "Occlusions", True),
-        ("Noise Variables", "Noise Variables", False),
+        ("Behaviours", "Behaviours", False),
     ],
 }
 

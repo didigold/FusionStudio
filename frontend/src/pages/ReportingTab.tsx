@@ -365,7 +365,7 @@ export default function ReportingTab() {
                 disabled={!reportingTemplate} 
                 className="w-full h-11 bg-primary text-background font-bold hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
               >
-                <PlayCircle className="w-5 h-5" /> GENERATE REPORT
+                GENERATE REPORT
               </Button>
             ) : (
               <Button 
