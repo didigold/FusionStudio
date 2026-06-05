@@ -1,77 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useReportingWS } from '../hooks/useReportingWS'
 import { 
   PlayCircle, Square, RefreshCw, FolderOpen, FileSpreadsheet, Settings
 } from 'lucide-react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-
-interface SVGPathInfo {
-  viewBox: string
-  paths: string[]
-}
-
-const backgroundSVGs: Record<string, SVGPathInfo> = {
-  template: {
-    viewBox: "0 0 100 100",
-    paths: [
-      "M 30 15 H 65 L 75 25 V 85 H 30 Z",
-      "M 65 15 V 25 H 75",
-      "M 38 38 H 68",
-      "M 38 50 H 68",
-      "M 38 62 H 68",
-      "M 38 74 H 68",
-      "M 48 32 V 78"
-    ]
-  },
-  rootFolder: {
-    viewBox: "0 0 100 100",
-    paths: [
-      "M 20 25 H 40 L 48 33 H 80 V 75 H 20 Z",
-      "M 28 45 H 72",
-      "M 28 55 H 72"
-    ]
-  },
-  outputFolder: {
-    viewBox: "0 0 100 100",
-    paths: [
-      "M 20 25 H 40 L 48 33 H 80 V 75 H 20 Z",
-      "M 50 40 V 62",
-      "M 42 54 L 50 62 L 58 54"
-    ]
-  },
-  outputFilename: {
-    viewBox: "0 0 100 100",
-    paths: [
-      "M 25 15 H 60 L 70 25 V 85 H 25 Z",
-      "M 60 15 V 25 H 70",
-      "M 40 70 L 65 45 L 70 50 L 45 75 Z",
-      "M 40 70 L 42 75 L 45 75"
-    ]
-  },
-  options: {
-    viewBox: "0 0 100 100",
-    paths: [
-      "M 50 35 A 15 15 0 1 1 50 65 A 15 15 0 1 1 50 35 Z",
-      "M 50 20 V 30",
-      "M 50 70 V 80",
-      "M 30 50 H 40",
-      "M 60 50 H 70",
-      "M 36 36 L 43 43",
-      "M 57 57 L 64 64",
-      "M 64 36 L 57 43",
-      "M 43 57 L 36 64"
-    ]
-  }
-}
+import DotField from '../components/analysis/DotField'
 
 export default function ReportingTab() {
   const {
-    reportingRootFolder, setReportingRootFolder,
     reportingOutputFolder, setReportingOutputFolder,
     reportingFilename, setReportingFilename,
     reportingTemplate, setReportingTemplate,
@@ -79,19 +19,13 @@ export default function ReportingTab() {
     reportingOptions, setReportingOption,
     reportingProcessing, setReportingProcessing,
     setReportingStatus,
-    addLog
+    addLog,
+    analysisSourcePath
   } = useAppStore()
 
   useReportingWS()
 
   const [loadingTemplates, setLoadingTemplates] = useState(false)
-  const [activeField, setActiveField] = useState<'template' | 'rootFolder' | 'outputFolder' | 'outputFilename' | 'options'>('template')
-  
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const setActiveFieldDebounced = useCallback((field: 'template' | 'rootFolder' | 'outputFolder' | 'outputFilename' | 'options') => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setActiveField(field), 150);
-  }, []);
 
   useEffect(() => {
     setLoadingTemplates(true)
@@ -111,7 +45,7 @@ export default function ReportingTab() {
   }, [])
 
   const handleGenerate = async () => {
-    if (!reportingRootFolder || !reportingOutputFolder || !reportingTemplate) {
+    if (!analysisSourcePath || !reportingOutputFolder || !reportingTemplate) {
       addLog('[Reporting] Please fill in all required fields.'); return
     }
 
@@ -134,7 +68,7 @@ export default function ReportingTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           template_name: reportingTemplate,
-          root_folder: reportingRootFolder,
+          root_folder: analysisSourcePath,
           output_folder: reportingOutputFolder,
           output_filename: reportingFilename,
           selected_folders: selectedFolders,
@@ -156,102 +90,33 @@ export default function ReportingTab() {
   return (
     <div className="relative flex flex-col items-center justify-center h-full min-h-0 overflow-y-auto p-8 bg-background">
       
-      {/* Background Grid & Animation Layer */}
+      {/* Background Dots Layer */}
       <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">
-        {/* Pulsing Grid Backdrop - centered to align coordinates mathematically */}
-        <div 
-          className="absolute inset-0 w-full h-full pointer-events-none" 
-          style={{ 
-            maskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)', 
-            WebkitMaskImage: 'radial-gradient(ellipse 65% 55% at 50% 50%, #000 70%, transparent 100%)' 
-          }}
-        >
-          {/* Base faint grid — pure CSS, dynamic border references */}
-          <div
-            className="absolute inset-0 pointer-events-none opacity-40"
-            style={{
-              backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
-              backgroundSize: '32px 32px',
-            }}
-          />
-          {/* Pulsing brighter grid layer */}
-          <div
-            className="absolute inset-0 pointer-events-none animate-pulse-sync opacity-80"
-            style={{
-              backgroundImage: `linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)`,
-              backgroundSize: '32px 32px',
-            }}
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <DotField
+            dotRadius={1.5}
+            dotSpacing={14}
+            bulgeStrength={67}
+            glowRadius={160}
+            sparkle={false}
+            waveAmplitude={0}
+            cursorRadius={500}
+            cursorForce={0.1}
+            bulgeOnly
+            darkGradientFrom="rgba(255, 255, 255, 0.75)"
+            darkGradientTo="rgba(255, 255, 255, 0.45)"
+            lightGradientFrom="rgba(80, 80, 80, 0.6)"
+            lightGradientTo="rgba(100, 100, 100, 0.4)"
+            glowColor="transparent"
           />
         </div>
-
-        {/* Soft orange glowing core */}
-        <style>{`
-          @keyframes glowBreathe {
-            0%, 100% { transform: scale(0.9); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 1.0; }
-          }
-          .glow-breathe { animation: glowBreathe 4s ease-in-out infinite; }
-        `}</style>
-        <div
-          className="absolute w-[400px] h-[400px] rounded-full pointer-events-none glow-breathe"
-          style={{
-            background: 'radial-gradient(circle, rgba(249, 115, 22, 0.05) 0%, rgba(249, 115, 22, 0) 70%)'
-          }}
-        />
-
-        <AnimatePresence mode="wait">
-          {activeField && backgroundSVGs[activeField] && (
-            <motion.div
-              key={activeField}
-              initial={{ y: 50, opacity: 0, scale: 0.9 }}
-              animate={{ y: 0, opacity: 0.25, scale: 1 }}
-              exit={{ y: -50, opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="w-[340px] h-[340px] flex items-center justify-center"
-            >
-              <svg
-                viewBox={backgroundSVGs[activeField].viewBox}
-                className="w-full h-full text-orange-500 filter drop-shadow-[0_0_15px_rgba(255,107,0,0.3)]"
-                fill="none"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <defs>
-                  <linearGradient id="corporate-orange" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ff6b00" />
-                    <stop offset="100%" stopColor="#ffa600" />
-                  </linearGradient>
-                </defs>
-                {backgroundSVGs[activeField].paths.map((d, index) => (
-                  <motion.path
-                    key={index}
-                    d={d}
-                    stroke="url(#corporate-orange)"
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{
-                      duration: 1.2,
-                      ease: "easeInOut",
-                      delay: index * 0.08,
-                    }}
-                  />
-                ))}
-              </svg>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
-      <div className="w-full max-w-lg relative z-10">
+      <div className="w-full max-w-lg relative z-10 animate-in fade-in zoom-in-95 duration-300">
         {/* Glassmorphic blur frame container */}
         <div className="flex flex-col gap-5 rounded-2xl bg-surface-2/20 border border-white/5 p-6 shadow-2xl backdrop-blur-xl relative z-10 transition-all duration-300">
           
-          <div 
-            className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveFieldDebounced('template')}
-            onClickCapture={() => setActiveFieldDebounced('template')}
-          >
+          <div className="flex flex-col gap-2">
             <Label htmlFor="template" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <FileSpreadsheet className="w-3.5 h-3.5 text-muted-foreground" /> Template
             </Label>
@@ -282,26 +147,9 @@ export default function ReportingTab() {
             </div>
           </div>
 
-          <div 
-            className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveFieldDebounced('rootFolder')}
-          >
-            <Label htmlFor="rootFolder" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
-              <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" /> Root Folder
-            </Label>
-            <Input
-              id="rootFolder"
-              value={reportingRootFolder}
-              onChange={(e) => setReportingRootFolder(e.target.value)}
-              placeholder="Root with P01, P02..."
-              className="h-9 focus-visible:ring-orange-500"
-            />
-          </div>
 
-          <div 
-            className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveFieldDebounced('outputFolder')}
-          >
+
+          <div className="flex flex-col gap-2">
             <Label htmlFor="outputFolder" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" /> Output Folder
             </Label>
@@ -314,10 +162,7 @@ export default function ReportingTab() {
             />
           </div>
 
-          <div 
-            className="flex flex-col gap-2 group/field"
-            onFocusCapture={() => setActiveFieldDebounced('outputFilename')}
-          >
+          <div className="flex flex-col gap-2">
             <Label htmlFor="outputFilename" className="text-sm font-medium text-foreground flex items-center gap-2 select-none cursor-pointer">
               <FileSpreadsheet className="w-3.5 h-3.5 text-muted-foreground" /> Output Filename
             </Label>
@@ -331,11 +176,7 @@ export default function ReportingTab() {
           </div>
 
           {showOptions && Object.keys(reportingOptions).length > 0 && (
-            <div 
-              className="flex flex-col gap-3 pt-3 border-t border-white/5 group/field"
-              onFocusCapture={() => setActiveFieldDebounced('options')}
-              onClickCapture={() => setActiveFieldDebounced('options')}
-            >
+            <div className="flex flex-col gap-3 pt-3 border-t border-white/5">
               <Label className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                 <Settings className="w-3.5 h-3.5 text-muted-foreground" /> Processing Options
               </Label>
@@ -349,7 +190,6 @@ export default function ReportingTab() {
                       id={`opt-${label}`}
                       checked={checked}
                       onCheckedChange={(val) => setReportingOption(label, val)}
-                      onFocus={() => setActiveField('options')}
                     />
                   </div>
                 ))}
