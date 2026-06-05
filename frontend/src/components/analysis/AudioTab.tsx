@@ -8,6 +8,76 @@ import { useAppStore } from '@/store/useAppStore';
 import { useTheme } from '@/hooks/useTheme';
 import DotField from './DotField';
 import SpotlightCard from './SpotlightCard';
+import Counter from './Counter';
+
+function EditableCounter({ 
+  value, 
+  onChange, 
+  min, 
+  max, 
+  isDecimal = false 
+}: { 
+  value: number, 
+  onChange: (v: number) => void, 
+  min: number, 
+  max: number, 
+  isDecimal?: boolean 
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value.toString());
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    let parsed = parseFloat(tempValue);
+    if (isNaN(parsed)) {
+      parsed = value;
+    }
+    parsed = Math.max(min, Math.min(max, parsed));
+    onChange(isDecimal ? Number(parsed.toFixed(3)) : Math.round(parsed));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        type="number"
+        value={tempValue}
+        placeholder={isDecimal ? "0.000" : "0"}
+        onChange={(e) => setTempValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        autoFocus
+        step={isDecimal ? 0.001 : 1}
+        className="w-24 h-12 text-center bg-transparent text-foreground border-b border-white/20 font-bold tracking-tighter tabular-nums focus:outline-none focus:border-primary"
+        style={{ fontSize: 36, appearance: 'textfield' }}
+      />
+    );
+  }
+
+  return (
+    <div 
+      className="w-24 h-12 flex items-center justify-center cursor-text hover:bg-white/5 rounded-lg transition-colors overflow-visible font-bold" 
+      onClick={() => { setTempValue(value.toFixed(isDecimal ? 3 : 0)); setIsEditing(true); }}
+    >
+      <Counter
+        value={value}
+        fontSize={36}
+        padding={0}
+        gap={1}
+        textColor="currentColor"
+        fontWeight={800}
+        gradientFrom="transparent"
+        gradientTo="transparent"
+        places={isDecimal ? [1, ".", 0.1, 0.01, 0.001] : undefined}
+      />
+    </div>
+  );
+}
 
 // Custom hook for hold-to-repeat behavior with acceleration
 function useHoldRepeat(callback: () => void, delay = 400) {
@@ -88,6 +158,8 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
   const minPlusHandlers = useHoldRepeat(() => setMinFreq(f => Math.min(maxFreqRef.current - 1, f + 1)));
   const maxMinusHandlers = useHoldRepeat(() => setMaxFreq(f => Math.max(minFreqRef.current + 1, f - 1)));
   const maxPlusHandlers = useHoldRepeat(() => setMaxFreq(f => Math.min(24000, f + 1)));
+  const thresholdMinusHandlers = useHoldRepeat(() => setThreshold(t => Math.max(0.001, Number((t - 0.001).toFixed(3)))));
+  const thresholdPlusHandlers = useHoldRepeat(() => setThreshold(t => Math.min(5, Number((t + 0.001).toFixed(3)))));
 
   const handleAutodetect = async () => {
     if (!fileToUse) {
@@ -196,7 +268,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               >
                 <Minus className="w-4 h-4" />
               </Button>
-              <span className="text-4xl font-bold tracking-tighter tabular-nums w-24 text-center">{minFreq}</span>
+              <EditableCounter value={minFreq} onChange={setMinFreq} min={1} max={maxFreq - 1} />
               <Button
                 variant="outline"
                 size="icon"
@@ -224,7 +296,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               >
                 <Minus className="w-4 h-4" />
               </Button>
-              <span className="text-4xl font-bold tracking-tighter tabular-nums w-24 text-center">{maxFreq}</span>
+              <EditableCounter value={maxFreq} onChange={setMaxFreq} min={minFreq + 1} max={24000} />
               <Button
                 variant="outline"
                 size="icon"
@@ -247,18 +319,18 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
-                onClick={() => setThreshold(Math.max(0.01, Number((threshold - 0.01).toFixed(2))))}
-                disabled={threshold <= 0.01}
+                disabled={threshold <= 0.001}
+                {...thresholdMinusHandlers}
               >
                 <Minus className="w-4 h-4" />
               </Button>
-              <span className="text-4xl font-bold tracking-tighter tabular-nums w-24 text-center">{threshold.toFixed(2)}</span>
+              <EditableCounter value={threshold} onChange={setThreshold} min={0.001} max={5} isDecimal />
               <Button
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
-                onClick={() => setThreshold(Number((threshold + 0.01).toFixed(2)))}
                 disabled={threshold >= 5}
+                {...thresholdPlusHandlers}
               >
                 <Plus className="w-4 h-4" />
               </Button>
