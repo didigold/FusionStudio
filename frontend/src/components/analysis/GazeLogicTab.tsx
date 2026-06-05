@@ -60,7 +60,7 @@ import {
   Trash2,
   FolderOpen,
   Lock,
-  Settings,
+  Cog,
   Box,
   Square,
   Drama,
@@ -1419,7 +1419,7 @@ export function GazeLogicTab() {
                 document.getElementById("import-config-input")?.click()
               }
             >
-              <Settings className="w-3.5 h-3.5 shrink-0" />
+              <Cog className="w-3.5 h-3.5 shrink-0" />
               <div className="relative flex items-center justify-center min-w-0">
                 <span
                   className="pill-text transition-all duration-200 truncate has-clear"
