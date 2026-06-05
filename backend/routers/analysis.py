@@ -2,10 +2,13 @@ import asyncio
 import json
 import logging
 import os
+import os
 import re
+import uuid
 from threading import Thread
+from typing import Dict
 
-from fastapi import APIRouter, WebSocket, HTTPException, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, HTTPException, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -756,8 +759,28 @@ async def ws_analysis(ws: WebSocket):
         print("WS DISCONNECTED")
 
 
+# Global dictionary to track ongoing transcode tasks to prevent concurrent generation
+transcoding_tasks: Dict[str, asyncio.Event] = {}
+
+
+def _run_ffmpeg_sync(cmd: list, creationflags: int) -> int:
+    import subprocess
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creationflags
+        )
+        process.wait()
+        return process.returncode
+    except Exception:
+        return -1
+
+
 @router.get("/media")
-def get_media(path: str):
+@router.head("/media")
+async def get_media(path: str, request: Request):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
     
@@ -767,9 +790,29 @@ def get_media(path: str):
         cache_dir = os.path.join(dir_name, "_video_cache")
         os.makedirs(cache_dir, exist_ok=True)
         mp4_path = os.path.join(cache_dir, os.path.splitext(base_name)[0] + ".mp4")
-        if not os.path.exists(mp4_path):
+        
+        # Clean up corrupted/empty cache files from previous interrupted runs
+        if os.path.exists(mp4_path) and os.path.getsize(mp4_path) < 1024:
             try:
-                import subprocess
+                os.remove(mp4_path)
+            except Exception:
+                pass
+
+        # If another request is currently transcoding this file, wait for it
+        if mp4_path in transcoding_tasks:
+            logger.info(f"Waiting for ongoing transcode to finish: {mp4_path}")
+            await transcoding_tasks[mp4_path].wait()
+            if not os.path.exists(mp4_path):
+                # If it still doesn't exist after waiting, the transcode failed.
+                return FileResponse(path)
+            return FileResponse(mp4_path)
+
+        if not os.path.exists(mp4_path):
+            transcode_event = asyncio.Event()
+            transcoding_tasks[mp4_path] = transcode_event
+            tmp_path = mp4_path + f".{uuid.uuid4().hex}.tmp.mp4"
+            
+            try:
                 logger.info(f"Transcoding AVI to MP4 for browser playback: {path} -> {mp4_path}")
                 
                 # Configure subprocess to run quietly and without window on Windows
@@ -790,20 +833,38 @@ def get_media(path: str):
                     "-c:v", "libx264", "-pix_fmt", "yuv420p",
                     "-preset", "veryfast", "-g", "1",
                     "-c:a", "aac", "-movflags", "faststart",
-                    mp4_path
+                    tmp_path
                 ]
-                subprocess.run(
-                    cmd, 
-                    stdout=subprocess.DEVNULL, 
-                    stderr=subprocess.DEVNULL, 
-                    check=True,
-                    creationflags=creationflags
+                
+                loop = asyncio.get_running_loop()
+                returncode = await loop.run_in_executor(
+                    None,
+                    _run_ffmpeg_sync,
+                    cmd,
+                    creationflags
                 )
-                logger.info(f"Successfully transcoded: {mp4_path}")
+                
+                if returncode == 0:
+                    if os.path.exists(tmp_path):
+                        os.replace(tmp_path, mp4_path)
+                    logger.info(f"Successfully transcoded: {mp4_path}")
+                else:
+                    raise Exception(f"FFmpeg exited with code {returncode}")
+                    
             except Exception as e:
                 logger.error(f"Failed to transcode {path} to browser-compatible format: {e}")
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
                 # Fallback to original AVI file
                 return FileResponse(path)
+            finally:
+                # Always signal that this file is done (success or fail)
+                transcode_event.set()
+                if mp4_path in transcoding_tasks:
+                    del transcoding_tasks[mp4_path]
         
         return FileResponse(mp4_path)
         

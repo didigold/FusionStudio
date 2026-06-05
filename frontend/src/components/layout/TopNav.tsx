@@ -140,6 +140,12 @@ export function TopNav() {
         body: JSON.stringify({ source_dir: path }),
       });
       const data = await res.json();
+      
+      // Prevent race conditions: discard scan results if the user switched projects
+      if (useAppStore.getState().analysisSourcePath !== path) {
+        return;
+      }
+      
       setAnalysisResults(data.results || []);
       setAnalysisAvailableCameras(data.available_cameras || []);
       setAllAnalysisFiles(true);
@@ -147,7 +153,10 @@ export function TopNav() {
     } catch (err) {
       addLog(`Error scanning analysis dir: ${err}`);
     } finally {
-      setScanning(false);
+      // Only disable scanning indicator if this is still the active project
+      if (useAppStore.getState().analysisSourcePath === path) {
+        setScanning(false);
+      }
     }
   };
 

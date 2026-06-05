@@ -243,9 +243,11 @@ export function GazeTimeTab() {
         return subjPart || 'Unknown';
       }))).sort();
       setSubjects(subjs);
-      if (!selectedSubject && subjs.length > 0) setSelectedSubject(subjs[0]);
+      if (subjs.length > 0 && (!selectedSubject || !subjs.includes(selectedSubject))) {
+        setSelectedSubject(subjs[0]);
+      }
     }
-  }, [analysisCheckedFiles]);
+  }, [analysisCheckedFiles, selectedSubject]);
 
   useEffect(() => {
     if (selectedSubject) {
@@ -266,7 +268,14 @@ export function GazeTimeTab() {
       fileToLoad = fileToLoad.replace('.mf4', '_tracking.mf4');
     }
     setTargetFile(fileToLoad);
-  }, [analysisSelectedFile, analysisCheckedFiles]);
+
+    if (fileToLoad) {
+      const match = subjects.find(s => fileToLoad.replace(/\\/g, '/').includes(s));
+      if (match && match !== selectedSubject) {
+        setSelectedSubject(match);
+      }
+    }
+  }, [analysisSelectedFile, analysisCheckedFiles, subjects, selectedSubject]);
 
   // Phase 3: Case navigation
   const findCaseIndex = useCallback((file: string | null) => {
