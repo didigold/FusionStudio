@@ -1165,18 +1165,11 @@ export function GazeLogicTab() {
     mask: 6.0,
   };
 
-  // Preview activation: sidebar file selected, active category has an MF4 file loaded, and at least one signal is active
-  const isPreviewEnabled =
-    !!analysisSelectedFile &&
-    !!loadedFiles[activeCategory] &&
-    currentSignalsList.some((s) => s.checked) &&
-    !isPreviewLoading;
+  // Preview activation: sidebar file selected, not currently loading
+  const isPreviewEnabled = !!analysisSelectedFile && !isPreviewLoading;
 
-  // Batch run activation: at least one checkbox active in sidebar tree, active category has an MF4 file loaded, and at least one signal is active
-  const isBatchEnabled =
-    analysisCheckedFiles.length > 0 &&
-    !!loadedFiles[activeCategory] &&
-    currentSignalsList.some((s) => s.checked);
+  // Batch run activation: at least one checkbox active in sidebar tree
+  const isBatchEnabled = analysisCheckedFiles.length > 0;
 
   // Filter signals list by query string
   const filteredSignals = currentSignalsList.filter((sig) => {
