@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon } from "lucide-react";
+import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useTheme } from "@/hooks/useTheme";
+
 
 declare const __USERNAME__: string | undefined;
 
@@ -63,6 +64,56 @@ export function TopNav() {
   const [localPath, setLocalPath] = useState(analysisSourcePath);
   const [isFocused, setIsFocused] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [recentProjects, setRecentProjects] = useState<string[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const loadRecent = () => {
+      const recent = localStorage.getItem("recent_projects");
+      if (recent) {
+        try {
+          const parsed = JSON.parse(recent);
+          if (Array.isArray(parsed)) {
+            setRecentProjects(
+              parsed.filter((p) => typeof p === "string" && p.trim() !== ""),
+            );
+          }
+        } catch (e) {
+          setRecentProjects([]);
+        }
+      }
+    };
+    loadRecent();
+
+    window.addEventListener("storage", loadRecent);
+    return () => window.removeEventListener("storage", loadRecent);
+  }, []);
+
+  const addToRecentProjects = (path: string) => {
+    if (!path || typeof path !== "string" || !path.trim()) return;
+    const cleanedPath = path.trim();
+    const recent = localStorage.getItem("recent_projects");
+    let list: string[] = [];
+    if (recent) {
+      try {
+        list = JSON.parse(recent);
+      } catch (e) {
+        list = [];
+      }
+    }
+    if (!Array.isArray(list)) list = [];
+    list = list.filter((p) => p !== cleanedPath);
+    list.unshift(cleanedPath);
+    list = list.slice(0, 5);
+    localStorage.setItem("recent_projects", JSON.stringify(list));
+    setRecentProjects(list);
+  };
+
+  useEffect(() => {
+    if (analysisSourcePath) {
+      addToRecentProjects(analysisSourcePath);
+    }
+  }, [analysisSourcePath]);
 
   // Keep localPath in sync with store changes (e.g. folder browser or config loaded)
   useEffect(() => {
@@ -184,55 +235,92 @@ export function TopNav() {
 
         {/* Center: Data Source Input Area (Fixed Position) */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
-          <div
-            className={cn(
-              "nav-entry-wrapper relative w-[600px] h-9 flex items-center bg-surface-2 border rounded-lg px-2 transition-all shadow-inner",
-              isFocused
-                ? "border-orange-500 ring-1 ring-orange-500/20"
-                : !analysisSourcePath
-                  ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]"
-                  : "border-border",
-            )}
-          >
-            <input
-              type="text"
-              value={localPath}
-              onChange={(e) => setLocalPath(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  if (pendingConfig) {
-                    confirmPromptedPath(localPath);
-                  } else {
-                    setAnalysisSourcePath(localPath);
-                    triggerScanForPath(localPath);
+          <div className="relative">
+            <div
+              className={cn(
+                "nav-entry-wrapper relative w-[600px] h-9 flex items-center bg-surface-2 border rounded-lg px-2 transition-all shadow-inner",
+                isFocused
+                  ? "border-orange-500 ring-1 ring-orange-500/20"
+                  : !analysisSourcePath
+                    ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]"
+                    : "border-border",
+              )}
+            >
+              <input
+                type="text"
+                value={localPath}
+                onChange={(e) => setLocalPath(e.target.value)}
+                onFocus={() => {
+                  setIsFocused(true);
+                  setDropdownOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    setDropdownOpen(false);
+                    if (pendingConfig) {
+                      confirmPromptedPath(localPath);
+                    } else {
+                      setAnalysisSourcePath(localPath);
+                      triggerScanForPath(localPath);
+                    }
                   }
-                }
-              }}
-              onBlur={() => {
-                setIsFocused(false);
-                if (pendingConfig) {
-                  if (localPath !== analysisSourcePath) {
-                    confirmPromptedPath(localPath);
-                  }
-                } else {
-                  setAnalysisSourcePath(localPath);
-                  triggerScanForPath(localPath);
-                }
-              }}
-              placeholder="Select project folder..."
-              style={{ outline: "none", border: "none", boxShadow: "none" }}
-              className="bg-transparent text-xs text-foreground/90 placeholder:text-muted-foreground/50 w-full pl-2 pr-2"
-            />
-            {analysisSourcePath && (
-              <button
-                type="button"
-                onClick={() => setClearConfirmOpen(true)}
-                className="nav-clear-btn p-1 hover:bg-foreground/5 text-muted-foreground hover:text-foreground rounded-md transition-all mr-1"
-                title="Clear Path"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+                }}
+                onBlur={() => {
+                  // Delay so mousedown on dropdown items fires before we hide the dropdown
+                  setTimeout(() => {
+                    setIsFocused(false);
+                    setDropdownOpen(false);
+                  }, 150);
+                }}
+                placeholder="Select project folder..."
+                style={{ outline: "none", border: "none", boxShadow: "none" }}
+                className="bg-transparent text-xs text-foreground/90 placeholder:text-muted-foreground/50 w-full pl-2 pr-2"
+              />
+              {analysisSourcePath && (
+                <button
+                  type="button"
+                  onClick={() => setClearConfirmOpen(true)}
+                  className="nav-clear-btn p-1 hover:bg-foreground/5 text-muted-foreground hover:text-foreground rounded-md transition-all mr-1"
+                  title="Clear Path"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Recent Projects Dropdown */}
+            {dropdownOpen && recentProjects.length > 0 && (
+              <div className="absolute left-0 top-full mt-1.5 w-full bg-surface-2/95 backdrop-blur-md border border-border rounded-xl shadow-2xl z-[100] text-foreground overflow-hidden">
+                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 border-b border-border/40 select-none flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" />
+                  Recent Projects
+                </div>
+                <div className="p-1 flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
+                  {recentProjects.map((path) => (
+                    <button
+                      key={path}
+                      type="button"
+                      onMouseDown={(e) => {
+                        // Prevent blur from firing before click
+                        e.preventDefault();
+                        setLocalPath(path);
+                        setDropdownOpen(false);
+                        setIsFocused(false);
+                        if (pendingConfig) {
+                          confirmPromptedPath(path);
+                        } else {
+                          setAnalysisSourcePath(path);
+                          triggerScanForPath(path);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
+                    >
+                      <Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60 group-hover:text-primary transition-colors" />
+                      <span className="truncate font-mono text-xs opacity-90">{path}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
