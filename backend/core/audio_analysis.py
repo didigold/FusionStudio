@@ -3,13 +3,8 @@
 def butter_bandpass(lowcut, highcut, fs, order=5):
     from scipy.signal import butter
     nyq = 0.5 * fs
-    low = max(1e-6, lowcut / nyq)
-    high = min(1 - 1e-6, highcut / nyq)
-    if low >= high:
-        high = low + 0.1
-        if high >= 1:
-            low = 0.1
-            high = 0.9
+    low = lowcut / nyq
+    high = highcut / nyq
     b, a = butter(order, [low, high], btype='band')
     return b, a
 

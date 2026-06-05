@@ -175,8 +175,8 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           file_path: fileToUse,
-          min_freq: minFreq,
-          max_freq: maxFreq,
+          min_freq: 230,
+          max_freq: 2000,
           signal_name: "SoundPressure"
         })
       });
@@ -344,7 +344,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
         <Button
           onClick={handleAutodetect}
           disabled={isDetecting || !fileToUse}
-          className="w-full h-10 text-sm font-medium bg-primary text-black hover:bg-primary/90 rounded-lg shadow-lg shadow-primary/20"
+          className="w-full h-10 text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg shadow-lg shadow-primary/20 disabled:opacity-100 disabled:bg-surface-3 disabled:text-muted-foreground/60"
         >
           {isDetecting ? (
             <RefreshCw className="w-4 h-4 animate-spin mr-2" />
