@@ -4,6 +4,8 @@
   --logoloop-gap: 32px;
   --logoloop-logoHeight: 28px;
   --logoloop-fadeColorAuto: #ffffff;
+  --logoloop-seq-size: 0px;
+  --logoloop-duration: 0s;
 }
 
 .logoloop--vertical {
@@ -171,9 +173,67 @@
   );
 }
 
+/* CSS Keyframe Animations for Hardware Acceleration (Compositor Thread) */
+@keyframes logoloop-scroll-left {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(calc(-1 * var(--logoloop-seq-size)), 0, 0);
+  }
+}
+
+@keyframes logoloop-scroll-right {
+  0% {
+    transform: translate3d(calc(-1 * var(--logoloop-seq-size)), 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes logoloop-scroll-up {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, calc(-1 * var(--logoloop-seq-size)), 0);
+  }
+}
+
+@keyframes logoloop-scroll-down {
+  0% {
+    transform: translate3d(0, calc(-1 * var(--logoloop-seq-size)), 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.logoloop--anim-left .logoloop__track {
+  animation: logoloop-scroll-left var(--logoloop-duration, 20s) linear infinite;
+}
+
+.logoloop--anim-right .logoloop__track {
+  animation: logoloop-scroll-right var(--logoloop-duration, 20s) linear infinite;
+}
+
+.logoloop--anim-up .logoloop__track {
+  animation: logoloop-scroll-up var(--logoloop-duration, 20s) linear infinite;
+}
+
+.logoloop--anim-down .logoloop__track {
+  animation: logoloop-scroll-down var(--logoloop-duration, 20s) linear infinite;
+}
+
+.logoloop--pause-on-hover:hover .logoloop__track {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .logoloop__track {
     transform: translate3d(0, 0, 0) !important;
+    animation: none !important;
   }
 
   .logoloop__item img,
