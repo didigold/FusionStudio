@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useAppStore } from '@/store/useAppStore';
 import { useTheme } from '@/hooks/useTheme';
 import DotField from './DotField';
+import SpotlightCard from './SpotlightCard';
 
 // Custom hook for hold-to-repeat behavior with acceleration
 function useHoldRepeat(callback: () => void, delay = 400) {
@@ -178,7 +179,10 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
         </div>
 
         {/* Glassmorphic blur frame container */}
-        <div className="flex flex-col gap-6 rounded-3xl bg-surface-2/20 border border-white/5 p-6 shadow-2xl backdrop-blur-xl relative z-10 transition-all duration-300">
+        <SpotlightCard 
+          className="flex flex-col gap-6 rounded-3xl bg-surface-2/20 border border-white/5 p-6 shadow-2xl backdrop-blur-xl relative z-10 transition-all duration-300"
+          spotlightColor={isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"}
+        >
           
           <div className="flex flex-col gap-3">
             <span className="text-sm font-medium text-foreground">Minimum frequency</span>
@@ -263,7 +267,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               Sensitivity for peak detection. Lower values detect more peaks.
             </span>
           </div>
-        </div>
+        </SpotlightCard>
 
         <Button
           onClick={handleAutodetect}
