@@ -1,251 +1,303 @@
-import { useState, useEffect, useMemo } from 'react'
-import { useAppStore } from '../store/useAppStore'
-import { useFuseWebSocket } from '../hooks/useFuseWebSocket'
-import { 
-  Play, Pause, Square, Box, Clapperboard, Crown, File,
-  RefreshCw, Filter, ChevronRight, ChevronDown, Check, ChevronsUpDown, X
-} from 'lucide-react'
-import { Checkbox } from '@/components/ui/checkbox'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { useState, useEffect, useMemo } from "react";
+import { useAppStore } from "../store/useAppStore";
+import { useFuseWebSocket } from "../hooks/useFuseWebSocket";
+import {
+  Play,
+  Pause,
+  Square,
+  Box,
+  Clapperboard,
+  Crown,
+  File,
+  RefreshCw,
+  Filter,
+  ChevronRight,
+  ChevronDown,
+  Check,
+  ChevronsUpDown,
+  X,
+} from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
-let lastScannedFusePath = ''
+let lastScannedFusePath = "";
 
 export default function FuseTab() {
-  const { 
+  const {
     analysisSourcePath,
-    participants, setParticipants,
-    toggleParticipant, setAllParticipants,
-    signals, setSignals, toggleSignal, setAllSignals,
-    masterFile, setMasterFile,
-    fusionState, setFusionState,
+    participants,
+    setParticipants,
+    toggleParticipant,
+    setAllParticipants,
+    signals,
+    setSignals,
+    toggleSignal,
+    setAllSignals,
+    masterFile,
+    setMasterFile,
+    fusionState,
+    setFusionState,
     addLog,
-    copyVideos, setCopyVideos,
-    overwriteMode, setOverwriteMode,
-    signalFilter, setSignalFilter
-  } = useAppStore()
+    copyVideos,
+    setCopyVideos,
+    overwriteMode,
+    setOverwriteMode,
+    signalFilter,
+    setSignalFilter,
+  } = useAppStore();
 
   // Removed useFuseWebSocket() - now managed at parent level in AnalysisTab.tsx to prevent tab-switch disconnects.
 
-  const [scanning, setScanning] = useState(false)
-  const [loadingSignals, setLoadingSignals] = useState(false)
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [comboboxOpen, setComboboxOpen] = useState(false)
+  const [scanning, setScanning] = useState(false);
+  const [loadingSignals, setLoadingSignals] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [comboboxOpen, setComboboxOpen] = useState(false);
 
-  const allChecked = participants.length > 0 && participants.every(p => p.checked)
-  const noneChecked = participants.length > 0 && participants.every(p => !p.checked)
-  const radioValue = allChecked ? 'all' : (noneChecked ? 'none' : '')
+  const allChecked =
+    participants.length > 0 && participants.every((p) => p.checked);
+  const noneChecked =
+    participants.length > 0 && participants.every((p) => !p.checked);
+  const radioValue = allChecked ? "all" : noneChecked ? "none" : "";
 
   const handleSelectionChange = (val: string) => {
-    if (val === 'all') {
-      setAllParticipants(true)
-    } else if (val === 'none') {
-      setAllParticipants(false)
+    if (val === "all") {
+      setAllParticipants(true);
+    } else if (val === "none") {
+      setAllParticipants(false);
     }
-  }
+  };
 
-  const allSignalsChecked = signals.length > 0 && signals.every(s => s.checked)
-  const noneSignalsChecked = signals.length > 0 && signals.every(s => !s.checked)
-  const signalsRadioValue = allSignalsChecked ? 'all' : (noneSignalsChecked ? 'none' : '')
+  const allSignalsChecked =
+    signals.length > 0 && signals.every((s) => s.checked);
+  const noneSignalsChecked =
+    signals.length > 0 && signals.every((s) => !s.checked);
+  const signalsRadioValue = allSignalsChecked
+    ? "all"
+    : noneSignalsChecked
+      ? "none"
+      : "";
 
   const handleSignalsSelectionChange = (val: string) => {
-    if (val === 'all') {
-      setAllSignals(true)
-    } else if (val === 'none') {
-      setAllSignals(false)
+    if (val === "all") {
+      setAllSignals(true);
+    } else if (val === "none") {
+      setAllSignals(false);
     }
-  }
+  };
 
   const toggleExpanded = (name: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(name)) next.delete(name)
-      else next.add(name)
-      return next
-    })
-  }
+    e.stopPropagation();
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   const handleScan = async (path: string) => {
-    if (!path) return
-    setScanning(true)
-    addLog(`Scanning root folder: ${path}`)
+    if (!path) return;
+    setScanning(true);
+    addLog(`Scanning root folder: ${path}`);
     try {
-      const res = await fetch('/api/fuse/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/fuse/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source_dir: path }),
-      })
-      const data = await res.json()
-      setParticipants((data.participants || []).map((p: any) => ({ ...p, checked: true })))
-      addLog(`Found ${data.participants?.length || 0} participants.`)
+      });
+      const data = await res.json();
+      setParticipants(
+        (data.participants || []).map((p: any) => ({ ...p, checked: true })),
+      );
+      addLog(`Found ${data.participants?.length || 0} participants.`);
     } catch (err) {
-      addLog(`Error scanning: ${err}`)
+      addLog(`Error scanning: ${err}`);
     } finally {
-      setScanning(false)
+      setScanning(false);
     }
-  }
+  };
 
   const handleLoadSignals = async (filePath: string) => {
-    if (!filePath) return
-    setLoadingSignals(true)
-    addLog(`Loading signals from master: ${filePath}`)
+    if (!filePath) return;
+    setLoadingSignals(true);
+    addLog(`Loading signals from master: ${filePath}`);
     try {
-      const res = await fetch('/api/fuse/signals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/fuse/signals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file_path: filePath }),
-      })
-      const data = await res.json()
-      setSignals((data.channels || []).map((ch: any) => ({ ...ch, checked: true })))
-      addLog(`Loaded ${data.channels?.length || 0} signals.`)
+      });
+      const data = await res.json();
+      setSignals(
+        (data.channels || []).map((ch: any) => ({ ...ch, checked: true })),
+      );
+      addLog(`Loaded ${data.channels?.length || 0} signals.`);
     } catch (err) {
-      addLog(`Error loading signals: ${err}`)
+      addLog(`Error loading signals: ${err}`);
     } finally {
-      setLoadingSignals(false)
+      setLoadingSignals(false);
     }
-  }
+  };
 
   const handleRun = async () => {
-    const selectedParticipants = participants.filter(p => p.checked).map(p => p.name)
-    const selectedSignals = signals.filter(s => s.checked).map(s => ({ name: s.name, g_idx: s.g_idx, c_idx: s.c_idx }))
-    
+    const selectedParticipants = participants
+      .filter((p) => p.checked)
+      .map((p) => p.name);
+    const selectedSignals = signals
+      .filter((s) => s.checked)
+      .map((s) => ({ name: s.name, g_idx: s.g_idx, c_idx: s.c_idx }));
+
     if (selectedParticipants.length === 0) {
-      addLog('No participants selected.')
-      return
+      addLog("No participants selected.");
+      return;
     }
-    
-    setFusionState('running')
-    addLog(`Starting fusion for ${selectedParticipants.length} participants...`)
-    
+
+    setFusionState("running");
+    addLog(
+      `Starting fusion for ${selectedParticipants.length} participants...`,
+    );
+
     try {
-      await fetch('/api/fuse/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/fuse/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           source_dir: analysisSourcePath,
           participants: selectedParticipants,
           signal_whitelist: selectedSignals.length > 0 ? selectedSignals : null,
           copy_videos: copyVideos,
-          overwrite_mode: overwriteMode
-        })
-      })
+          overwrite_mode: overwriteMode,
+        }),
+      });
     } catch (err) {
-      addLog(`Error starting fusion: ${err}`)
-      setFusionState('idle')
+      addLog(`Error starting fusion: ${err}`);
+      setFusionState("idle");
     }
-  }
+  };
 
   const handlePause = async () => {
     try {
-      await fetch('/api/fuse/pause', { method: 'POST' })
-      setFusionState('paused')
-      addLog('Pause requested.')
+      await fetch("/api/fuse/pause", { method: "POST" });
+      setFusionState("paused");
+      addLog("Pause requested.");
     } catch (err) {
-      addLog(`Error pausing: ${err}`)
+      addLog(`Error pausing: ${err}`);
     }
-  }
+  };
 
   const handleResume = async () => {
     try {
-      await fetch('/api/fuse/resume', { method: 'POST' })
-      setFusionState('running')
-      addLog('Resume requested.')
+      await fetch("/api/fuse/resume", { method: "POST" });
+      setFusionState("running");
+      addLog("Resume requested.");
     } catch (err) {
-      addLog(`Error resuming: ${err}`)
+      addLog(`Error resuming: ${err}`);
     }
-  }
+  };
 
   const handleStop = async () => {
     try {
-      await fetch('/api/fuse/stop', { method: 'POST' })
-      setFusionState('stopping')
-      addLog('Stop requested.')
+      await fetch("/api/fuse/stop", { method: "POST" });
+      setFusionState("stopping");
+      addLog("Stop requested.");
     } catch (err) {
-      addLog(`Error stopping: ${err}`)
+      addLog(`Error stopping: ${err}`);
     }
-  }
+  };
 
   // Trigger participant scan when analysisSourcePath changes
   useEffect(() => {
     if (analysisSourcePath) {
       if (analysisSourcePath !== lastScannedFusePath) {
-        handleScan(analysisSourcePath)
-        lastScannedFusePath = analysisSourcePath
+        handleScan(analysisSourcePath);
+        lastScannedFusePath = analysisSourcePath;
       }
     } else {
-      lastScannedFusePath = ''
+      lastScannedFusePath = "";
     }
-  }, [analysisSourcePath])
+  }, [analysisSourcePath]);
 
   // Dynamically extract all master files from selected participants
   const masterFilesList = useMemo(() => {
-    const list: { name: string; path: string }[] = []
-    const seen = new Set<string>()
-    participants.forEach(p => {
+    const list: { name: string; path: string }[] = [];
+    const seen = new Set<string>();
+    participants.forEach((p) => {
       if (p.checked && p.masters) {
         p.masters.forEach((m: any) => {
-          const name = typeof m === 'object' ? m.name : m
-          const path = typeof m === 'object' ? m.path : `${p.path}/${m}`
+          const name = typeof m === "object" ? m.name : m;
+          const path = typeof m === "object" ? m.path : `${p.path}/${m}`;
           if (!seen.has(path)) {
-            seen.add(path)
-            list.push({ name, path })
+            seen.add(path);
+            list.push({ name, path });
           }
-        })
+        });
       }
-    })
-    return list
-  }, [participants])
+    });
+    return list;
+  }, [participants]);
 
   // Automatically select the first available master file when the selection updates
   useEffect(() => {
     if (masterFilesList.length > 0) {
-      const exists = masterFilesList.some(m => m.path === masterFile)
-      if (!exists) setMasterFile(masterFilesList[0].path)
+      const exists = masterFilesList.some((m) => m.path === masterFile);
+      if (!exists) setMasterFile(masterFilesList[0].path);
     } else {
-      setMasterFile('')
+      setMasterFile("");
     }
-  }, [masterFilesList, masterFile, setMasterFile])
+  }, [masterFilesList, masterFile, setMasterFile]);
 
   // Load signals automatically when masterFile changes
   useEffect(() => {
     if (masterFile) {
-      handleLoadSignals(masterFile)
+      handleLoadSignals(masterFile);
     } else {
-      setSignals([])
+      setSignals([]);
     }
-  }, [masterFile])
+  }, [masterFile]);
 
-  const filteredSignals = signals.filter(s => 
-    s.name.toLowerCase().includes(signalFilter.toLowerCase())
-  )
+  const filteredSignals = signals.filter((s) =>
+    s.name.toLowerCase().includes(signalFilter.toLowerCase()),
+  );
 
   const parseStatus = (statusText: string) => {
-    if (!statusText) return { files: null, vids: null }
-    const filesMatch = statusText.match(/(\d+\/\d+)\s+files/i)
-    const vidsMatch = statusText.match(/(\d+\/\d+)\s+vids/i)
+    if (!statusText) return { files: null, vids: null };
+    const filesMatch = statusText.match(/(\d+\/\d+)\s+files/i);
+    const vidsMatch = statusText.match(/(\d+\/\d+)\s+vids/i);
     return {
       files: filesMatch ? filesMatch[1] : null,
-      vids: vidsMatch ? vidsMatch[1] : null
-    }
-  }
+      vids: vidsMatch ? vidsMatch[1] : null,
+    };
+  };
 
   return (
     <div className="flex h-full overflow-hidden divide-x divide-border bg-background">
-
       {/* ───── Left Column: Processing Sandbox ───── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-
         {/* Header */}
         <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-surface-2/30 shrink-0">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-foreground">Processing Sandbox</span>
+            <span className="font-bold text-foreground">
+              Processing Sandbox
+            </span>
             <span className="text-xs bg-surface-3 px-2 py-0.5 rounded-full text-muted-foreground tabular-nums">
-              {participants.filter(p => p.checked).length} / {participants.length}
+              {participants.filter((p) => p.checked).length} /{" "}
+              {participants.length}
             </span>
             <button
               onClick={() => handleScan(analysisSourcePath)}
@@ -253,21 +305,30 @@ export default function FuseTab() {
               className="text-muted-foreground hover:text-foreground p-1 rounded-md transition-colors disabled:opacity-50"
               title="Rescan project folder"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${scanning ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${scanning ? "animate-spin" : ""}`}
+              />
             </button>
           </div>
-          <RadioGroup 
-            value={radioValue} 
+          <RadioGroup
+            value={radioValue}
             onValueChange={handleSelectionChange}
             className="flex items-center gap-x-3"
           >
             {[
-              { id: 'all', label: 'All' },
-              { id: 'none', label: 'None' },
+              { id: "all", label: "All" },
+              { id: "none", label: "None" },
             ].map((item) => (
               <div key={item.id} className="flex items-center space-x-1.5">
-                <RadioGroupItem value={item.id} id={`r-${item.id}`} className="w-3 h-3 border-white/20" />
-                <Label htmlFor={`r-${item.id}`} className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors">
+                <RadioGroupItem
+                  value={item.id}
+                  id={`r-${item.id}`}
+                  className="w-3 h-3 border-white/20"
+                />
+                <Label
+                  htmlFor={`r-${item.id}`}
+                  className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                >
                   {item.label}
                 </Label>
               </div>
@@ -277,8 +338,8 @@ export default function FuseTab() {
 
         {/* Column Headers */}
         <div className="flex items-center pl-4 pr-4 py-2 bg-surface-2 text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border shrink-0">
-          <div className="w-6 shrink-0" />   {/* checkbox space */}
-          <div className="w-7 shrink-0" />   {/* chevron space */}
+          <div className="w-6 shrink-0" /> {/* checkbox space */}
+          <div className="w-7 shrink-0" /> {/* chevron space */}
           <div className="flex-1 font-medium pl-1">Participant</div>
           <div className="w-48 font-medium">Status</div>
         </div>
@@ -286,31 +347,36 @@ export default function FuseTab() {
         {/* Participant List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {participants.map((p) => {
-            const isExpanded = expanded.has(p.name)
-            const parsed = parseStatus(p.status_text)
-            const hasMasters = p.masters && p.masters.length > 0
-            const hasSatellites = p.satellites && p.satellites.length > 0
-            const hasChildren = hasMasters || hasSatellites
+            const isExpanded = expanded.has(p.name);
+            const parsed = parseStatus(p.status_text);
+            const hasMasters = p.masters && p.masters.length > 0;
+            const hasSatellites = p.satellites && p.satellites.length > 0;
+            const hasChildren = hasMasters || hasSatellites;
 
-            const progress = p.progress || 0
-            const showShading = progress > 0 && progress < 100
+            const progress = p.progress || 0;
+            const showShading = progress > 0 && progress < 100;
             const style = showShading
               ? {
-                  background: `linear-gradient(to right, color-mix(in srgb, var(--primary) 8%, transparent) ${progress}%, transparent ${progress}%)`
+                  background: `linear-gradient(to right, color-mix(in srgb, var(--primary) 8%, transparent) ${progress}%, transparent ${progress}%)`,
                 }
-              : undefined
+              : undefined;
 
             return (
-              <div key={p.name} className="border-b border-border/30 last:border-0">
-
+              <div
+                key={p.name}
+                className="border-b border-border/30 last:border-0"
+              >
                 {/* Main Row */}
                 <div
                   style={style}
-                  className={`flex items-center pl-4 pr-4 py-2.5 cursor-pointer hover:bg-primary/5 transition-all select-none ${p.checked ? 'bg-primary/[0.02]' : ''}`}
+                  className={`flex items-center pl-4 pr-4 py-2.5 cursor-pointer hover:bg-primary/5 transition-all select-none ${p.checked ? "bg-primary/[0.02]" : ""}`}
                   onClick={(e) => toggleExpanded(p.name, e)}
                 >
                   {/* Checkbox — consistent with Recordings panel */}
-                  <div className="w-6 shrink-0 flex items-center" onClick={e => e.stopPropagation()}>
+                  <div
+                    className="w-6 shrink-0 flex items-center"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Checkbox
                       checked={p.checked}
                       onCheckedChange={() => toggleParticipant(p.name)}
@@ -321,44 +387,68 @@ export default function FuseTab() {
                   {/* Expand/Collapse Chevron */}
                   <div
                     className="w-7 shrink-0 flex items-center justify-center"
-                    onClick={e => toggleExpanded(p.name, e)}
+                    onClick={(e) => toggleExpanded(p.name, e)}
                   >
                     {hasChildren ? (
-                      isExpanded
-                        ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
-                        : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                      isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                      )
                     ) : (
                       <div className="w-3.5 h-3.5" /> // empty placeholder
                     )}
                   </div>
 
                   {/* Name */}
-                  <div className="flex-1 font-medium text-foreground pl-1 text-sm">{p.name}</div>
+                  <div className="flex-1 font-medium text-foreground pl-1 text-sm">
+                    {p.name}
+                  </div>
 
                   {/* Status badges */}
                   <div className="w-48">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color || '#666' }} />
-                      {p.status_text === 'No Data' ? (
-                        <span className="text-sm text-muted-foreground font-semibold">No Data</span>
+                      <div
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: p.color || "#666" }}
+                      />
+                      {p.status_text === "No Data" ? (
+                        <span className="text-sm text-muted-foreground font-semibold">
+                          No Data
+                        </span>
                       ) : (
                         <div className="flex items-center gap-2.5 text-muted-foreground">
                           {parsed.files && (
-                            <div className="flex items-center gap-1.5 w-14 shrink-0" title="Satellite files fused">
+                            <div
+                              className="flex items-center gap-1.5 w-14 shrink-0"
+                              title="Satellite files fused"
+                            >
                               <Box className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80 shrink-0" />
-                              <span className="text-sm font-mono">{parsed.files}</span>
+                              <span className="text-sm font-mono">
+                                {parsed.files}
+                              </span>
                             </div>
                           )}
                           {parsed.vids && (
-                            <div className="flex items-center gap-1.5 w-14 shrink-0" title="Tracking videos">
+                            <div
+                              className="flex items-center gap-1.5 w-14 shrink-0"
+                              title="Tracking videos"
+                            >
                               <Clapperboard className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80 shrink-0" />
-                              <span className="text-sm font-mono">{parsed.vids}</span>
+                              <span className="text-sm font-mono">
+                                {parsed.vids}
+                              </span>
                             </div>
                           )}
                           {hasMasters && (
-                            <div className="flex items-center gap-1.5 w-10 shrink-0" title={`${p.masters.length} master file(s)`}>
+                            <div
+                              className="flex items-center gap-1.5 w-10 shrink-0"
+                              title={`${p.masters.length} master file(s)`}
+                            >
                               <Crown className="w-3.5 h-3.5 text-amber-900 dark:text-amber-300 shrink-0" />
-                              <span className="text-sm font-mono">{p.masters.length}</span>
+                              <span className="text-sm font-mono">
+                                {p.masters.length}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -370,7 +460,6 @@ export default function FuseTab() {
                 {/* ── Expanded detail section ── */}
                 {isExpanded && (
                   <div className="border-t border-border/20 bg-surface-1/30">
-
                     {/* Masters */}
                     {hasMasters && (
                       <div>
@@ -381,17 +470,19 @@ export default function FuseTab() {
                           </span>
                         </div>
                         {p.masters.map((m: any) => {
-                          const mName = typeof m === 'object' ? m.name : m
-                          const mPath = typeof m === 'object' ? m.path : m
+                          const mName = typeof m === "object" ? m.name : m;
+                          const mPath = typeof m === "object" ? m.path : m;
                           return (
                             <div
                               key={mPath}
                               className="flex items-center gap-2 pl-[60px] pr-4 py-1 hover:bg-amber-500/5 transition-colors"
                             >
                               <File className="w-3.5 h-3.5 text-amber-500/40 shrink-0" />
-                              <span className="text-xs text-amber-400/70 font-mono truncate">{mName}</span>
+                              <span className="text-xs text-amber-400/70 font-mono truncate">
+                                {mName}
+                              </span>
                             </div>
-                          )
+                          );
                         })}
                       </div>
                     )}
@@ -412,7 +503,9 @@ export default function FuseTab() {
                               className="flex items-center gap-1.5 pl-[60px] pr-4 py-[3px] hover:bg-surface-3/20 transition-colors"
                             >
                               <File className="w-3 h-3 text-muted-foreground/25 shrink-0" />
-                              <span className="text-xs text-muted-foreground/40 font-mono truncate">{s}</span>
+                              <span className="text-xs text-muted-foreground/40 font-mono truncate">
+                                {s}
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -421,7 +514,7 @@ export default function FuseTab() {
                   </div>
                 )}
               </div>
-            )
+            );
           })}
 
           {/* Empty state */}
@@ -440,13 +533,14 @@ export default function FuseTab() {
 
       {/* ───── Right Column: Signal Config & Actions ───── */}
       <div className="flex flex-col w-96 overflow-hidden divide-y divide-border shrink-0 bg-surface-1/10">
-
         {/* Signal Selection */}
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="p-6 border-b border-border bg-surface-2/30">
             <div className="flex items-center gap-2 mb-4">
               <span className="font-bold text-foreground">Signals</span>
-              {loadingSignals && <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              {loadingSignals && (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+              )}
             </div>
 
             <div className="flex flex-col gap-3">
@@ -461,35 +555,47 @@ export default function FuseTab() {
                   >
                     <span className="truncate flex-1 text-left">
                       {masterFile
-                        ? (masterFilesList.find(m => m.path === masterFile)?.name || masterFile.split(/[/\\]/).pop())
+                        ? masterFilesList.find((m) => m.path === masterFile)
+                            ?.name || masterFile.split(/[/\\]/).pop()
                         : "Select a Master MF4..."}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 p-0 bg-popover border border-border" align="start">
+                <PopoverContent
+                  className="w-80 p-0 bg-popover border border-border"
+                  align="start"
+                >
                   <Command>
-                    <CommandInput placeholder="Search Master MF4..." className="text-xs" />
+                    <CommandInput
+                      placeholder="Search Master MF4..."
+                      className="text-xs"
+                    />
                     <CommandList className="max-h-[300px] overflow-y-auto custom-scrollbar">
-                      <CommandEmpty className="text-xs text-muted-foreground p-3">No master files found.</CommandEmpty>
+                      <CommandEmpty className="text-xs text-muted-foreground p-3">
+                        No master files found.
+                      </CommandEmpty>
                       <CommandGroup>
                         {masterFilesList.map((m) => (
                           <CommandItem
                             key={m.path}
                             value={m.name + " " + m.path}
                             onSelect={() => {
-                              setMasterFile(m.path)
-                              setComboboxOpen(false)
+                              setMasterFile(m.path);
+                              setComboboxOpen(false);
                             }}
                             className="text-xs text-foreground cursor-pointer hover:bg-accent hover:text-accent-foreground px-3 py-2 flex items-center justify-between"
                           >
                             <span className="truncate flex-1">
-                              {m.name} ({m.path.split(/[/\\]/).slice(-2, -1)[0]})
+                              {m.name} ({m.path.split(/[/\\]/).slice(-2, -1)[0]}
+                              )
                             </span>
                             <Check
                               className={cn(
                                 "ml-2 h-3.5 w-3.5 shrink-0",
-                                masterFile === m.path ? "opacity-100" : "opacity-0"
+                                masterFile === m.path
+                                  ? "opacity-100"
+                                  : "opacity-0",
                               )}
                             />
                           </CommandItem>
@@ -505,13 +611,13 @@ export default function FuseTab() {
                 <input
                   type="text"
                   placeholder="Filter signals..."
-                  value={signalFilter || ''}
-                  onChange={e => setSignalFilter(e.target.value)}
+                  value={signalFilter || ""}
+                  onChange={(e) => setSignalFilter(e.target.value)}
                   className="w-full bg-surface-3 border border-border/50 rounded-lg pl-9 pr-8 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 {signalFilter && (
                   <button
-                    onClick={() => setSignalFilter('')}
+                    onClick={() => setSignalFilter("")}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground opacity-0 group-hover/filter:opacity-100 transition-opacity p-0.5 rounded-md hover:bg-surface-2"
                     title="Clear filter"
                   >
@@ -525,18 +631,25 @@ export default function FuseTab() {
           {/* Signals column header */}
           <div className="p-3 bg-surface-2/30 border-b border-border flex justify-between items-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-6 shrink-0">
             <span>Name</span>
-            <RadioGroup 
-              value={signalsRadioValue} 
+            <RadioGroup
+              value={signalsRadioValue}
               onValueChange={handleSignalsSelectionChange}
               className="flex items-center gap-x-3"
             >
               {[
-                { id: 'all', label: 'All' },
-                { id: 'none', label: 'None' },
+                { id: "all", label: "All" },
+                { id: "none", label: "None" },
               ].map((item) => (
                 <div key={item.id} className="flex items-center space-x-1.5">
-                  <RadioGroupItem value={item.id} id={`sig-r-${item.id}`} className="w-3 h-3 border-white/20" />
-                  <Label htmlFor={`sig-r-${item.id}`} className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors">
+                  <RadioGroupItem
+                    value={item.id}
+                    id={`sig-r-${item.id}`}
+                    className="w-3 h-3 border-white/20"
+                  />
+                  <Label
+                    htmlFor={`sig-r-${item.id}`}
+                    className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors"
+                  >
                     {item.label}
                   </Label>
                 </div>
@@ -546,14 +659,16 @@ export default function FuseTab() {
 
           {/* Signals list */}
           <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-            {filteredSignals.map(sig => (
+            {filteredSignals.map((sig) => (
               <div
                 key={sig.name}
                 onClick={() => toggleSignal(sig.name)}
                 className="flex items-center justify-between p-2 rounded-lg hover:bg-surface-3 cursor-pointer group"
               >
-                <span className="text-xs text-foreground truncate flex-1 pr-2">{sig.name}</span>
-                <div onClick={e => e.stopPropagation()}>
+                <span className="text-xs text-foreground truncate flex-1 pr-2">
+                  {sig.name}
+                </span>
+                <div onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={sig.checked}
                     onCheckedChange={() => toggleSignal(sig.name)}
@@ -563,7 +678,9 @@ export default function FuseTab() {
               </div>
             ))}
             {filteredSignals.length === 0 && (
-              <div className="text-xs text-muted-foreground italic p-4 text-center">No signals loaded.</div>
+              <div className="text-xs text-muted-foreground italic p-4 text-center">
+                No signals loaded.
+              </div>
             )}
           </div>
         </div>
@@ -574,36 +691,44 @@ export default function FuseTab() {
             <label className="flex items-center gap-3 cursor-pointer group select-none">
               <div
                 onClick={() => setCopyVideos(!copyVideos)}
-                className={`w-10 h-5 rounded-full relative transition-colors ${copyVideos ? 'bg-primary' : 'bg-surface-3'}`}
+                className={`w-10 h-5 rounded-full relative transition-colors ${copyVideos ? "bg-primary" : "bg-surface-3"}`}
               >
-                <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${copyVideos ? 'left-6' : 'left-1'}`} />
+                <div
+                  className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${copyVideos ? "left-6" : "left-1"}`}
+                />
               </div>
-              <span className="text-xs font-medium text-foreground">Copy Tracking Videos</span>
+              <span className="text-xs font-medium text-foreground">
+                Copy Tracking Videos
+              </span>
             </label>
 
             <label className="flex items-center gap-3 cursor-pointer group select-none">
               <div
                 onClick={() => setOverwriteMode(!overwriteMode)}
-                className={`w-10 h-5 rounded-full relative transition-colors ${overwriteMode ? 'bg-primary' : 'bg-surface-3'}`}
+                className={`w-10 h-5 rounded-full relative transition-colors ${overwriteMode ? "bg-primary" : "bg-surface-3"}`}
               >
-                <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${overwriteMode ? 'left-6' : 'left-1'}`} />
+                <div
+                  className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${overwriteMode ? "left-6" : "left-1"}`}
+                />
               </div>
-              <span className="text-xs font-medium text-foreground">Overwrite Existing</span>
+              <span className="text-xs font-medium text-foreground">
+                Overwrite Existing
+              </span>
             </label>
           </div>
 
           <div className="pt-2 flex gap-2">
-            {fusionState === 'idle' && (
+            {fusionState === "idle" && (
               <button
                 onClick={handleRun}
-                disabled={participants.filter(p => p.checked).length === 0}
+                disabled={participants.filter((p) => p.checked).length === 0}
                 className="w-full bg-primary text-background rounded-lg py-4 font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/10 hover:shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale disabled:scale-100"
               >
                 <Play className="w-5 h-5 fill-current" />
                 START FUSION
               </button>
             )}
-            {fusionState === 'running' && (
+            {fusionState === "running" && (
               <>
                 <button
                   onClick={handlePause}
@@ -621,7 +746,7 @@ export default function FuseTab() {
                 </button>
               </>
             )}
-            {fusionState === 'paused' && (
+            {fusionState === "paused" && (
               <>
                 <button
                   onClick={handleResume}
@@ -639,7 +764,7 @@ export default function FuseTab() {
                 </button>
               </>
             )}
-            {fusionState === 'stopping' && (
+            {fusionState === "stopping" && (
               <button
                 disabled
                 className="w-full bg-surface-3 text-muted-foreground border border-border/50 rounded-lg py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
@@ -652,5 +777,5 @@ export default function FuseTab() {
         </div>
       </div>
     </div>
-  )
+  );
 }
