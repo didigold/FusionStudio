@@ -183,14 +183,21 @@ export function TopNav() {
     <>
       <style>{`
         .nav-entry-wrapper {
-          transition: background-color 0.2s ease, border-color 0.2s ease;
+          transition: background-color 0.2s ease, border-color 0.2s ease, width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .nav-entry-wrapper .nav-clear-btn {
+          max-width: 0;
           opacity: 0;
+          overflow: hidden;
           pointer-events: none;
-          transition: opacity 0.2s ease, color 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: max-width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, color 0.2s ease;
         }
-        .nav-entry-wrapper:hover .nav-clear-btn {
+        .nav-entry-wrapper:hover .nav-clear-btn,
+        .nav-entry-wrapper:focus-within .nav-clear-btn {
+          max-width: 32px;
           opacity: 1;
           pointer-events: auto;
         }
@@ -239,7 +246,10 @@ export function TopNav() {
           <div className="relative">
             <div
               className={cn(
-                "nav-entry-wrapper relative w-[600px] h-9 flex items-center bg-surface-2 border rounded-lg px-2 transition-all shadow-inner",
+                "nav-entry-wrapper relative h-9 flex items-center bg-surface-2 border rounded-lg px-2 shadow-inner",
+                analysisSourcePath
+                  ? "w-[560px] hover:w-[600px] focus-within:w-[600px]"
+                  : "w-[600px]",
                 isFocused
                   ? "border-orange-500 ring-1 ring-orange-500/20"
                   : !analysisSourcePath
@@ -281,7 +291,7 @@ export function TopNav() {
                 <button
                   type="button"
                   onClick={() => setClearConfirmOpen(true)}
-                  className="nav-clear-btn p-1 hover:bg-foreground/5 text-muted-foreground hover:text-foreground rounded-md transition-all mr-1"
+                  className="nav-clear-btn p-1 hover:bg-foreground/5 text-muted-foreground hover:text-foreground rounded-md transition-all"
                   title="Clear Path"
                 >
                   <X className="w-3.5 h-3.5" />
