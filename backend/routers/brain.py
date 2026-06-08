@@ -31,6 +31,7 @@ class TrainMultimodalRequest(BaseModel):
     lr: float = 0.001
     patience: int = 15
     camera_config: dict[str, str] = {}
+    base_model_path: str = ""
 
 
 class AnalyzeRequest(BaseModel):
@@ -85,11 +86,13 @@ async def list_models():
                     "size_mb": round(size / (1024 * 1024), 2),
                     "metadata": None,
                 }
-                # Try to load metadata from training_history.json
-                history_path = os.path.join(root, "training_history.json")
-                if os.path.exists(history_path):
+                # Try to load metadata from metadata.json or training_history.json
+                meta_path = os.path.join(root, "metadata.json")
+                if not os.path.exists(meta_path):
+                    meta_path = os.path.join(root, "training_history.json")
+                if os.path.exists(meta_path):
                     try:
-                        with open(history_path) as hf:
+                        with open(meta_path) as hf:
                             entry["metadata"] = json.load(hf)
                     except Exception:
                         pass
@@ -326,6 +329,7 @@ async def train_multimodal(req: TrainMultimodalRequest):
                     result["project_ids"],
                     req.model_name, req.epochs, req.lr,
                     req.root_folders, req.patience,
+                    base_model_path=req.base_model_path,
                 )
 
                 if success:

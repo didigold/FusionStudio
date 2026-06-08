@@ -178,10 +178,15 @@ class MultimodalTrainer:
         val_projects = [project_paths[i] for i in val_idx]
         return train_projects, val_projects
 
-    def train(self, signal_windows, video_windows, labels, project_ids, model_name, epochs, lr, project_paths, early_stop_patience=15):
+    def train(self, signal_windows, video_windows, labels, project_ids, model_name, epochs, lr, project_paths, early_stop_patience=15, base_model_path=None):
         from sklearn.metrics import f1_score, accuracy_score
 
         try:
+            if base_model_path and os.path.exists(base_model_path):
+                if self.on_log:
+                    self.on_log(f"Loading weights from base model: {base_model_path}")
+                self.load_model(base_model_path)
+
             if self.on_log:
                 self.on_log("Preparing multimodal dataset...")
 
@@ -229,14 +234,19 @@ class MultimodalTrainer:
             sig_dim = train_sig_norm[0].shape[1] if train_sig_norm else 7
             vid_dim = train_vid[0].shape[1] if train_vid else 1284
 
-            if self.on_log:
-                self.on_log(f"Initializing MultimodalDetector (signal_dim={sig_dim}, video_dim={vid_dim})...")
-            self.model = MultimodalDetector._Impl(signal_dim=sig_dim, video_dim=vid_dim)
+            if self.model is None:
+                if self.on_log:
+                    self.on_log(f"Initializing MultimodalDetector (signal_dim={sig_dim}, video_dim={vid_dim})...")
+                self.model = MultimodalDetector._Impl(signal_dim=sig_dim, video_dim=vid_dim)
+            else:
+                if self.on_log:
+                    self.on_log("Resuming training with loaded model weights.")
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
             optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-4)
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=5, factor=0.5)
 
-            self.metadata["history"] = {"train_loss": [], "train_acc": [], "train_f1": [], "val_loss": [], "val_acc": [], "val_f1": []}
+            if "history" not in self.metadata or not self.metadata["history"] or not self.metadata["history"].get("train_loss"):
+                self.metadata["history"] = {"train_loss": [], "train_acc": [], "train_f1": [], "val_loss": [], "val_acc": [], "val_f1": []}
 
             best_val_loss = float("inf")
             best_state = None

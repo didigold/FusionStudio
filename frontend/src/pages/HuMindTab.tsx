@@ -234,6 +234,17 @@ interface ProjectGroup {
   isExpanded: boolean;
 }
 
+// Get training project paths from model metadata
+const getModelTrainingPaths = (model: any): string[] => {
+  if (model?.metadata?.training_projects) {
+    return model.metadata.training_projects.map((p: any) => p.path || p);
+  }
+  if (model?.metadata?.projects) {
+    return model.metadata.projects;
+  }
+  return [];
+};
+
 // ─── Main Component ───
 export default function HuMindTab() {
   const {
@@ -262,6 +273,11 @@ export default function HuMindTab() {
 
   useBrainTrainingWS();
 
+  // Selected active model path (for inference selection)
+  const [activeModelPath, setActiveModelPath] = useState<string | null>(() => {
+    return localStorage.getItem("humind_active_model_path");
+  });
+
   const [scanning, setScanning] = useState(false);
   const [projectInput, setProjectInput] = useState("");
   const [activePreset, setActivePreset] = useState<string | null>("balanced");
@@ -271,6 +287,70 @@ export default function HuMindTab() {
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
   const [tipText, setTipText] = useState("");
   const epochScrollRef = useRef<HTMLDivElement>(null);
+
+  const [trainingMode, setTrainingMode] = useState<"fresh" | "finetune">("fresh");
+
+  // Sync trainingMode to 'fresh' when activeModelPath is cleared
+  useEffect(() => {
+    if (!activeModelPath) {
+      setTrainingMode("fresh");
+    }
+  }, [activeModelPath]);
+
+  // Derive projects that are already part of the active model's database
+  const activeModelTrainedPaths = useMemo(() => {
+    const paths = new Set<string>();
+    if (activeModelPath && Array.isArray(brainModels)) {
+      const activeModel = brainModels.find((m: any) => m.path === activeModelPath);
+      if (activeModel) {
+        const trained = getModelTrainingPaths(activeModel);
+        if (Array.isArray(trained)) {
+          trained.forEach((p) => {
+            if (p) paths.add(p);
+          });
+        }
+      }
+    }
+    return paths;
+  }, [activeModelPath, brainModels]);
+
+  const activeModelTrainedBasenames = useMemo(() => {
+    const basenames = new Set<string>();
+    activeModelTrainedPaths.forEach((p) => {
+      const base = p.split(/[/\\]/).filter(Boolean).pop() || "";
+      if (base) basenames.add(base.toLowerCase());
+    });
+    return basenames;
+  }, [activeModelTrainedPaths]);
+
+  // Group models by variant/name and sort by timestamp
+  const groupedModels = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    if (Array.isArray(brainModels)) {
+      brainModels.forEach((m: any) => {
+        if (m) {
+          let name = m.metadata?.name || m.variant || "Unspecified Model";
+          if (name === "No model loaded" || name === "no_model_loaded" || name === "distraction_detector") {
+            if (m.variant === "multimodal") {
+              name = "Multimodal";
+            } else if (m.variant === "mlp") {
+              name = "Distraction Detector";
+            }
+          }
+          if (!groups[name]) groups[name] = [];
+          groups[name].push(m);
+        }
+      });
+    }
+    Object.keys(groups).forEach((key) => {
+      groups[key].sort((a, b) => {
+        const timeA = String(a.metadata?.training_config?.timestamp || "");
+        const timeB = String(b.metadata?.training_config?.timestamp || "");
+        return timeB.localeCompare(timeA);
+      });
+    });
+    return groups;
+  }, [brainModels]);
 
   // Drag Resizing State and Logic
   const [sidebarWidth, setSidebarWidth] = useState(340);
@@ -337,10 +417,7 @@ export default function HuMindTab() {
     return [];
   });
 
-  // Selected active model path (for inference selection)
-  const [activeModelPath, setActiveModelPath] = useState<string | null>(() => {
-    return localStorage.getItem("humind_active_model_path");
-  });
+
 
   // Sync projects to localStorage
   useEffect(() => {
@@ -357,15 +434,35 @@ export default function HuMindTab() {
     );
   }, [selectedProjects]);
 
-  // Load models and history on mount
+  // Load models and history on mount and when training finishes
   useEffect(() => {
     fetch("/api/brain/models")
       .then((r) => r.json())
-      .then((d) => setBrainModels(d.models || []));
+      .then((d) => {
+        const models = d.models || [];
+        setBrainModels(models);
+        
+        if (models.length > 0) {
+          // Sort models by timestamp descending
+          const sorted = [...models].sort((a, b) => {
+            const timeA = String(a.metadata?.training_config?.timestamp || "");
+            const timeB = String(b.metadata?.training_config?.timestamp || "");
+            return timeB.localeCompare(timeA);
+          });
+          
+          // Auto-select latest model by default if not set or if we want to default to the newest
+          const stored = localStorage.getItem("humind_active_model_path");
+          if (!stored || !models.some((m: any) => m.path === stored) || brainPhase === "done") {
+            const latestPath = sorted[0].path;
+            setActiveModelPath(latestPath);
+            localStorage.setItem("humind_active_model_path", latestPath);
+          }
+        }
+      });
     fetch("/api/brain/history")
       .then((r) => r.json())
       .then((d) => setBrainHistory(d));
-  }, []);
+  }, [brainPhase, setBrainModels, setBrainHistory]);
 
   // Rotate contextual tips
   useEffect(() => {
@@ -398,16 +495,7 @@ export default function HuMindTab() {
     return bestIdx;
   }, [brainEpochData]);
 
-  // Get training project paths from model metadata
-  const getModelTrainingPaths = (model: any): string[] => {
-    if (model?.metadata?.training_projects) {
-      return model.metadata.training_projects.map((p: any) => p.path || p);
-    }
-    if (model?.metadata?.projects) {
-      return model.metadata.projects;
-    }
-    return [];
-  };
+
 
   // Add a project path to the list
   const handleAddProject = async () => {
@@ -530,8 +618,9 @@ export default function HuMindTab() {
     }
     setBrainTraining(true);
     clearBrainEpochData();
+    const modeDesc = trainingMode === "finetune" && activeModelPath ? "fine-tuning active model" : "starting fresh training";
     addLog(
-      `Starting ${brainArchitecture} training: ${brainModelName} on ${selectedProjects.length} project(s)`,
+      `Starting ${brainArchitecture} training (${modeDesc}): ${brainModelName} on ${selectedProjects.length} project(s)`,
     );
 
     try {
@@ -546,6 +635,9 @@ export default function HuMindTab() {
         lr: brainLR,
       };
       if (brainArchitecture === "multimodal") body.patience = brainPatience;
+      if (trainingMode === "finetune" && activeModelPath) {
+        body.base_model_path = activeModelPath;
+      }
 
       await fetch(endpoint, {
         method: "POST",
@@ -616,14 +708,25 @@ export default function HuMindTab() {
   // Determine project statuses relative to model training data
   const modelTrainedPaths = useMemo(() => {
     const paths = new Set<string>();
-    brainModels.forEach((m: any) => {
-      getModelTrainingPaths(m).forEach((p) => paths.add(p));
-    });
+    if (Array.isArray(brainModels)) {
+      brainModels.forEach((m: any) => {
+        const trained = getModelTrainingPaths(m);
+        if (Array.isArray(trained)) {
+          trained.forEach((p) => {
+            if (p) paths.add(p);
+          });
+        }
+      });
+    }
     // Also from history
-    if (brainHistory?.mlp?.projects)
-      brainHistory.mlp.projects.forEach((p: string) => paths.add(p));
-    if (brainHistory?.multimodal?.projects)
-      brainHistory.multimodal.projects.forEach((p: string) => paths.add(p));
+    if (brainHistory?.mlp?.projects && Array.isArray(brainHistory.mlp.projects))
+      brainHistory.mlp.projects.forEach((p: string) => {
+        if (p) paths.add(p);
+      });
+    if (brainHistory?.multimodal?.projects && Array.isArray(brainHistory.multimodal.projects))
+      brainHistory.multimodal.projects.forEach((p: string) => {
+        if (p) paths.add(p);
+      });
     return paths;
   }, [brainModels, brainHistory]);
 
@@ -672,8 +775,9 @@ export default function HuMindTab() {
         >
           <ScrollArea className="flex-1">
             <Accordion
-              type="multiple"
-              defaultValue={["config", "projects"]}
+              type="single"
+              collapsible
+              defaultValue="config"
               className="w-full"
             >
               {/* Section 1: Model Configuration */}
@@ -690,30 +794,58 @@ export default function HuMindTab() {
                     <label className="text-xs font-bold text-muted-foreground/80 uppercase tracking-wide">
                       Architecture
                     </label>
+                    <div className="flex bg-surface-3/30 rounded-lg p-3 border border-white/5 items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">MULTIMODAL (CNN + LSTM)</span>
+                      <Badge className="bg-primary/20 text-primary hover:bg-primary/20 text-[10px] font-bold border-0">ACTIVE</Badge>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/50 leading-tight">
+                      Fuses 1D vehicle signal telemetry (MF4) with driver visual behavior features (AVI).
+                    </p>
+                  </div>
+
+                  {/* Training Mode */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-bold text-muted-foreground/80 uppercase tracking-wide">
+                      Training Mode
+                    </label>
                     <div className="flex bg-surface-3 rounded-lg p-1 border border-border/30">
                       <button
-                        onClick={() => setBrainArchitecture("multimodal")}
+                        type="button"
+                        onClick={() => setTrainingMode("fresh")}
                         className={cn(
                           "flex-1 py-1.5 text-xs font-bold rounded-md transition-all",
-                          brainArchitecture === "multimodal"
+                          trainingMode === "fresh"
                             ? "bg-primary text-background shadow-md"
                             : "text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        MULTIMODAL
+                        START FRESH
                       </button>
                       <button
-                        onClick={() => setBrainArchitecture("legacy")}
+                        type="button"
+                        onClick={() => setTrainingMode("finetune")}
+                        disabled={!activeModelPath}
                         className={cn(
-                          "flex-1 py-1.5 text-xs font-bold rounded-md transition-all",
-                          brainArchitecture === "legacy"
+                          "flex-1 py-1.5 text-xs font-bold rounded-md transition-all disabled:opacity-40 disabled:pointer-events-none",
+                          trainingMode === "finetune"
                             ? "bg-primary text-background shadow-md"
                             : "text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        LEGACY (MLP)
+                        FINE-TUNE ACTIVE
                       </button>
                     </div>
+                    {!activeModelPath ? (
+                      <p className="text-[10px] text-amber-500/80 leading-tight">
+                        Select a model in the database to enable Fine-tuning.
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                        {trainingMode === "finetune"
+                          ? "Resuming training using the weights of the selected active model."
+                          : "Starting training a brand new model from scratch."}
+                      </p>
+                    )}
                   </div>
 
                   {/* Presets */}
@@ -743,17 +875,6 @@ export default function HuMindTab() {
 
                   {/* Hyperparameters Form fields */}
                   <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1 col-span-2">
-                      <label className="text-xs font-bold text-muted-foreground/80 uppercase tracking-wide">
-                        Model Name
-                      </label>
-                      <input
-                        type="text"
-                        value={brainModelName}
-                        onChange={(e) => setBrainModelName(e.target.value)}
-                        className="w-full bg-surface-3 border border-border/50 rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/30 transition-colors"
-                      />
-                    </div>
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-muted-foreground/80 uppercase tracking-wide">
                         Epochs
@@ -937,63 +1058,109 @@ export default function HuMindTab() {
                               </div>
 
                               {/* Participant Sub-items */}
-                              {group.isExpanded && (
-                                <div className="space-y-1 pl-1">
-                                  {group.participants.map((p) => {
-                                    const isSelected =
-                                      selectedProjects.includes(p.path);
-                                    const isTrained = modelTrainedPaths.has(
-                                      p.path,
-                                    );
-                                    return (
-                                      <div
-                                        key={p.path}
-                                        className={cn(
-                                          "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-xs",
-                                          isSelected
-                                            ? "bg-primary/5 hover:bg-primary/10"
-                                            : "hover:bg-surface-3/40",
-                                        )}
-                                        onClick={() =>
-                                          toggleParticipantSelection(p.path)
-                                        }
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={isSelected}
-                                          onChange={() =>
-                                            toggleParticipantSelection(p.path)
-                                          }
-                                          className="w-3.5 h-3.5 accent-primary rounded shrink-0 cursor-pointer"
-                                        />
-                                        {/* Status bullet */}
-                                        <div
-                                          className={cn(
-                                            "w-2 h-2 rounded-full shrink-0",
-                                            isTrained
-                                              ? "bg-emerald-500"
-                                              : "bg-amber-500",
-                                          )}
-                                          title={
-                                            isTrained
-                                              ? "Included in trained models"
-                                              : "Pending (not trained)"
-                                          }
-                                        />
-                                        <span className="flex-1 truncate text-foreground/80 font-medium">
-                                          {p.name}
+                              {group.isExpanded && (() => {
+                                const isTrained = (p: any) => {
+                                  if (!p || !p.path) return false;
+                                  if (activeModelTrainedPaths.has(p.path)) return true;
+                                  const base = p.path.split(/[/\\]/).filter(Boolean).pop() || "";
+                                  if (base && activeModelTrainedBasenames.has(base.toLowerCase())) return true;
+                                  if (p.name && activeModelTrainedBasenames.has(p.name.toLowerCase())) return true;
+                                  return false;
+                                };
+                                const databaseParticipants = (group.participants || []).filter(isTrained);
+                                const newParticipants = (group.participants || []).filter((p) => !isTrained(p));
+                                return (
+                                  <div className="space-y-3 pl-1">
+                                    {databaseParticipants.length > 0 && (
+                                      <div className="space-y-1">
+                                        <span className="text-[9px] text-muted-foreground/50 uppercase font-bold tracking-wider block px-1.5 pb-0.5">
+                                          In Selected Model Database
                                         </span>
-                                        {(p.mf4s > 0 || p.avis > 0) && (
-                                          <span className="text-[10px] font-bold text-muted-foreground/40 font-mono shrink-0">
-                                            {p.mf4s > 0 ? `${p.mf4s}M` : ""}{" "}
-                                            {p.avis > 0 ? `${p.avis}V` : ""}
+                                        {databaseParticipants.map((p) => {
+                                          const isSelected = selectedProjects.includes(p.path);
+                                          return (
+                                            <div
+                                              key={p.path}
+                                              className={cn(
+                                                "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-xs",
+                                                isSelected
+                                                  ? "bg-primary/5 hover:bg-primary/10"
+                                                  : "hover:bg-surface-3/40",
+                                              )}
+                                              onClick={() => toggleParticipantSelection(p.path)}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => toggleParticipantSelection(p.path)}
+                                                className="w-3.5 h-3.5 accent-primary rounded shrink-0 cursor-pointer"
+                                              />
+                                              <div className="w-2 h-2 rounded-full shrink-0 bg-emerald-500" />
+                                              <span className="flex-1 truncate text-foreground/80 font-medium">
+                                                {p.name}
+                                              </span>
+                                              {(p.mf4s > 0 || p.avis > 0) && (
+                                                <span className="text-[10px] font-bold text-muted-foreground/40 font-mono shrink-0">
+                                                  {p.mf4s > 0 ? `${p.mf4s}M` : ""} {p.avis > 0 ? `${p.avis}V` : ""}
+                                                </span>
+                                              )}
+                                              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold py-0.5 px-1.5 rounded-md shrink-0">
+                                                In DB
+                                              </Badge>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {newParticipants.length > 0 && (
+                                      <div className="space-y-1">
+                                        {activeModelPath && databaseParticipants.length > 0 && (
+                                          <span className="text-[9px] text-muted-foreground/50 uppercase font-bold tracking-wider block px-1.5 pb-0.5 pt-1">
+                                            New Data / Additions
                                           </span>
                                         )}
+                                        {newParticipants.map((p) => {
+                                          const isSelected = selectedProjects.includes(p.path);
+                                          return (
+                                            <div
+                                              key={p.path}
+                                              className={cn(
+                                                "flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-xs",
+                                                isSelected
+                                                  ? "bg-primary/5 hover:bg-primary/10"
+                                                  : "hover:bg-surface-3/40",
+                                              )}
+                                              onClick={() => toggleParticipantSelection(p.path)}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => toggleParticipantSelection(p.path)}
+                                                className="w-3.5 h-3.5 accent-primary rounded shrink-0 cursor-pointer"
+                                              />
+                                              <div className="w-2 h-2 rounded-full shrink-0 bg-blue-500" />
+                                              <span className="flex-1 truncate text-foreground/80 font-medium">
+                                                {p.name}
+                                              </span>
+                                              {(p.mf4s > 0 || p.avis > 0) && (
+                                                <span className="text-[10px] font-bold text-muted-foreground/40 font-mono shrink-0">
+                                                  {p.mf4s > 0 ? `${p.mf4s}M` : ""} {p.avis > 0 ? `${p.avis}V` : ""}
+                                                </span>
+                                              )}
+                                              {activeModelPath && (
+                                                <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-bold py-0.5 px-1.5 rounded-md shrink-0">
+                                                  New Data
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
@@ -1035,180 +1202,195 @@ export default function HuMindTab() {
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pb-4 pt-1 space-y-2">
-                  {brainModels.length > 0 ? (
-                    <div className="space-y-2">
-                      {brainModels.map((m: any, i: number) => {
-                        const isExpanded = expandedModel === m.path;
-                        const isModelActive = activeModelPath === m.path;
-                        const trainedProjects = getModelTrainingPaths(m);
-
-                        // Try to pull metrics from metadata
-                        const bestAcc =
-                          m.metadata?.best_val_acc ??
-                          m.metadata?.history?.acc?.slice(-1)[0] ??
-                          null;
-                        const epochsTrained =
-                          m.metadata?.epochs_completed ??
-                          m.metadata?.history?.acc?.length ??
-                          null;
-
-                        return (
-                          <div
-                            key={i}
-                            className={cn(
-                              "border rounded-xl overflow-hidden transition-all",
-                              isModelActive
-                                ? "bg-primary/[0.03] border-primary/30 shadow-sm"
-                                : "bg-surface-3/20 border-white/5 hover:border-white/10",
-                            )}
-                          >
-                            {/* Card Content */}
-                            <div className="p-3 space-y-2 relative group/card">
-                              {/* Header info */}
-                              <div className="flex items-start gap-2.5">
-                                {/* Active Select Toggle */}
-                                <button
-                                  onClick={() => handleSetActiveModel(m.path)}
-                                  className={cn(
-                                    "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center transition-all shrink-0 cursor-pointer",
-                                    isModelActive
-                                      ? "bg-primary border-primary text-background"
-                                      : "border-white/20 hover:border-primary/50",
-                                  )}
-                                  title={
-                                    isModelActive
-                                      ? "Active inference model"
-                                      : "Set as active inference model"
-                                  }
-                                >
-                                  {isModelActive && (
-                                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                                  )}
-                                </button>
-
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <Badge
-                                      variant="outline"
-                                      className="text-[10px] uppercase font-bold bg-white/5 border-0 px-1.5 py-0.5 rounded"
-                                    >
-                                      {m.architecture}
-                                    </Badge>
-                                    {isModelActive && (
-                                      <Badge className="text-[10px] font-bold bg-emerald-500 text-background px-1.5 py-0.5 rounded">
-                                        ACTIVE
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <h4
-                                    className="text-xs font-bold text-foreground/90 truncate mt-1"
-                                    title={m.variant || m.architecture}
-                                  >
-                                    {m.variant || m.architecture}
-                                  </h4>
-                                </div>
-
-                                <div className="text-right shrink-0">
-                                  <span className="text-xs font-semibold text-muted-foreground/60 block font-mono">
-                                    {m.size_mb} MB
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Summary performance metrics if present */}
-                              {(bestAcc !== null || epochsTrained !== null) && (
-                                <div className="flex items-center gap-4 text-xs bg-surface-3/30 px-2 py-1 rounded-md">
-                                  {bestAcc !== null && (
-                                    <span>
-                                      Acc:{" "}
-                                      <span className="font-bold text-amber-400">
-                                        {(bestAcc * 100).toFixed(1)}%
-                                      </span>
-                                    </span>
-                                  )}
-                                  {epochsTrained !== null && (
-                                    <span className="text-muted-foreground/60">
-                                      Epochs:{" "}
-                                      <span className="font-semibold text-foreground/80">
-                                        {epochsTrained}
-                                      </span>
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Card Action buttons (hover visible) */}
-                              <div className="flex items-center justify-between pt-1 border-t border-white/[0.03]">
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleLoadModelConfig(m)}
-                                    className="h-7 px-2 text-xs font-bold text-primary hover:bg-primary/10 rounded-md flex items-center gap-1"
-                                    title="Load configuration parameters to sidebar"
-                                  >
-                                    <RefreshCw className="w-3.5 h-3.5" />
-                                    <span>Load Config</span>
-                                  </Button>
-                                  {trainedProjects.length > 0 && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        setExpandedModel(
-                                          isExpanded ? null : m.path,
-                                        )
-                                      }
-                                      className="h-7 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground rounded-md flex items-center gap-0.5"
-                                    >
-                                      <span>Provenance</span>
-                                      <ChevronRight
-                                        className={cn(
-                                          "w-3.5 h-3.5 transition-transform",
-                                          isExpanded && "rotate-90",
-                                        )}
-                                      />
-                                    </Button>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    setDeleteModelPath(m.path);
-                                    setDeleteConfirmOpen(true);
-                                  }}
-                                  className="opacity-0 group-hover/card:opacity-100 text-muted-foreground/50 hover:text-red-400 transition-opacity p-1.5"
-                                  title="Delete model file"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Provenance training projects details */}
-                            {isExpanded && trainedProjects.length > 0 && (
-                              <div className="px-3 pb-3 border-t border-white/5 pt-2 bg-black/10 space-y-1.5 min-w-0 w-full overflow-hidden">
-                                <span className="text-[10px] text-muted-foreground/60 uppercase font-bold tracking-wider block">
-                                  Training Datasets
-                                </span>
-                                <div className="space-y-1 max-h-24 overflow-y-auto custom-scrollbar min-w-0 w-full">
-                                  {trainedProjects.map((p, pi) => (
-                                    <div
-                                      key={pi}
-                                      className="relative w-full min-w-0 overflow-hidden pr-6 group/path"
-                                      title={p}
-                                    >
-                                      <div className="text-xs text-muted-foreground/75 font-mono truncate py-0.5 hover:text-foreground select-all">
-                                        {p}
-                                      </div>
-                                      <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#131313] via-[#131313]/90 to-transparent pointer-events-none group-hover/path:from-surface-3/50 transition-colors" />
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                  {Object.keys(groupedModels).length > 0 ? (
+                    <div className="space-y-4">
+                      {Object.entries(groupedModels).map(([groupName, models]) => (
+                        <div key={groupName} className="space-y-2">
+                          <div className="flex items-center gap-1.5 px-1 pt-1">
+                            <Brain className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+                            <span className="text-xs font-bold text-foreground/90 truncate">{groupName}</span>
+                            <Badge className="bg-white/5 text-muted-foreground/60 text-[9px] font-bold py-0.5 px-1.5 border-0 rounded-full ml-auto font-mono shrink-0">
+                              {models.length} ver
+                            </Badge>
                           </div>
-                        );
-                      })}
+
+                          <div className="pl-3.5 border-l border-white/5 space-y-2 ml-2">
+                            {models.map((m: any, idx: number) => {
+                              const isExpanded = expandedModel === m.path;
+                              const isModelActive = activeModelPath === m.path;
+                              const trainedProjects = getModelTrainingPaths(m);
+
+                              // Try to pull metrics from metadata
+                              const bestAcc =
+                                m.metadata?.best_val_acc ??
+                                m.metadata?.history?.acc?.slice(-1)[0] ??
+                                null;
+                              const epochsTrained =
+                                m.metadata?.epochs_completed ??
+                                m.metadata?.history?.acc?.length ??
+                                null;
+
+                              const timestampStr = m.metadata?.training_config?.timestamp
+                                ? new Date(m.metadata.training_config.timestamp).toLocaleDateString() + " " + new Date(m.metadata.training_config.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : "Original Build";
+
+                              return (
+                                <div
+                                  key={m.path}
+                                  className={cn(
+                                    "border rounded-xl overflow-hidden transition-all relative",
+                                    isModelActive
+                                      ? "bg-primary/[0.03] border-primary/30 shadow-sm"
+                                      : "bg-surface-3/10 border-white/5 hover:border-white/10",
+                                  )}
+                                >
+                                  {/* Card Content */}
+                                  <div className="p-2.5 space-y-2 relative group/card">
+                                    {/* Header info */}
+                                    <div className="flex items-start gap-2">
+                                      {/* Active Select Toggle */}
+                                      <button
+                                        onClick={() => handleSetActiveModel(m.path)}
+                                        className={cn(
+                                          "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center transition-all shrink-0 cursor-pointer",
+                                          isModelActive
+                                            ? "bg-primary border-primary text-background"
+                                            : "border-white/20 hover:border-primary/50",
+                                        )}
+                                        title={
+                                          isModelActive
+                                            ? "Active inference model"
+                                            : "Set as active inference model"
+                                        }
+                                      >
+                                        {isModelActive && (
+                                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                        )}
+                                      </button>
+
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[9px] uppercase font-bold bg-white/5 border-0 px-1 py-0.5 rounded"
+                                          >
+                                            {m.architecture}
+                                          </Badge>
+                                          {isModelActive && (
+                                            <Badge className="text-[9px] font-bold bg-emerald-500 text-background px-1.5 py-0.5 rounded">
+                                              ACTIVE
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-muted-foreground/60 font-semibold truncate mt-1">
+                                          {timestampStr}
+                                        </div>
+                                      </div>
+
+                                      <div className="text-right shrink-0">
+                                        <span className="text-[10px] font-semibold text-muted-foreground/60 block font-mono">
+                                          {m.size_mb} MB
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Summary performance metrics if present */}
+                                    {(bestAcc !== null || epochsTrained !== null) && (
+                                      <div className="flex items-center gap-3 text-[10px] bg-surface-3/30 px-2 py-1 rounded-md">
+                                        {bestAcc !== null && (
+                                          <span>
+                                            Val Acc:{" "}
+                                            <span className="font-bold text-amber-400">
+                                              {(bestAcc * 100).toFixed(1)}%
+                                            </span>
+                                          </span>
+                                        )}
+                                        {epochsTrained !== null && (
+                                          <span className="text-muted-foreground/60 font-medium">
+                                            Epochs:{" "}
+                                            <span className="font-semibold text-foreground/80">
+                                              {epochsTrained}
+                                            </span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Card Action buttons (hover visible) */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-white/[0.03]">
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleLoadModelConfig(m)}
+                                          className="h-6 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-md flex items-center gap-1"
+                                          title="Load configuration parameters to sidebar"
+                                        >
+                                          <RefreshCw className="w-3 h-3" />
+                                          <span>Load Config</span>
+                                        </Button>
+                                        {trainedProjects.length > 0 && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              setExpandedModel(
+                                                isExpanded ? null : m.path,
+                                              )
+                                            }
+                                            className="h-6 px-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground rounded-md flex items-center gap-0.5"
+                                          >
+                                            <span>Provenance</span>
+                                            <ChevronRight
+                                              className={cn(
+                                                "w-3 h-3 transition-transform",
+                                                isExpanded && "rotate-90",
+                                              )}
+                                            />
+                                          </Button>
+                                        )}
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          setDeleteModelPath(m.path);
+                                          setDeleteConfirmOpen(true);
+                                        }}
+                                        className="opacity-0 group-hover/card:opacity-100 text-muted-foreground/50 hover:text-red-400 transition-opacity p-1"
+                                        title="Delete model file"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Provenance training projects details */}
+                                  {isExpanded && trainedProjects.length > 0 && (
+                                    <div className="px-2 pb-2 border-t border-white/5 pt-1.5 bg-black/10 space-y-1 min-w-0 w-full overflow-hidden">
+                                      <span className="text-[9px] text-muted-foreground/60 uppercase font-bold tracking-wider block">
+                                        Training Datasets
+                                      </span>
+                                      <div className="space-y-0.5 max-h-20 overflow-y-auto custom-scrollbar min-w-0 w-full">
+                                        {trainedProjects.map((p, pi) => (
+                                          <div
+                                            key={pi}
+                                            className="relative w-full min-w-0 overflow-hidden pr-6 group/path"
+                                            title={p}
+                                          >
+                                            <div className="text-[10px] text-muted-foreground/75 font-mono truncate py-0.5 hover:text-foreground select-all">
+                                              {p}
+                                            </div>
+                                            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#131313] via-[#131313]/90 to-transparent pointer-events-none group-hover/path:from-surface-3/50 transition-colors" />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center py-6 text-xs text-muted-foreground/40 italic bg-surface-3/10 rounded-xl border border-dashed border-white/5">

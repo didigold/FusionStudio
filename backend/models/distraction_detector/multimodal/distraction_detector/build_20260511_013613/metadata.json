@@ -617,7 +617,7 @@
             0.0
         ]
     },
-    "name": "No model loaded",
+    "name": "distraction_detector",
     "train_projects": [
         "_FUSION_RESULTS"
     ],
