@@ -1,93 +1,46 @@
-<a id="readme-top"></a>
+# ⚡ FusionStudio Pro
+## v26.0 — Automotive Safety Intelligence Platform
 
-<!-- PROJECT SHIELDS -->
+A professional desktop & web application for **ADAS / DMS compliance testing**.
+Merges CAN bus data, video recordings, and acoustic signals into publication-grade engineering reports.
 
-[![Python][python-shield]][python-url]
-[![Node][node-shield]][node-url]
-[![FastAPI][fastapi-shield]][fastapi-url]
-[![React][react-shield]][react-url]
-[![License][license-shield]](#-license)
-
-<!-- PROJECT HEADER -->
-<br />
-<div align="center">
-
-  <h1 align="center">⚡ FusionStudio Pro</h1>
-  <h3 align="center"><em>v26.0 — Automotive Safety Intelligence Platform</em></h3>
-
-  <p align="center">
-    A professional desktop & web application for <strong>ADAS / DMS compliance testing</strong>.<br />
-    Merges CAN bus data, video recordings, and acoustic signals into publication-grade engineering reports.
-    <br /><br />
-    <a href="#-tab-by-tab-reference-manual"><strong>📖 Explore the Docs »</strong></a>
-    &nbsp;&middot;&nbsp;
-    <a href="#-standard-operating-procedure-sop">🚦 SOP Walkthrough</a>
-    &nbsp;&middot;&nbsp;
-    <a href="#-quick-start--setup">🚀 Quick Start</a>
-  </p>
-</div>
-
-> Developed for **internal use** at [Applus+ IDIADA](https://www.idiada.com/) — _Human Factors & Active Safety Department_ — as the core utility to audit, evaluate, and certify compliance of Advanced Driver-Assist Systems (ADAS) and Driver Monitoring Systems (DMS) against Euro NCAP and ADDW regulatory protocols.
+Developed for **internal use** at [Applus+ IDIADA](https://www.idiada.com/) — *Human Factors & Active Safety Department* — as the core utility to audit, evaluate, and certify compliance of Advanced Driver-Assist Systems (ADAS) and Driver Monitoring Systems (DMS) against Euro NCAP and ADDW regulatory protocols.
 
 ---
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>📑 Table of Contents</summary>
-  <ol>
-    <li><a href="#-quick-start--setup">Quick Start & Setup</a></li>
-    <li><a href="#-project-directory-layout">Project Directory Layout</a></li>
-    <li>
-      <a href="#-tab-by-tab-reference-manual">Tab-by-Tab Reference Manual</a>
-      <ul>
-        <li><a href="#1--file-fusion-sandbox">File Fusion (Sandbox)</a></li>
-        <li><a href="#2--audio-analysis">Audio Analysis</a></li>
-        <li><a href="#3--metadata-config">Metadata Config</a></li>
-        <li><a href="#4--gaze-analysis-tracking">Gaze Analysis: Tracking</a></li>
-        <li><a href="#5--gaze-analysis-gaze-time-selector">Gaze Analysis: Gaze Time Selector</a></li>
-        <li><a href="#6--gaze-analysis-gaze-logic-rules-engine">Gaze Analysis: Gaze Logic (Rules Engine)</a></li>
-        <li><a href="#7--occupant-monitoring">Occupant Monitoring</a></li>
-        <li><a href="#8--classification--annotations">Classification & Annotations</a></li>
-        <li><a href="#9--report-generator">Report Generator</a></li>
-        <li><a href="#10--humind-ml-models">HuMind (ML Models)</a></li>
-        <li><a href="#11--system-diagnostics-log">System Diagnostics (Log)</a></li>
-      </ul>
-    </li>
-    <li><a href="#-standard-operating-procedure-sop">Standard Operating Procedure (SOP)</a></li>
-    <li><a href="#-tech-stack">Tech Stack</a></li>
-    <li><a href="#-license">License</a></li>
-  </ol>
-</details>
+## 📑 Table of Contents
+
+- [🚀 Quick Start & Desktop Execution](#-quick-start--desktop-execution)
+- [📂 Project Directory Layout](#-project-directory-layout)
+- [⚙️ Tab-by-Tab Reference Manual](#-tab-by-tab-reference-manual)
+  - [1. File Fusion (Sandbox)](#1--file-fusion-sandbox)
+  - [2. Audio Analysis](#2--audio-analysis)
+  - [3. Metadata Config](#3--metadata-config)
+  - [4. Gaze Analysis: Tracking](#4--gaze-analysis-tracking)
+  - [5. Gaze Analysis: Gaze Time Selector](#5--gaze-analysis-gaze-time-selector)
+  - [6. Gaze Analysis: Gaze Logic (Rules Engine)](#6--gaze-analysis-gaze-logic-rules-engine)
+  - [7. Occupant Monitoring](#7--occupant-monitoring)
+  - [8. Classification & Annotations](#8--classification--annotations)
+  - [9. Report Generator](#9--report-generator)
+  - [10. HuMind (ML Models)](#10--humind-ml-models)
+  - [11. System Diagnostics (Log)](#11--system-diagnostics-log)
+- [📋 Standard Operating Procedure (SOP)](#-standard-operating-procedure-sop)
+- [🛠️ Developer Setup & Tech Stack](#-developer-setup--tech-stack)
+- [📜 License](#-license)
 
 ---
 
-## 🚀 Quick Start & Setup
+## 🚀 Quick Start & Desktop Execution
 
 ### Prerequisites
+For end-users and test engineers running the packaged application, there are **no software prerequisites**. You do not need Python, Node.js, or local libraries installed on your machine. The app is fully portable.
 
-| Requirement | Minimum Version | Notes                         |
-| ----------- | --------------- | ----------------------------- |
-| **Python**  | 3.11+           | Must be on your system `PATH` |
-| **Node.js** | 18+             | For the React/Vite frontend   |
+### Double-Click Launch
+1. Open the distributed project directory and locate the standalone folder: `dist/FusionStudio_Pro/`.
+2. Locate and double-click the executable: `FusionStudio_Pro.exe`.
+3. The application will initialize, displaying a custom loading splash animation while starting background processing layers. Once ready, the main application window will open automatically.
 
-### One-Command Launch
-
-Everything is automated. Just double-click or run from the project root:
-
-```powershell
-.\dev.bat
-```
-
-This unified launcher script will, in order:
-
-1. 🐍 **Start the FastAPI backend** in hot-reload mode at `http://127.0.0.1:8001`
-2. 📦 **Detect missing Node modules** — runs `npm install` automatically if `frontend/node_modules/` is absent
-3. ⚡ **Launch the Vite dev server** (React frontend) at `http://localhost:5173`
-4. 🌐 **Open the app in your browser** automatically
-
-> **Tip for engineers:** The backend runs on port `8001` (not the default `8000`) to avoid collisions with other local services. If `8001` is occupied, check for stale Python processes with `netstat -ano | findstr :8001`.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+> **Tip for engineers:** If the application fails to start or says a port is occupied, ensure no previous background instances are running. You can close stale instances from Windows Task Manager or run `taskkill /f /im FusionStudio_Pro.exe` in Command Prompt.
 
 ---
 
@@ -130,7 +83,7 @@ FusionStudio Pro/
 
 > **Key file to know:** `backend/config/gauge_rules.json` is the single source of truth for all evaluation logic. Every threshold, operator, and phase duration is read from here at runtime. Editing it in the **Gaze Logic** tab auto-saves back to this file.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -178,7 +131,7 @@ The fusion algorithm:
 | **PAUSE / RESUME**              | Suspends and resumes the fusion loop mid-batch — handy if you need to free up system resources temporarily without aborting the entire job.                                                                                                                                        |
 | **STOP**                        | Cleanly aborts the fusion loop. Already-completed participants are kept; in-progress ones may result in an incomplete fused file.                                                                                                                                                  |
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -215,7 +168,7 @@ The algorithm:
 
 > **Pro tip:** After running Autodetect, zoom into the audio waveform and visually verify that the highlighted onset markers align with the visible spikes. If they're slightly off, reduce the Threshold by `0.1` increments until alignment is perfect.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -236,7 +189,7 @@ The **Metadata** tab records the administrative and environmental context of the
 | **Analyst**          | Name of the data analyst processing the files (often the person using FusionStudio). May differ from the engineer if post-processing is done at a later date.                                                                                                                          |
 | **Euro NCAP Switch** | Activates Euro NCAP compliance mode. When ON, report generation applies NCAP-specific pass/fail constraints and formats. When OFF, the evaluation uses the more permissive internal ADDW criteria. **Set this before generating reports** — it affects threshold application globally. |
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -271,7 +224,7 @@ The **Camera Selector** dropdown at the top of the Tracking tab determines which
 
 **How to identify the correct camera:** Look for a camera label containing terms like `DMS`, `Driver`, `Face`, `Interior`, or `IR_Cam`. When selected, the wireframe dashboard model should align with the visible dashboard geometry in the video feed.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -336,7 +289,7 @@ The synchronized video player is the engineer's ground truth — you use it to *
 | **Undo**            | `Ctrl + Z`     | Reverts the last marker action (place, move, or delete). Supports multiple undo levels.                                              |
 | **Clear All Marks** | `Ctrl + Space` | Deletes **all** markers for the currently active trial case. Use with caution — this is not undoable. A confirmation prompt appears. |
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -427,7 +380,7 @@ The visual timeline shows the regulatory phase structure:
 | **Export Config** | Exports the active ruleset as a standalone JSON file. Use this to archive a snapshot of your configuration or share it with another analyst.                |
 | **Import Config** | Loads a previously exported JSON configuration. Overwrites the current UI state. Useful for switching between client-specific rulesets.                     |
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -449,7 +402,7 @@ Evaluation runs checks defined in the misuse constraint ruleset, flagging condit
 - Rear passenger seat occupied but belt not fastened
 - Child seat detected but safety system not acknowledging it
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -475,7 +428,7 @@ The **Classification & Annotations** tab is the quality-gate layer. Before data 
 
 > **Workflow recommendation:** Do one complete pass through all trials annotating `No Signal` and clear `Invalid` cases first. Then go back and do a second pass on `Needs Review` cases with a colleague.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -510,7 +463,7 @@ The **Report Generator** is where everything comes together. After fusion, calib
 | **STOP**                   | Aborts the pipeline. Any reports already written to disk are kept; partially-generated files may be incomplete.                                                                                                                                   |
 | **Template Preview Table** | After selecting a template, this renders a live tabular preview of the template's sheet structure (column names, expected data types) directly in the UI — so you can verify you've selected the right template before running the full pipeline. |
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -534,7 +487,7 @@ The **HuMind** tab is FusionStudio Pro's machine learning management console. It
 
 > **Note for analysts:** The `distraction_detector` model classifies DMS signal windows as `distracted` / `not distracted` with a sliding window of configurable length. If model accuracy drops after a new test campaign, consider retraining with the new session data appended to the training set.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -555,11 +508,11 @@ The **System Diagnostics** tab is your real-time application terminal window. Ev
 | Fusion produces no output | Look for `FileNotFoundError` or `Permission denied` messages — the source path or master file might be misconfigured |
 | Report shows blank cells  | Look for `Signal not found` warnings — the signal name in `gauge_rules.json` doesn't match what's in the fused MF4   |
 | Audio Autodetect fails    | Look for `FFT returned no peaks` — the sound pressure channel might be empty or mislabeled                           |
-| App hangs unexpectedly    | Look for `WebSocket disconnected` — the backend may have crashed; restart via `.\dev.bat`                            |
+| App hangs unexpectedly    | Look for `WebSocket disconnected` — the backend may have crashed; restart the executable `FusionStudio_Pro.exe`      |
 
 > **Pro tip:** Keep this tab open in a second browser window while working. The microsecond timestamps help you correlate backend processing time with UI interactions during troubleshooting.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
@@ -627,46 +580,46 @@ Follow these steps to process a new test campaign from raw files to a final repo
 6. When complete, use the **Template Preview** to do a quick sanity-check on the output tables
 7. Open the generated `.xlsx` file and the PDF summary to review final results
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Developer Setup & Tech Stack
 
-| Layer                 | Technology                                             | Role                            |
-| --------------------- | ------------------------------------------------------ | ------------------------------- |
-| **Backend**           | [![Python][python-shield]][python-url] Python 3.11     | Core processing engine          |
-| **API**               | [![FastAPI][fastapi-shield]][fastapi-url] FastAPI      | REST + WebSocket server         |
-| **Frontend**          | [![React][react-shield]][react-url] React + TypeScript | UI framework                    |
-| **Build Tool**        | [![Vite][vite-shield]][vite-url] Vite                  | Fast frontend bundler           |
-| **Charting**          | uPlot                                                  | Ultra-fast Canvas charts        |
-| **Signal Processing** | asammdf                                                | ASAM MDF4 read/write            |
-| **Numerical**         | NumPy / SciPy                                          | FFT, signal filtering           |
-| **Reporting**         | Matplotlib + openpyxl                                  | Plots & Excel export            |
-| **ML**                | scikit-learn                                           | Classifier training & inference |
+If you are developing or building FusionStudio Pro from source:
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+### Development Prerequisites
+- **Python 3.11+** (must be on system `PATH`)
+- **Node.js 18+** (for building the React frontend)
+
+### Launching in Dev Mode
+Run the following script from the project root:
+```powershell
+.\dev.bat
+```
+This launcher starts the FastAPI backend at `http://127.0.0.1:8001`, installs Node modules if missing, starts the Vite dev server at `http://localhost:5173`, and opens the application in your browser.
+
+### Compiling and Packaging
+To build the standalone `.exe` desktop application bundle:
+```powershell
+python scripts/build_desktop.py
+```
+
+### Core Technologies
+| Layer                 | Technology             | Role                            |
+| --------------------- | ---------------------- | ------------------------------- |
+| **Backend**           | Python 3.11            | Core processing engine          |
+| **API**               | FastAPI                | REST + WebSocket server         |
+| **Frontend**          | React + TypeScript     | UI framework                    |
+| **Build Tool**        | Vite                   | Fast frontend bundler           |
+| **Charting**          | uPlot                  | Ultra-fast Canvas charts        |
+| **Signal Processing** | asammdf                | ASAM MDF4 read/write            |
+| **Numerical**         | NumPy / SciPy          | FFT, signal filtering           |
+| **Reporting**         | Matplotlib + openpyxl  | Plots & Excel export            |
+| **ML**                | scikit-learn           | Classifier training & inference |
 
 ---
 
 ## 📜 License
 
 Proprietary — Applus+ IDIADA, Human Factors & Active Safety Department. All rights reserved. See `LICENSE` for full terms.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
----
-
-<!-- MARKDOWN LINKS & IMAGES -->
-
-[python-shield]: https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white
-[python-url]: https://www.python.org/
-[node-shield]: https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white
-[node-url]: https://nodejs.org/
-[fastapi-shield]: https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white
-[fastapi-url]: https://fastapi.tiangolo.com/
-[react-shield]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
-[react-url]: https://reactjs.org/
-[vite-shield]: https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white
-[vite-url]: https://vitejs.dev/
-[license-shield]: https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge

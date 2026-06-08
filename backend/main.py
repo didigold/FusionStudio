@@ -1,6 +1,19 @@
 import os
+import sys
 import logging
 from contextlib import asynccontextmanager
+
+# Ensure stdout and stderr handle UTF-8 output safely
+if sys.stdout is not None:
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+if sys.stderr is not None:
+    try:
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,7 +62,18 @@ async def health_check():
     return {"status": "ok", "service": "FusionStudio API"}
 
 
-FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+FRONTEND_DIST = os.getenv("FUSIONSTUDIO_FRONTEND_DIST")
+
+if not FRONTEND_DIST:
+    # Check next to executable (fallback)
+    import sys
+    exe_dir = os.path.dirname(sys.executable)
+    FRONTEND_DIST = os.path.join(exe_dir, "frontend", "dist")
+
+if not FRONTEND_DIST or not os.path.exists(FRONTEND_DIST):
+    # Fallback to source-relative path (dev mode)
+    FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+
 if os.path.exists(FRONTEND_DIST):
     from fastapi.staticfiles import StaticFiles
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="static")

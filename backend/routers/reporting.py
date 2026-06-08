@@ -1107,4 +1107,30 @@ async def write_gauge_rules_file(req: GaugeFileWriteRequest):
 
 @router.post("/gauge_rules/exists")
 async def check_gauge_rules_exists(req: GaugeFileExistsRequest):
-    return {"exists": os.path.exists(req.file_path) and os.path.isfile(req.file_path)}
+    return {"exists": os.path.exists(req.file_path) and os.path.isfile(req.file_path)}
+
+
+class OpenFileRequest(BaseModel):
+    file_path: str
+
+
+@router.post("/open_file")
+async def open_file_in_os_viewer(req: OpenFileRequest):
+    import os
+    import sys
+    import subprocess
+    
+    if not os.path.exists(req.file_path):
+        return {"status": "error", "message": f"File not found: {req.file_path}"}
+        
+    try:
+        if os.name == 'nt':
+            os.startfile(req.file_path)
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', req.file_path])
+        else:
+            subprocess.Popen(['xdg-open', req.file_path])
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to open file externally: {e}")
+        return {"status": "error", "message": str(e)}

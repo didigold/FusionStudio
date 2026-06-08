@@ -33,6 +33,7 @@ export const reportingApi = {
     category_configs: Record<string, any>
     gauge_rules: Record<string, any>
     micro?: { min_freq: number; max_freq: number; threshold: number }
+    source_dir?: string
   }) => api.post('/gaze/preview', params),
 
   gazeGenerate: (params: {
@@ -48,5 +49,8 @@ export const reportingApi = {
     category_configs: Record<string, any>
     gauge_rules: Record<string, any>
     micro?: { min_freq: number; max_freq: number; threshold: number }
+    source_dir?: string
   }) => api.post('/gaze/generate', params),
+
+  openFile: (file_path: string) => api.post('/open_file', { file_path }),
 }

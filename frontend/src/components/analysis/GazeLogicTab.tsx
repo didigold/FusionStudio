@@ -1017,9 +1017,6 @@ export function GazeLogicTab() {
 
     setIsPreviewLoading(true);
 
-    // Open a blank window synchronously on user click to avoid browser popup blockers
-    const newWindow = window.open("about:blank", "_blank");
-
     try {
       const backendConfigs = getBackendCategoryConfigs();
       const res = await reportingApi.gazePreview({
@@ -1039,19 +1036,25 @@ export function GazeLogicTab() {
           max_freq: audioMaxFreq,
           threshold: audioThreshold,
         },
+        source_dir: analysisSourcePath,
       });
 
       if (res.data?.status === "success" && res.data?.preview_path) {
         toast.success("Preview report generated successfully!");
-        const url = `/api/analysis/media?path=${encodeURIComponent(res.data.preview_path)}`;
-        if (newWindow) {
-          newWindow.location.href = url;
+        
+        // Directly open the generated preview image in the Windows default viewer
+        try {
+          const openRes = await reportingApi.openFile(res.data.preview_path);
+          if (openRes.data?.status === "success") {
+            toast.success("Opening report image in OS viewer...");
+          } else {
+            toast.error(openRes.data?.message || "Failed to open image externally");
+          }
+        } catch (err) {
+          toast.error("Error launching photo viewer.");
         }
       } else {
         toast.error(res.data?.message || "Failed to generate preview report");
-        if (newWindow) {
-          newWindow.close();
-        }
       }
     } catch (err) {
       console.error(err);
@@ -1059,9 +1062,6 @@ export function GazeLogicTab() {
       toast.error(
         error.response?.data?.message || "Error communicating with server",
       );
-      if (newWindow) {
-        newWindow.close();
-      }
     } finally {
       setIsPreviewLoading(false);
     }
@@ -1130,6 +1130,7 @@ export function GazeLogicTab() {
           max_freq: audioMaxFreq,
           threshold: audioThreshold,
         },
+        source_dir: analysisSourcePath,
       });
     } catch (err) {
       console.error(err);
@@ -2819,6 +2820,8 @@ export function GazeLogicTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+
     </div>
   );
 }
