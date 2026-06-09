@@ -929,7 +929,7 @@ export function GazeTimeTab() {
   }, [currentTime, updatePlayheadCursors]);
 
   return (
-    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden" style={{ backgroundColor: isDark ? 'var(--background)' : '#ffffff' }}>
+    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden bg-white dark:bg-background">
       <style>{`
         .uplot .u-over { cursor: crosshair !important; }
         .uplot .u-select { background: rgba(0, 170, 255, 0.2) !important; }
@@ -968,14 +968,12 @@ export function GazeTimeTab() {
 
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
         <div 
-          className="flex-[2] flex flex-col gap-0 p-0 overflow-hidden h-full min-h-0 justify-center border-r border-border"
-          style={{ backgroundColor: isDark ? 'var(--surface-ink)' : '#ffffff' }}
+          className="flex-[2] flex flex-col gap-0 p-0 overflow-hidden h-full min-h-0 justify-center border-r border-border bg-white dark:bg-surface-ink"
         >
           {targetFile ? (
             <>
               <div 
-                className="flex-1 min-h-[90px] rounded-none border-b border-border relative overflow-hidden group"
-                style={{ backgroundColor: isDark ? 'var(--surface-1)' : '#ffffff' }}
+                className="flex-1 min-h-[90px] rounded-none border-b border-border relative overflow-hidden group bg-white dark:bg-surface-1"
                 onMouseEnter={() => setHoveringChart('top')}
                 onMouseLeave={() => { setHoveringChart(null); if (topTooltipRef.current) topTooltipRef.current.style.display = 'none'; }}
               >
@@ -995,8 +993,7 @@ export function GazeTimeTab() {
                 </div>
               </div>
               <div 
-                className="flex-1 min-h-[90px] rounded-none relative overflow-hidden group"
-                style={{ backgroundColor: isDark ? 'var(--surface-1)' : '#ffffff' }}
+                className="flex-1 min-h-[90px] rounded-none relative overflow-hidden group bg-white dark:bg-surface-1"
                 onMouseEnter={() => setHoveringChart('bottom')}
                 onMouseLeave={() => { setHoveringChart(null); if (bottomTooltipRef.current) bottomTooltipRef.current.style.display = 'none'; }}
               >
@@ -1334,7 +1331,7 @@ export function GazeTimeTab() {
                     </div>
                 </div>
             </div>
-            <div className="h-24 border-t border-border p-3 shrink-0 flex flex-col justify-between" style={{ backgroundColor: isDark ? 'var(--surface-ink)' : '#ffffff' }}>
+            <div className="h-24 border-t border-border p-3 shrink-0 flex flex-col justify-between bg-white dark:bg-surface-ink">
                 <div className="flex items-center gap-3 w-full">
                     <span className="text-xs font-bold text-muted-foreground dark:text-white font-mono">{currentTime.toFixed(2)}s</span>
                     <div className="flex-1 relative py-2 flex items-center">
