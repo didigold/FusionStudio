@@ -20,7 +20,9 @@ torchvision>=0.15.0
 onnx>=1.14.0
 Pillow
 packaging
-pywebview>=5.0
+pywebview==6.2.1
+pythonnet==3.1.0
+clr_loader==0.3.1
 matplotlib>=3.7.0
 joblib
 imageio-ffmpeg>=0.4.9

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '../store/useAppStore'
 import { useReportingWS } from '../hooks/useReportingWS'
 import { 
-  PlayCircle, Square, RefreshCw, FolderOpen, FileSpreadsheet, Settings
+  Square, RefreshCw, FolderOpen, FileSpreadsheet, Settings
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,8 +46,14 @@ export default function ReportingTab() {
   }, [])
 
   const handleGenerate = async () => {
-    if (!analysisSourcePath || !reportingOutputFolder || !reportingTemplate) {
-      addLog('[Reporting] Please fill in all required fields.'); return
+    if (!analysisSourcePath) {
+      toast.error('Source path is required. Please select a project folder in the Files/Analysis tab first.')
+      addLog('[Reporting] Please specify a source path.')
+      return
+    }
+    if (!reportingOutputFolder || !reportingTemplate) {
+      addLog('[Reporting] Please fill in all required fields.')
+      return
     }
 
     const showOptions = reportingTemplate?.toLowerCase().includes("driver_engagement") || reportingTemplate?.toLowerCase().includes("driver engagement");

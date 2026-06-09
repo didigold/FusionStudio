@@ -138,6 +138,7 @@ async def run_report(req: RunRequest):
             self.is_running = False
 
         def run(self):
+            global _active_worker
             from backend.core.dsm_processor import DSMProcessor
             try:
                 processor = DSMProcessor(callback=on_progress)
@@ -145,23 +146,21 @@ async def run_report(req: RunRequest):
                     template_path, output_path, req.root_folder,
                     req.selected_folders
                 )
-                loop.call_soon_threadsafe(
-                    lambda: asyncio.run_coroutine_threadsafe(
-                        manager_reporting.broadcast({
-                            "type": "finished",
-                            "output_path": output_path,
-                        }), loop
-                    )
+                asyncio.run_coroutine_threadsafe(
+                    manager_reporting.broadcast({
+                        "type": "finished",
+                        "output_path": output_path,
+                    }), loop
                 )
             except Exception as e:
-                loop.call_soon_threadsafe(
-                    lambda: asyncio.run_coroutine_threadsafe(
-                        manager_reporting.broadcast({
-                            "type": "error",
-                            "message": str(e),
-                        }), loop
-                    )
+                asyncio.run_coroutine_threadsafe(
+                    manager_reporting.broadcast({
+                        "type": "error",
+                        "message": str(e),
+                    }), loop
                 )
+            finally:
+                _active_worker = None
 
     worker = _ReportingWorker()
     _active_worker = worker
@@ -972,86 +971,92 @@ async def gaze_generate(req: GazeGenerateRequest):
             self.is_running = False
 
         def run(self):
+            global _active_worker
             from backend.routers.analysis import _load_marks_dict, _get_marks_key
             from backend.core.report_builder import MatplotlibReportBuilder
             
-            total_files = len(req.files)
-            success_count = 0
-            for idx, file_path in enumerate(req.files):
-                if not self.is_running:
-                    on_progress("Gaze batch generation stopped by user.")
-                    break
-                
-                base_name = os.path.splitext(os.path.basename(file_path))[0]
-                on_progress(f"Processing ({idx+1}/{total_files}): {base_name}...")
-                asyncio.run_coroutine_threadsafe(
-                    manager_reporting.broadcast({
-                        "type": "progress_update",
-                        "current": idx + 1,
-                        "total": total_files,
-                        "message": f"Processing ({idx+1}/{total_files}): {base_name}..."
-                    }), loop
-                )
-                
-                try:
-                    if not os.path.exists(file_path):
-                        on_progress(f"[ERROR] File not found: {file_path}")
-                        continue
+            try:
+                total_files = len(req.files)
+                success_count = 0
+                for idx, file_path in enumerate(req.files):
+                    if not self.is_running:
+                        on_progress("Gaze batch generation stopped by user.")
+                        break
                     
-                    source_dir = req.source_dir
-                    if not source_dir:
-                        curr = os.path.dirname(file_path)
-                        while curr and curr != os.path.dirname(curr):
-                            if os.path.exists(os.path.join(curr, "marks.json")):
-                                source_dir = curr
-                                break
-                            curr = os.path.dirname(curr)
-                        if not source_dir:
-                            source_dir = os.path.dirname(file_path)
-
-                    marks_dict = _load_marks_dict(source_dir)
-                    key = _get_marks_key(file_path)
-                    driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
-                    if not isinstance(driver_marks, list):
-                        driver_marks = []
-                        
-                    config = build_report_config(
-                        file_path=file_path,
-                        protocol=req.protocol,
-                        metadata=req.metadata,
-                        category_configs=req.category_configs,
-                        gauge_rules=req.gauge_rules,
-                        driver_marks=driver_marks,
-                        micro=req.micro,
-                        show_thresholds=False
+                    base_name = os.path.splitext(os.path.basename(file_path))[0]
+                    on_progress(f"Processing ({idx+1}/{total_files}): {base_name}...")
+                    asyncio.run_coroutine_threadsafe(
+                        manager_reporting.broadcast({
+                            "type": "progress_update",
+                            "current": idx + 1,
+                            "total": total_files,
+                            "message": f"Processing ({idx+1}/{total_files}): {base_name}..."
+                        }), loop
                     )
                     
-                    base_dir = os.path.dirname(file_path)
-                    reports_dir = os.path.join(base_dir, "Reports")
-                    os.makedirs(reports_dir, exist_ok=True)
-                    output_png = os.path.join(reports_dir, f"{base_name}.png")
-                    
-                    builder = MatplotlibReportBuilder(config)
-                    builder.generate(output_png, dpi=300)
-                    
-                    update_excel_results(config=config, file_path=file_path)
-                    
-                    success_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to generate report for {file_path}: {e}")
-                    on_progress(f"[ERROR] {base_name}: {str(e)}")
+                    try:
+                        if not os.path.exists(file_path):
+                            on_progress(f"[ERROR] File not found: {file_path}")
+                            continue
+                        
+                        source_dir = req.source_dir
+                        if not source_dir:
+                            curr = os.path.dirname(file_path)
+                            while curr and curr != os.path.dirname(curr):
+                                if os.path.exists(os.path.join(curr, "marks.json")):
+                                    source_dir = curr
+                                    break
+                                curr = os.path.dirname(curr)
+                            if not source_dir:
+                                source_dir = os.path.dirname(file_path)
 
-            loop.call_soon_threadsafe(
-                lambda: asyncio.run_coroutine_threadsafe(
+                        marks_dict = _load_marks_dict(source_dir)
+                        key = _get_marks_key(file_path)
+                        driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
+                        if not isinstance(driver_marks, list):
+                            driver_marks = []
+                            
+                        config = build_report_config(
+                            file_path=file_path,
+                            protocol=req.protocol,
+                            metadata=req.metadata,
+                            category_configs=req.category_configs,
+                            gauge_rules=req.gauge_rules,
+                            driver_marks=driver_marks,
+                            micro=req.micro,
+                            show_thresholds=False
+                        )
+                        
+                        base_dir = os.path.dirname(file_path)
+                        reports_dir = os.path.join(base_dir, "Reports")
+                        os.makedirs(reports_dir, exist_ok=True)
+                        output_png = os.path.join(reports_dir, f"{base_name}.png")
+                        
+                        builder = MatplotlibReportBuilder(config)
+                        builder.generate(output_png, dpi=300)
+                        
+                        update_excel_results(config=config, file_path=file_path)
+                        
+                        success_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to generate report for {file_path}: {e}")
+                        on_progress(f"[ERROR] {base_name}: {str(e)}")
+
+                asyncio.run_coroutine_threadsafe(
                     manager_reporting.broadcast({
                         "type": "finished",
                         "message": f"Successfully generated {success_count} reports."
                     }), loop
                 )
-            )
-            
-            global _active_worker
-            _active_worker = None
+            except Exception as e:
+                asyncio.run_coroutine_threadsafe(
+                    manager_reporting.broadcast({
+                        "type": "error",
+                        "message": str(e)
+                    }), loop
+                )
+            finally:
+                _active_worker = None
 
     worker = _GazeReportingWorker()
     _active_worker = worker

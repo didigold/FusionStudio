@@ -81,28 +81,38 @@ if __name__ == "__main__":
         width=1280,
         height=800,
         resizable=True,
-        min_size=(1024, 768)
+        min_size=(1024, 768),
+        background_color='#060608'
     )
     
     def check_backend_ready():
         import urllib.request
         import time
         
+        start_time = time.time()
         backend_url = f"http://127.0.0.1:{port}"
         health_url = f"{backend_url}/api/health"
         
-        while True:
+        # Poll health endpoint until backend is active
+        backend_ready = False
+        while not backend_ready:
             try:
-                # Try to connect to health check endpoint
                 with urllib.request.urlopen(health_url, timeout=1) as response:
                     if response.status == 200:
+                        backend_ready = True
                         break
             except Exception:
                 pass
-            time.sleep(0.5)
+            time.sleep(0.1)
+            
+        # Enforce minimum splash screen display duration of 2.5 seconds
+        min_splash_time = 2.5
+        elapsed = time.time() - start_time
+        if elapsed < min_splash_time:
+            time.sleep(min_splash_time - elapsed)
             
         # Redirect window to final FastAPI url
         window.load_url(backend_url)
         
     # Start webview loop (blocks until window is closed)
-    webview.start(check_backend_ready)
+    webview.start(check_backend_ready, http_server=True)

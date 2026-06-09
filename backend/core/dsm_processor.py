@@ -603,6 +603,8 @@ class DSMProcessor:
             self.log(f"[ERROR] Could not find participant identifier in path: {origin_path}")
             return
 
+        self.log(f"  Loaded {len(df)} rows from results file of participant {participant_id}")
+
         if "File Name" in df.columns:
             def natural_sort_key(s):
                 import re
@@ -630,27 +632,34 @@ class DSMProcessor:
             sheet_type, main_id, noisevar_id = self.get_ids(file_name, 
                 sheet_type="OCCLUSION" if filtered_folder.lower() == "occlusions" else None)
             if not sheet_type:
+                self.log(f"  [SKIP] File Name not recognized as valid sheet category: {file_name}")
                 continue
 
             try:
                 sheet = wb.sheets[sheet_type]
             except Exception as e:
-                self.log(f"[ERROR] Sheet '{sheet_type}' not found in destination. ({e})")
+                self.log(f"  [ERROR] Sheet '{sheet_type}' not found in destination. ({e})")
                 continue
 
             row_id = file_name.split("_")[0]
 
             # ---------- BEHAVIOURS ----------
             if sheet_type == "BEHAVIOURS":
-                if not noisevar_id: continue
+                if not noisevar_id:
+                    self.log(f"  [SKIP] No noise variant ID found for: {file_name}")
+                    continue
                 main_prefix = file_name[0].upper() if len(file_name) > 0 else None
-                if main_prefix not in ["D", "F"]: continue
+                if main_prefix not in ["D", "F"]:
+                    self.log(f"  [SKIP] Invalid prefix for Behaviours: {file_name}")
+                    continue
                 main_full = f"{main_prefix}{main_id}"
                 rep_key = (sheet_type, main_id, noisevar_id)
                 rep_counters[rep_key] = rep_counters.get(rep_key, 0) + 1
                 rel_rep = rep_counters[rep_key]
                 target_col = self.get_repetition_label(file_name, sheet_type, main_id, noisevar_id, manual_rep=rel_rep)
-                if not target_col: continue
+                if not target_col:
+                    self.log(f"  [SKIP] Repetition label could not be resolved for: {file_name}")
+                    continue
                 noise_letter = noisevar_id[0].upper()
                 if noise_letter == "O":
                     noise_id_row = self.find_noise_id_row(sheet, "O", participant_index)
@@ -658,8 +667,12 @@ class DSMProcessor:
                 elif noise_letter == "B":
                     noise_id_row = self.find_noise_id_row(sheet, "B", participant_index)
                     id_ref_col_letter = "AB"
-                else: continue
-                if not noise_id_row: continue
+                else:
+                    self.log(f"  [SKIP] Invalid noise letter '{noise_letter}' for: {file_name}")
+                    continue
+                if not noise_id_row:
+                    self.log(f"  [SKIP] Noise ID row not found for participant index {participant_index} in BEHAVIOURS")
+                    continue
                 col_o = 6
                 col_b = 29
                 main_full_noise = f"{main_prefix}{main_id}_{noisevar_id}"
@@ -674,9 +687,15 @@ class DSMProcessor:
                 if noise_letter == "O" and col_o: sheet.range((noise_id_row, col_o)).value = noise_val
                 elif noise_letter == "B" and col_b: sheet.range((noise_id_row, col_b)).value = noise_val
                 rep_col = self.find_repetition_col_in_row_26(sheet, target_col, noise_letter)
-                if not rep_col: continue
+                if not rep_col:
+                    self.log(f"  [SKIP] Repetition column {target_col} not found in row 26")
+                    continue
                 val_to_write = '-' if pd.isna(warning_value) else warning_value
-                if current_row is not None: sheet.range((current_row, rep_col)).value = val_to_write
+                if current_row is not None:
+                    sheet.range((current_row, rep_col)).value = val_to_write
+                    self.log(f"  [BEHAVIOURS] Write {main_full}_{noisevar_id} -> {target_col} (Row {current_row}, Col {self.get_column_letter(rep_col)}) = {val_to_write}")
+                else:
+                    self.log(f"  [SKIP] Row not found for {main_full} in ID column starting at row {noise_id_row}")
                 continue
 
             # ---------- DISTRACTION ----------
@@ -685,18 +704,29 @@ class DSMProcessor:
                 rep_counters[rep_key] = rep_counters.get(rep_key, 0) + 1
                 rel_rep = rep_counters[rep_key]
                 target_col = self.get_repetition_label(file_name, sheet_type, main_id, noisevar_id, manual_rep=rel_rep)
-                if not target_col: continue
+                if not target_col:
+                    self.log(f"  [SKIP] Repetition label could not be resolved for: {file_name}")
+                    continue
                 row_index = self.find_row_by_id(sheet, row_id, sheet_type)
-                if not row_index: continue
+                if not row_index:
+                    self.log(f"  [SKIP] Row for ID {row_id} not found in DISTRACTION sheet")
+                    continue
                 base_col = self.ensure_participant_block(sheet, sheet_type, participant_id)
-                if not base_col: continue
+                if not base_col:
+                    self.log(f"  [SKIP] Block for participant {participant_id} could not be resolved/created")
+                    continue
                 config = self.SHEET_CONFIG["DISTRACTION"]
                 col_index = self.find_repetition_col_in_block(sheet, base_col, config["block_width"], target_col, header_row=2)
-                if not col_index: continue
+                if not col_index:
+                    self.log(f"  [SKIP] Repetition column {target_col} not found in block for {participant_id}")
+                    continue
                 val_to_write = '-' if pd.isna(warning_value) else warning_value
                 sheet.range((row_index, col_index)).value = val_to_write
+                log_msg = f"  [DISTRACTION] Write {row_id} -> {target_col} for {participant_id} (Row {row_index}, Col {self.get_column_letter(col_index)}) = {val_to_write}"
                 if score_value:
                     sheet.range((row_index, col_index + 1)).value = score_value
+                    log_msg += f", Score = {score_value}"
+                self.log(log_msg)
 
             # ---------- FATIGUE ----------
             elif sheet_type == "FATIGUE":
@@ -704,18 +734,29 @@ class DSMProcessor:
                 rep_counters[rep_key] = rep_counters.get(rep_key, 0) + 1
                 rel_rep = rep_counters[rep_key]
                 target_col = self.get_repetition_label(file_name, sheet_type, main_id, noisevar_id, manual_rep=rel_rep)
-                if not target_col: continue
+                if not target_col:
+                    self.log(f"  [SKIP] Repetition label could not be resolved for: {file_name}")
+                    continue
                 row_index = self.find_row_by_id(sheet, row_id, sheet_type)
-                if not row_index: continue
+                if not row_index:
+                    self.log(f"  [SKIP] Row for ID {row_id} not found in FATIGUE sheet")
+                    continue
                 base_col = self.ensure_participant_block(sheet, sheet_type, participant_id)
-                if not base_col: continue
+                if not base_col:
+                    self.log(f"  [SKIP] Block for participant {participant_id} could not be resolved/created")
+                    continue
                 config = self.SHEET_CONFIG["FATIGUE"]
                 col_index = self.find_repetition_col_in_block(sheet, base_col, config["block_width"], target_col, header_row=2)
-                if not col_index: continue
+                if not col_index:
+                    self.log(f"  [SKIP] Repetition column {target_col} not found in block for {participant_id}")
+                    continue
                 val_to_write = '-' if pd.isna(warning_value) else warning_value
                 sheet.range((row_index, col_index)).value = val_to_write
+                log_msg = f"  [FATIGUE] Write {row_id} -> {target_col} for {participant_id} (Row {row_index}, Col {self.get_column_letter(col_index)}) = {val_to_write}"
                 if score_value:
                     sheet.range((row_index, col_index + 1)).value = score_value
+                    log_msg += f", Score = {score_value}"
+                self.log(log_msg)
 
             # ---------- OCCLUSION ----------
             elif sheet_type == "OCCLUSION":
@@ -723,25 +764,39 @@ class DSMProcessor:
                 rep_counters[rep_key] = rep_counters.get(rep_key, 0) + 1
                 rel_rep = rep_counters[rep_key]
                 rep_label = self.get_repetition_label(file_name, sheet_type, main_id, noisevar_id, manual_rep=rel_rep)
-                if not rep_label: continue
+                if not rep_label:
+                    self.log(f"  [SKIP] Repetition label could not be resolved for: {file_name}")
+                    continue
                 prefix = file_name[0].upper()
                 main_full = f"{prefix}{main_id}"
                 occ_full = noisevar_id.upper() if noisevar_id else None
-                if not occ_full: continue
+                if not occ_full:
+                    self.log(f"  [SKIP] No occlusion ID found for: {file_name}")
+                    continue
                 base_col = self.ensure_participant_block(sheet, sheet_type, participant_id)
-                if not base_col: continue
+                if not base_col:
+                    self.log(f"  [SKIP] Block for participant {participant_id} could not be resolved/created")
+                    continue
                 config = self.SHEET_CONFIG["OCCLUSION"]
                 if prefix == 'D':
                     d_num = int(main_id)
                     cat = self._get_distraction_category(d_num)
-                    if not cat: continue
-                    if not hasattr(self, '_occ_row_ranges') or cat not in self._occ_row_ranges: continue
+                    if not cat:
+                        self.log(f"  [SKIP] Distraction category not found for: {file_name}")
+                        continue
+                    if not hasattr(self, '_occ_row_ranges') or cat not in self._occ_row_ranges:
+                        self.log(f"  [SKIP] OCCLUSION row range not found for category {cat}")
+                        continue
                     row_start, row_end = self._occ_row_ranges[cat]
                 elif prefix == 'F':
                     cat = f"F{main_id}"
-                    if not hasattr(self, '_occ_row_ranges') or cat not in self._occ_row_ranges: continue
+                    if not hasattr(self, '_occ_row_ranges') or cat not in self._occ_row_ranges:
+                        self.log(f"  [SKIP] OCCLUSION row range not found for category {cat}")
+                        continue
                     row_start, row_end = self._occ_row_ranges[cat]
-                else: continue
+                else:
+                    self.log(f"  [SKIP] Invalid prefix '{prefix}' for Occlusion: {file_name}")
+                    continue
                 d_col_letter = self.get_column_letter(base_col)
                 e_col_letter = self.get_column_letter(base_col + 1)
                 row_index = self.find_row_by_id_occ(sheet, main_full, occ_full, base_col)
@@ -755,10 +810,17 @@ class DSMProcessor:
                             row_index = r
                             found_empty = True
                             break
-                    if not found_empty: continue
+                    if not found_empty:
+                        self.log(f"  [SKIP] No empty row available for category {cat} under OCCLUSION for {participant_id}")
+                        continue
                 col_index = self.find_repetition_col_in_block(sheet, base_col, config["block_width"], rep_label, header_row=2)
-                if not col_index: continue
+                if not col_index:
+                    self.log(f"  [SKIP] Repetition column {rep_label} not found in OCCLUSION block for {participant_id}")
+                    continue
                 val_to_write = '-' if pd.isna(warning_value) else warning_value
                 sheet.range((row_index, col_index)).value = val_to_write
+                log_msg = f"  [OCCLUSION] Write {main_full} ({occ_full}) -> {rep_label} for {participant_id} (Row {row_index}, Col {self.get_column_letter(col_index)}) = {val_to_write}"
                 if score_value:
                     sheet.range((row_index, col_index + 1)).value = score_value
+                    log_msg += f", Score = {score_value}"
+                self.log(log_msg)

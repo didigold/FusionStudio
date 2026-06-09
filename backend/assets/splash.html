@@ -66,9 +66,17 @@
     <script>
         window.addEventListener('DOMContentLoaded', () => {
             const player = document.querySelector('lottie-player');
-            if (player && typeof animationData !== 'undefined') {
-                player.load(animationData);
+            let attempts = 0;
+            
+            function initPlayer() {
+                if (player && typeof player.load === 'function' && typeof animationData !== 'undefined') {
+                    player.load(animationData);
+                } else if (attempts < 100) {
+                    attempts++;
+                    setTimeout(initPlayer, 50);
+                }
             }
+            initPlayer();
         });
     </script>
 </head>

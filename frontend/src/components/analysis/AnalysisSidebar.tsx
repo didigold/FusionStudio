@@ -4,7 +4,6 @@ import {
   FileText,
   Clock,
   GitBranch,
-  Package,
   AlertTriangle,
   BrainCircuit,
   Tags,
@@ -262,6 +261,9 @@ export function AnalysisSidebar({
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>Reporting</span>
+                {reportingProcessing && (
+                  <Spinner className="size-3 text-primary/60 ml-auto" />
+                )}
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
