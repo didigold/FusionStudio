@@ -7,7 +7,6 @@ import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   define: {
-    __USERNAME__: JSON.stringify(os.userInfo().username),
   },
   plugins: [react(), tailwindcss()],
   resolve: {

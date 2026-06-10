@@ -61,6 +61,18 @@ app.include_router(brain.router, prefix="/api/brain")
 async def health_check():
     return {"status": "ok", "service": "FusionStudio API"}
 
+@app.get("/api/user/me")
+async def get_current_user():
+    import getpass
+    try:
+        username = getpass.getuser()
+    except Exception:
+        username = "User"
+    
+    return {
+        "username": username
+    }
+
 
 FRONTEND_DIST = os.getenv("FUSIONSTUDIO_FRONTEND_DIST")
 

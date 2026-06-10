@@ -138,9 +138,25 @@ async def scan_directory(req: ScanRequest):
         groups: dict[str, list] = {}
 
         for r, _, files in os.walk(base_dir):
-            for file in files:
-                if not file.lower().endswith(".mf4"):
+            mf4_files = [f for f in files if f.lower().endswith(".mf4")]
+            base_to_files = {}
+            for file in mf4_files:
+                is_tracking = file.lower().endswith("_tracking.mf4")
+                base = file[:-13] if is_tracking else os.path.splitext(file)[0]
+                base_lower = base.lower()
+                if base_lower not in base_to_files:
+                    base_to_files[base_lower] = {"base": base, "raw": None, "tracking": None}
+                
+                if is_tracking:
+                    base_to_files[base_lower]["tracking"] = file
+                else:
+                    base_to_files[base_lower]["raw"] = file
+
+            for base_lower, file_dict in base_to_files.items():
+                file = file_dict["tracking"] or file_dict["raw"]
+                if not file:
                     continue
+
                 clean_file = re.sub(r'_tracking', '', file, flags=re.IGNORECASE)
                 match = pattern.match(clean_file)
                 simple_match = pattern_simple.match(clean_file)
@@ -166,8 +182,13 @@ async def scan_directory(req: ScanRequest):
                 base_src_name = re.sub(r'_tracking', '', os.path.splitext(file)[0], flags=re.IGNORECASE)
                 
                 has_report = False
+                seen_folders = set()
                 for folder in [r, os.path.join(r, "Reports"), os.path.join(r, "reports")]:
                     if os.path.exists(folder) and os.path.isdir(folder):
+                        norm_folder = os.path.normpath(os.path.abspath(folder)).lower()
+                        if norm_folder in seen_folders:
+                            continue
+                        seen_folders.add(norm_folder)
                         pngs = [f for f in os.listdir(folder) if f.lower().endswith(".png") and f.lower().startswith(base_src_name.lower())]
                         if pngs:
                             has_report = True

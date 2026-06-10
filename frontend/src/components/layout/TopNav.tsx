@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock } from "lucide-react";
+import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock, IdCardLanyard } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,9 +32,6 @@ import {
 import { useTheme } from "@/hooks/useTheme";
 
 
-declare const __USERNAME__: string | undefined;
-
-const userName = typeof __USERNAME__ !== "undefined" ? __USERNAME__ : "User";
 
 export function TopNav() {
   const {
@@ -59,6 +56,15 @@ export function TopNav() {
   const { toggleTheme, isDark } = useTheme();
 
   const [scanning, setScanning] = useState(false);
+  const [userProfile, setUserProfile] = useState<{username: string}>({username: "Loading..."});
+
+  useEffect(() => {
+    fetch("/api/user/me")
+      .then(res => res.json())
+      .then(data => setUserProfile({username: data.username}))
+      .catch(err => console.error("Failed to fetch user profile", err));
+  }, []);
+
   const [browseOpen, setBrowseOpen] = useState(false);
   const [promptedPath, setPromptedPath] = useState("");
   const [promptFolderBrowserOpen, setPromptFolderBrowserOpen] = useState(false);
@@ -471,22 +477,19 @@ export function TopNav() {
                 className="rounded-full h-8 w-8 hover:bg-foreground/5"
               >
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs bg-surface-3 text-foreground">
-                    {userName.charAt(0).toUpperCase()}
+                  <AvatarFallback className="bg-surface-3 text-foreground flex items-center justify-center">
+                    <IdCardLanyard className="w-4 h-4 text-muted-foreground" />
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="w-44 bg-surface-2 border-border text-foreground"
+              className="min-w-[120px] bg-surface-2 border-border text-foreground"
             >
-              <div className="px-2 py-2 text-xs font-bold text-muted-foreground border-b border-border">
-                {userName}
+              <div className="px-3 py-2 text-sm font-bold text-muted-foreground text-center">
+                {userProfile.username}
               </div>
-              <DropdownMenuItem className="cursor-default text-muted-foreground text-xs hover:bg-transparent">
-                Accredited user
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

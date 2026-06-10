@@ -25,8 +25,11 @@ export const analysisApi = {
   detectEvents: (file_path: string, channel_name: string) =>
     api.post('/detect/events', { file_path, channel_name }),
 
-  runChronos: (mf4_paths: string[], camera_id = 0, source_dir = '') =>
-    api.post('/run/chronos', { mf4_paths, camera_id, source_dir }),
+  runChronos: (mf4_paths: string[], camera_id = 0, source_dir = '', gamification_filter = 'none') =>
+    api.post('/run/chronos', { mf4_paths, camera_id, source_dir, gamification_filter }),
+
+  updateChronosFilter: (gamification_filter: string) =>
+    api.post('/run/chronos/filter', { gamification_filter }),
 
   stopChronos: () => api.post('/stop/chronos'),
 

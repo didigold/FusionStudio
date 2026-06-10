@@ -42,7 +42,7 @@ class ChronosWorker:
     def __init__(self, task_queue, camera_id,
                  on_new_frame=None, on_log=None, on_progress=None,
                  on_finished_task=None, on_all_finished=None, on_error=None,
-                 on_stats=None):
+                 on_stats=None, gamification_filter='none'):
         self.task_queue = task_queue
         self.camera_id = camera_id
         self.is_running = True
@@ -57,9 +57,34 @@ class ChronosWorker:
         self.on_all_finished = on_all_finished
         self.on_error = on_error
         self.on_stats = on_stats
+        self.gamification_filter = gamification_filter
+        
+        self.gamification_img = None
+        if self.gamification_filter != 'none':
+            import cv2
+            img_path = resource_path(f"assets/gamification/{self.gamification_filter}.png")
+            if os.path.exists(img_path):
+                self.gamification_img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+            else:
+                if self.on_log:
+                    self.on_log(f"Gamification asset not found: {img_path}")
 
     def stop(self):
         self.is_running = False
+
+    def update_filter(self, gamification_filter):
+        self.gamification_filter = gamification_filter
+        if self.gamification_filter == 'none':
+            self.gamification_img = None
+        else:
+            import cv2
+            img_path = resource_path(f"assets/gamification/{self.gamification_filter}.png")
+            if os.path.exists(img_path):
+                self.gamification_img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+            else:
+                self.gamification_img = None
+                if self.on_log:
+                    self.on_log(f"Gamification asset not found: {img_path}")
 
     def run(self):
         total_tasks = len(self.task_queue)
@@ -139,6 +164,7 @@ class ChronosWorker:
         frame_idx = 0
         frame_interval = 1.0 / fps
         proc_start = time.time()
+        landmarks = None
 
         if self.on_log:
             self.on_log(f"  Frames: {total_frames} | FPS: {fps:.1f}")
@@ -198,6 +224,8 @@ class ChronosWorker:
                 timestamps.append(curr_t)
 
                 if frame_idx % self.FRAME_SKIP == 0:
+                    if self.gamification_filter != 'none':
+                        self._draw_gamification_perspective(frame, landmarks, img_w, img_h)
                     self._emit_frame(frame)
                     elapsed = time.time() - proc_start
                     proc_fps = frame_idx / elapsed if elapsed > 0 else 0
@@ -213,6 +241,9 @@ class ChronosWorker:
                             'task_idx': self.current_task_idx,
                             'total_tasks': self.total_tasks
                         })
+
+                # Yield GIL to allow async event loop on main thread to process WS
+                time.sleep(0.002)
 
         cap.release()
         if not self.is_running:
@@ -250,6 +281,7 @@ class ChronosWorker:
         frame_idx = 0
         frame_interval = 1.0 / fps
         proc_start = time.time()
+        landmarks = None
 
         engine_name = "LIZARD" if logic == "LIZ" else "EYE"
         if self.on_log:
@@ -305,6 +337,8 @@ class ChronosWorker:
                 timestamps_arr.append(curr_t)
 
                 if frame_idx % self.FRAME_SKIP == 0:
+                    if self.gamification_filter != 'none':
+                        self._draw_gamification_perspective(frame, landmarks, img_w, img_h)
                     self._emit_frame(frame)
                     elapsed = time.time() - proc_start
                     proc_fps = frame_idx / elapsed if elapsed > 0 else 0
@@ -320,6 +354,9 @@ class ChronosWorker:
                             'task_idx': self.current_task_idx,
                             'total_tasks': self.total_tasks
                         })
+
+                # Yield GIL to allow async event loop on main thread to process WS
+                time.sleep(0.002)
 
         cap.release()
         if not self.is_running:
@@ -337,6 +374,101 @@ class ChronosWorker:
         for lm in landmarks:
             x, y = int(lm.x * img_w), int(lm.y * img_h)
             cv.circle(frame, (x, y), 1, (0, 255, 0), -1)
+
+    def _draw_gamification_perspective(self, frame, landmarks, img_w, img_h):
+        if self.gamification_img is None or landmarks is None:
+            return
+            
+        import cv2 as cv
+        import numpy as np
+
+        is_hat = 'hat' in self.gamification_filter.lower()
+        is_ears = 'ears' in self.gamification_filter.lower()
+        is_mustache = 'mus' in self.gamification_filter.lower() or 'mustache' in self.gamification_filter.lower()
+
+        if is_hat or is_ears:
+            # Forehead anchor
+            pt_tl = landmarks[103]
+            pt_tr = landmarks[332]
+            pt_bl = landmarks[21]
+            pt_br = landmarks[251]
+        elif is_mustache:
+            # Mustache anchor (under the nose, above the mouth)
+            pt_tl = landmarks[205] # left upper lip area
+            pt_tr = landmarks[425] # right upper lip area
+            pt_bl = landmarks[61]  # left corner of mouth
+            pt_br = landmarks[291] # right corner of mouth
+        else:
+            # Glasses anchor
+            pt_tl = landmarks[234] # left temple
+            pt_tr = landmarks[454] # right temple
+            pt_bl = landmarks[132] # left cheek
+            pt_br = landmarks[361] # right cheek
+
+        face_pts = np.array([
+            [pt_tl.x * img_w, pt_tl.y * img_h],
+            [pt_tr.x * img_w, pt_tr.y * img_h],
+            [pt_br.x * img_w, pt_br.y * img_h],
+            [pt_bl.x * img_w, pt_bl.y * img_h]
+        ], dtype=np.float32)
+
+        center = np.mean(face_pts, axis=0)
+        
+        # Determine scale padding based on the asset type
+        if is_hat or is_ears:
+            sw, sh = 1.8, 2.5
+        elif is_mustache:
+            sw, sh = 1.2, 1.2
+        else:
+            sw, sh = 1.3, 1.5
+        
+        dst_pts = np.zeros_like(face_pts)
+        for i in range(4):
+            vec = face_pts[i] - center
+            dst_pts[i] = center + np.array([vec[0]*sw, vec[1]*sh])
+            
+        if is_hat or is_ears:
+            shift_y = (pt_bl.y * img_h - pt_tl.y * img_h) * 1.5
+            for i in range(4):
+                dst_pts[i][1] -= shift_y
+        elif is_mustache:
+            # Center it slightly lower below the nose if needed
+            shift_y = (pt_bl.y * img_h - pt_tl.y * img_h) * 0.1
+            for i in range(4):
+                dst_pts[i][1] += shift_y
+        else:
+            shift_y = (pt_bl.y * img_h - pt_tl.y * img_h) * 0.2
+            for i in range(4):
+                dst_pts[i][1] -= shift_y
+
+        h, w = self.gamification_img.shape[:2]
+        src_pts = np.array([
+            [0, 0],
+            [w, 0],
+            [w, h],
+            [0, h]
+        ], dtype=np.float32)
+        
+        M = cv.getPerspectiveTransform(src_pts, dst_pts)
+        warped = cv.warpPerspective(self.gamification_img, M, (img_w, img_h))
+        
+        # Crop and blend inside the bounding box of the non-transparent warped overlay
+        alpha_chan = warped[:, :, 3]
+        non_zero = np.argwhere(alpha_chan > 0)
+        if non_zero.size == 0:
+            return
+
+        by1, bx1 = non_zero.min(axis=0)
+        by2, bx2 = non_zero.max(axis=0) + 1
+
+        crop_frame = frame[by1:by2, bx1:bx2]
+        crop_warped = warped[by1:by2, bx1:bx2]
+
+        crop_alpha = (crop_warped[:, :, 3] / 255.0)[:, :, np.newaxis].astype(np.float32)
+        crop_overlay = crop_warped[:, :, :3].astype(np.float32)
+
+        blended = (crop_alpha * crop_overlay + (1.0 - crop_alpha) * crop_frame.astype(np.float32)).astype(np.uint8)
+        frame[by1:by2, bx1:bx2] = blended
 
     def _emit_frame(self, frame):
         if self.on_new_frame:

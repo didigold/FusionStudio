@@ -20,6 +20,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
 
 export default function ClassificationTab() {
   const {
@@ -247,6 +249,26 @@ export default function ClassificationTab() {
     setExpandedGroups(nextState)
   }
 
+  const allChecked = useMemo(() => {
+    if (classifyGroups.length === 0) return false
+    return classifyGroups.every((g: any) => g.files?.every((f: any) => f.checked))
+  }, [classifyGroups])
+
+  const noneChecked = useMemo(() => {
+    if (classifyGroups.length === 0) return true
+    return classifyGroups.every((g: any) => g.files?.every((f: any) => !f.checked))
+  }, [classifyGroups])
+
+  const selectionValue = allChecked ? "all" : noneChecked ? "none" : "mixed"
+
+  const handleSelectAll = (checked: boolean) => {
+    const updated = classifyGroups.map((g: any) => ({
+      ...g,
+      files: g.files?.map((f: any) => ({ ...f, checked })) || []
+    }))
+    setClassifyGroups(updated)
+  }
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       {/* Sidebar Config */}
@@ -316,6 +338,25 @@ export default function ClassificationTab() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {classifyGroups.length > 0 && (
+              <RadioGroup
+                value={selectionValue}
+                onValueChange={(val) => {
+                  if (val === "all") handleSelectAll(true)
+                  if (val === "none") handleSelectAll(false)
+                }}
+                className="flex items-center gap-4 mr-3"
+              >
+                <div className="flex items-center gap-1.5 cursor-pointer">
+                  <RadioGroupItem value="all" id="select-all-radio" />
+                  <Label htmlFor="select-all-radio" className="text-xs font-semibold cursor-pointer select-none">All</Label>
+                </div>
+                <div className="flex items-center gap-1.5 cursor-pointer">
+                  <RadioGroupItem value="none" id="select-none-radio" />
+                  <Label htmlFor="select-none-radio" className="text-xs font-semibold cursor-pointer select-none">None</Label>
+                </div>
+              </RadioGroup>
+            )}
             <Button
               variant="ghost"
               size="icon"

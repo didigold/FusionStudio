@@ -260,6 +260,8 @@ interface AppState {
   setAnalysisChronosStats: (s: any) => void
   analysisChronosFrame: string | null
   setAnalysisChronosFrame: (frame: string | null) => void
+  analysisGamificationFilter: string
+  setAnalysisGamificationFilter: (v: string) => void
 
   // Classification state
   classifySourcePath: string
@@ -591,6 +593,8 @@ export const useAppStore = create<AppState>((set) => ({
   setAnalysisChronosStats: (s: any) => set({ analysisChronosStats: s }),
   analysisChronosFrame: null as string | null,
   setAnalysisChronosFrame: (frame) => set({ analysisChronosFrame: frame }),
+  analysisGamificationFilter: 'none',
+  setAnalysisGamificationFilter: (v) => set({ analysisGamificationFilter: v }),
 
   // Classification state
   classifySourcePath: '',

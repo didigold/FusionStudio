@@ -22,6 +22,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function TrackingTab() {
   const {
@@ -32,6 +39,8 @@ export function TrackingTab() {
     analysisCheckedFiles,
     analysisChronosRunning,
     setAnalysisChronosRunning,
+    analysisGamificationFilter,
+    setAnalysisGamificationFilter,
     analysisChronosProgress,
     analysisChronosStats,
     analysisChronosFrame,
@@ -63,6 +72,15 @@ export function TrackingTab() {
     img.src = `data:image/jpeg;base64,${analysisChronosFrame}`;
   }, [analysisChronosFrame, showAmbilight]);
 
+  // Dynamically update the gamification filter while tracking is running
+  useEffect(() => {
+    if (analysisChronosRunning) {
+      analysisApi.updateChronosFilter(analysisGamificationFilter).catch((err) => {
+        console.error("Failed to update active filter dynamically", err);
+      });
+    }
+  }, [analysisGamificationFilter, analysisChronosRunning]);
+
   const availableCameras = analysisAvailableCameras;
 
   const startTracking = useCallback(async () => {
@@ -71,6 +89,7 @@ export function TrackingTab() {
         analysisCheckedFiles,
         analysisSelectedCamera,
         analysisSourcePath,
+        analysisGamificationFilter
       );
       if (res.data.status === "started") {
         setAnalysisChronosRunning(true);
@@ -87,6 +106,7 @@ export function TrackingTab() {
     analysisCheckedFiles,
     analysisSelectedCamera,
     analysisSourcePath,
+    analysisGamificationFilter,
     setAnalysisChronosRunning,
     addLog,
   ]);
@@ -184,6 +204,133 @@ export function TrackingTab() {
           >
             <Sparkles className="w-3.5 h-3.5" />
           </Button>
+
+          {/* Gamification Filter */}
+          <div className="w-[180px]">
+            <Select
+              value={analysisGamificationFilter}
+              onValueChange={setAnalysisGamificationFilter}
+            >
+              <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70 focus:ring-0 focus:ring-offset-0">
+                <SelectValue placeholder="Filter..." />
+              </SelectTrigger>
+              <SelectContent className="bg-surface-2 border-border text-foreground">
+                <SelectItem value="none">
+                  <span className="text-sm">None</span>
+                </SelectItem>
+                <SelectItem value="sunglasses1">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/sunglasses1.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Thug Life"
+                    />
+                    <span className="text-sm">Thug Life</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="sunglasses2">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/sunglasses2.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Sunglasses 2"
+                    />
+                    <span className="text-sm">Sunglasses 2</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="hat1">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/hat1.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Top Hat"
+                    />
+                    <span className="text-sm">Top Hat</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="hat2">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/hat2.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Cap"
+                    />
+                    <span className="text-sm">Cap</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="hat_santa">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/hat_santa.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Santa Hat"
+                    />
+                    <span className="text-sm">Santa Hat</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="ears_bear">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/ears_bear.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Bear Ears"
+                    />
+                    <span className="text-sm">Bear Ears</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="ears_cat">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/ears_cat.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Cat Ears"
+                    />
+                    <span className="text-sm">Cat Ears</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="ears_teady">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/ears_teady.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Teddy Ears"
+                    />
+                    <span className="text-sm">Teddy Ears</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="mus1">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/mus1.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Mustache 1"
+                    />
+                    <span className="text-sm">Mustache 1</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="mus2">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/mus2.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Mustache 2"
+                    />
+                    <span className="text-sm">Mustache 2</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="mus3">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="/api/analysis/assets/gamification/mus3.png"
+                      className="w-5 h-5 object-contain"
+                      alt="Mustache 3"
+                    />
+                    <span className="text-sm">Mustache 3</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {analysisChronosRunning ? (
             <AlertDialog>

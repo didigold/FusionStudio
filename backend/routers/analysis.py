@@ -60,6 +60,11 @@ class ChronosRequest(BaseModel):
     mf4_paths: list[str]
     camera_id: int = 0
     source_dir: str = ""
+    gamification_filter: str = "none"
+
+
+class UpdateFilterRequest(BaseModel):
+    gamification_filter: str
 
 
 class SignalUniqueValuesRequest(BaseModel):
@@ -663,6 +668,7 @@ async def run_chronos(req: ChronosRequest):
         on_error=on_error,
         on_stats=on_stats,
         on_new_frame=on_new_frame,
+        gamification_filter=req.gamification_filter,
     )
 
     _active_worker = worker
@@ -674,6 +680,24 @@ async def run_chronos(req: ChronosRequest):
     _worker_thread.start()
 
     return {"status": "started", "task_count": len(tasks)}
+
+
+@router.post("/run/chronos/filter")
+async def run_chronos_filter(req: UpdateFilterRequest):
+    global _active_worker
+    if _active_worker is not None:
+        _active_worker.update_filter(req.gamification_filter)
+        return {"status": "updated", "filter": req.gamification_filter}
+    return {"status": "no_active_worker"}
+
+
+@router.get("/assets/gamification/{filename}")
+async def get_gamification_asset(filename: str):
+    from backend.core.utils import resource_path
+    img_path = resource_path(f"assets/gamification/{filename}")
+    if os.path.exists(img_path):
+        return FileResponse(img_path)
+    raise HTTPException(status_code=404, detail="Gamification asset not found")
 
 
 def _get_marks_key(file_path: str) -> str:

@@ -201,8 +201,13 @@ Raw data filename           :{raw_filename_clean}
                 pass
 
         matching_pngs = []
+        seen_folders = set()
         for folder in [src_dir, os.path.join(src_dir, "Reports"), os.path.join(src_dir, "reports")]:
             if os.path.exists(folder) and os.path.isdir(folder):
+                norm_folder = os.path.normpath(os.path.abspath(folder)).lower()
+                if norm_folder in seen_folders:
+                    continue
+                seen_folders.add(norm_folder)
                 for f in os.listdir(folder):
                     if f.lower().endswith(".png") and f.lower().startswith(base_src_name.lower()):
                         matching_pngs.append((os.path.join(folder, f), f))
