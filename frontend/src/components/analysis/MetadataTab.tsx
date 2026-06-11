@@ -7,25 +7,29 @@ import { SearchableSelect } from "@/components/analysis/SearchableSelect"
 import { useAppStore } from "@/store/useAppStore"
 import { LogoLoop } from "@/components/ui/LogoLoop"
 
-const oems = [
-  "Acura", "Aisin", "Aito", "Alfa Romeo", "AMG", "APPLUS+IDIADA", "Aptiv",
-  "Aston Martin", "Audi", "Bentley", "BMW", "Bosch", "Brembo", "Bridgestone",
-  "Buick", "BYD", "CEVT", "Chery", "Chevrolet", "Continental", "Cupra",
-  "Deepal", "Denso", "DFSK", "Dongfeng", "driveBUDDY AI", "EuroNCAP", "Exeed",
-  "FAW", "FCA", "Ferrari", "Fiat", "Fisker", "Ford", "Ford Otosan", "Forvia",
-  "Gaz", "Geely", "General Motors", "Goodyear", "Great Wall", "Hirige",
-  "Hitachi", "Honda", "Hongqi", "Huawei", "Hyundai", "Hyundai Mobis", "INEOS",
-  "Infiniti", "ISUZU", "JAC Motors", "JAECOO", "Jaguar", "JiXiang", "JLR",
-  "KGM", "KIA", "Lamborghini", "Land Rover", "LeapMotor", "Lexus", "LG",
-  "Lincoln", "Lotus", "Lucid", "Magna", "Mahindra", "Maserati", "Maxus",
-  "Mazda", "McLaren", "Mercedes-AMG", "Mercedes-Benz", "MG", "Michelin",
-  "Mini", "Mitsubishi", "NIO", "Nissan", "Novelic", "Nvidia", "OMODA", "Opel",
-  "Peugeot", "Piaggio", "Pirelli", "Polestar", "Porsche", "Renault", "Rivian",
-  "SAIC", "Saint Gobain", "Samsung", "SEAT", "Seeing Machines", "Seres",
-  "Smart", "SmartEye", "Sony", "Stellantis", "Subaru", "Suzuki", "TATA", "TEQ",
-  "Tesla", "Togg", "Toyota", "Valeo", "Vinfast", "Volkswagen", "Volvo",
-  "Weichai", "Xiaomi", "XPENG", "Zeekr", "ZF",
-]
+// Dynamically scan the frontend/public/assets/logos folder using Vite's glob import
+const logoModules = import.meta.glob(
+  "/public/assets/logos/*.{png,jpeg,jpg,webp,svg}",
+  { eager: true }
+);
+
+// Map paths to OEM names and URLs
+const oemData = Object.keys(logoModules).map((path) => {
+  const filename = path.split("/").pop() || "";
+  const dotIndex = filename.lastIndexOf(".");
+  const name = dotIndex !== -1 ? filename.substring(0, dotIndex) : filename;
+  
+  // Convert public path (e.g. "/public/assets/logos/Acura.png") to served URL (e.g. "/assets/logos/Acura.png")
+  const url = path.replace(/^\/public/, "");
+  
+  return { name, url };
+});
+
+// Sort OEMs alphabetically
+oemData.sort((a, b) => a.name.localeCompare(b.name));
+
+const oems = oemData.map((item) => item.name);
+const oemMap = new Map(oemData.map((item) => [item.name, item.url]));
 
 const hqTracks = [
   "(0) Highway Loop",
@@ -89,9 +93,7 @@ export function MetadataTab() {
   } = useAppStore()
   
   const getOemLogoUrl = (oem: string) => {
-    if (oem === "Great Wall") return "/assets/logos/GWM.png";
-    if (oem === "Novelic") return "/assets/logos/Novelic.jpeg";
-    return `/assets/logos/${oem}.png`;
+    return oemMap.get(oem) || "";
   };
 
   const allLogoItems = useMemo(() => {
@@ -112,7 +114,7 @@ export function MetadataTab() {
     <div className="relative flex items-center justify-center h-full min-h-0 overflow-y-auto p-8 bg-background">
       
       {/* Background Logo Mosaic Layer */}
-      <div className="absolute inset-0 z-0 flex flex-col justify-around pointer-events-none overflow-hidden opacity-[0.16] dark:opacity-[0.20] select-none py-8">
+      <div className="absolute inset-0 z-0 flex flex-col justify-around pointer-events-none overflow-hidden opacity-[0.16] dark:opacity-[0.32] select-none py-8">
         <LogoLoop logos={row1} speed={10} direction="left" logoHeight={32} gap={48} />
         <LogoLoop logos={row2} speed={8} direction="right" logoHeight={32} gap={48} />
         <LogoLoop logos={row3} speed={12} direction="left" logoHeight={32} gap={48} />

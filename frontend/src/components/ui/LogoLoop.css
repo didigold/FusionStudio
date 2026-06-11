@@ -85,6 +85,10 @@
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+:root.dark .logoloop__item img {
+  filter: invert(1) hue-rotate(180deg) brightness(1.1) drop-shadow(0 0 6px rgba(255, 255, 255, 0.15));
+}
+
 .logoloop--scale-hover .logoloop__item {
   overflow: visible;
 }
