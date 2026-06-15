@@ -26,10 +26,13 @@ class TrainLegacyRequest(BaseModel):
 
 class TrainMultimodalRequest(BaseModel):
     root_folders: list[str]
-    model_name: str = "multimodal_v1"
-    epochs: int = 100
+    model_name: str = "distraction_detector"
+    epochs: int = 150
     lr: float = 0.001
-    patience: int = 15
+    patience: int = 20
+    batch_size: int = 32
+    weight_decay: float = 0.0001
+    video_fps: int = 5
     camera_config: dict[str, str] = {}
     base_model_path: str = ""
 
@@ -62,6 +65,19 @@ async def list_projects(root: str = ""):
         if avis > 0 or mf4s > 0:
             projects.append({"name": folder, "path": fpath, "avis": avis, "mf4s": mf4s})
     return {"projects": projects}
+
+
+def clean_nans_infs(obj):
+    import math
+    if isinstance(obj, float):
+        if math.isinf(obj) or math.isnan(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: clean_nans_infs(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_nans_infs(v) for v in obj]
+    return obj
 
 
 @router.get("/models")
@@ -106,7 +122,7 @@ async def list_models():
                     except Exception:
                         pass
                 result.append(entry)
-    return {"models": result}
+    return clean_nans_infs({"models": result})
 
 
 @router.delete("/models")
@@ -166,7 +182,7 @@ async def get_history():
             except Exception:
                 pass
 
-    return result
+    return clean_nans_infs(result)
 
 
 @router.post("/train/legacy")
@@ -226,7 +242,7 @@ async def train_legacy(req: TrainLegacyRequest):
 
                 emit({"type": "status", "phase": "training"})
                 success = engine.train(
-                    csv_path, req.model_name, req.epochs, req.lr, req.root_folders
+                    csv_path, req.model_name, req.epochs, req.lr, req.root_folders, check_running_callback=lambda: worker.is_running
                 )
 
                 if success:
@@ -241,7 +257,11 @@ async def train_legacy(req: TrainLegacyRequest):
     _active_training = worker
 
     def _run():
-        worker.run()
+        global _active_training
+        try:
+            worker.run()
+        finally:
+            _active_training = None
 
     _training_thread = Thread(target=_run, daemon=True)
     _training_thread.start()
@@ -271,20 +291,26 @@ async def train_multimodal(req: TrainMultimodalRequest):
             self.is_running = False
 
         def run(self):
+            global _active_training
             try:
                 from backend.core.dataset_builder import DatasetBuilder
                 from backend.core.multimodal_engine import MultimodalTrainer
                 from backend.core.video_feature_extractor import VideoFeatureExtractor
 
+                # Auto-generate model name with timestamp
+                from datetime import datetime
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                model_name = f"distraction_detector_{timestamp_str}"
+
                 output_dir = os.path.join(
                     resource_path("models"), "distraction_detector", "multimodal",
-                    f"run_{req.model_name}"
+                    f"run_{model_name}"
                 )
                 os.makedirs(output_dir, exist_ok=True)
 
                 extractor = VideoFeatureExtractor(
-                    cam_config=req.camera_config,
-                    on_start_extraction=lambda v: emit({"type": "log", "message": f"Extracting: {v}"}),
+                    fps_sample=req.video_fps,
+                    on_log=lambda v: emit({"type": "log", "message": v}),
                     on_progress=lambda v: emit({"type": "status", "phase": "extracting", "progress": v}),
                 )
 
@@ -293,21 +319,31 @@ async def train_multimodal(req: TrainMultimodalRequest):
                     on_progress=lambda v: emit({"type": "status", "phase": "building", "progress": v}),
                 )
 
+                def _on_metrics(data):
+                    """Route metrics: dataset_stats go as their own type, epoch data as 'epoch'."""
+                    if data.get("type") == "dataset_stats":
+                        emit({"type": "dataset_stats", **{k: v for k, v in data.items() if k != "type"}})
+                    else:
+                        emit({
+                            "type": "epoch",
+                            "epoch": data.get("epoch"),
+                            "loss": data.get("loss"),
+                            "acc": data.get("acc"),
+                            "val_loss": data.get("val_loss"),
+                            "val_acc": data.get("val_acc"),
+                            "val_f1": data.get("val_f1"),
+                            "train_f1": data.get("train_f1"),
+                            "lr": data.get("lr"),
+                            "epoch_time": data.get("epoch_time"),
+                        })
+
                 trainer = MultimodalTrainer(
-                    on_phase_change=lambda p: emit({"type": "status", "phase": p}),
-                    on_epoch=lambda ep, loss, acc, val_loss, val_acc: emit({
-                        "type": "epoch",
-                        "epoch": ep,
-                        "loss": loss,
-                        "acc": acc,
-                        "val_loss": val_loss,
-                        "val_acc": val_acc,
-                    }),
+                    on_metrics=_on_metrics,
                     on_log=lambda m: emit({"type": "log", "message": m}),
                 )
 
                 emit({"type": "status", "phase": "extracting"})
-                emit({"type": "log", "message": "Starting video feature extraction..."})
+                emit({"type": "log", "message": f"Starting video feature extraction (sampling at {req.video_fps} fps)..."})
 
                 result = builder.build_multimodal_from_folders(
                     req.root_folders, output_dir,
@@ -327,9 +363,12 @@ async def train_multimodal(req: TrainMultimodalRequest):
                     result["video_windows"],
                     result["labels"],
                     result["project_ids"],
-                    req.model_name, req.epochs, req.lr,
+                    model_name, req.epochs, req.lr,
                     req.root_folders, req.patience,
                     base_model_path=req.base_model_path,
+                    batch_size=req.batch_size,
+                    weight_decay=req.weight_decay,
+                    check_running_callback=lambda: worker.is_running
                 )
 
                 if success:
@@ -339,6 +378,8 @@ async def train_multimodal(req: TrainMultimodalRequest):
 
             except Exception as e:
                 emit({"type": "error", "message": str(e)})
+            finally:
+                _active_training = None
 
     worker = _MultiTrainer()
     _active_training = worker
@@ -387,7 +428,7 @@ async def analyze_file(req: AnalyzeRequest):
     return {"status": "started"}
 
 
-@router.websocket("/ws/train")
+@router.websocket("/ws/training")
 async def ws_brain_train(ws: WebSocket):
     await manager_brain.connect(ws)
     try:

@@ -30,14 +30,46 @@ class DatasetBuilder:
             for f_idx, folder in enumerate(root_folders):
                 if self.on_log:
                     self.on_log(f"Scanning folder: {os.path.basename(folder)}")
+                folder_name = os.path.basename(folder)
                 marks_path = os.path.join(folder, "marks.json")
-                if not os.path.exists(marks_path):
+                marks_data = {}
+                is_parent_marks = False
+
+                if os.path.exists(marks_path):
+                    try:
+                        with open(marks_path, "r", encoding="utf-8") as f:
+                            marks_data = json.load(f)
+                    except Exception:
+                        pass
+
+                if not marks_data:
+                    parent_marks = os.path.join(os.path.dirname(folder), "marks.json")
+                    if os.path.exists(parent_marks):
+                        try:
+                            with open(parent_marks, "r", encoding="utf-8") as f:
+                                marks_data = json.load(f)
+                            is_parent_marks = True
+                            if self.on_log:
+                                self.on_log(f"  Using parent marks.json for {folder_name}")
+                        except Exception:
+                            pass
+
+                if not marks_data:
                     if self.on_log:
-                        self.on_log(f"Skipping {folder}: No marks.json found.")
+                        self.on_log(f"Skipping {folder}: No valid marks data found.")
                     continue
 
-                with open(marks_path, "r", encoding="utf-8") as f:
-                    marks_data = json.load(f)
+                if is_parent_marks:
+                    filtered_marks = {}
+                    for k, v in marks_data.items():
+                        if k.startswith(folder_name + "/") or k.startswith(folder_name + "\\"):
+                            filtered_marks[k] = v
+                    marks_data = filtered_marks
+
+                if not marks_data:
+                    if self.on_log:
+                        self.on_log(f"Skipping {folder}: No marks found for this project in parent marks.json.")
+                    continue
 
                 total_cases = len(marks_data)
                 for c_idx, (case_key, timestamps) in enumerate(marks_data.items()):
@@ -161,13 +193,47 @@ class DatasetBuilder:
                 if self.on_log:
                     self.on_log(f"[Multimodal] Scanning: {folder_name}")
                 marks_path = os.path.join(folder, "marks.json")
-                if not os.path.exists(marks_path):
+                marks_data = {}
+                is_parent_marks = False
+
+                if os.path.exists(marks_path):
+                    try:
+                        with open(marks_path, "r", encoding="utf-8") as f:
+                            marks_data = json.load(f)
+                    except Exception:
+                        pass
+
+                # If local marks.json doesn't exist or is empty, try the parent directory
+                if not marks_data:
+                    parent_marks = os.path.join(os.path.dirname(folder), "marks.json")
+                    if os.path.exists(parent_marks):
+                        try:
+                            with open(parent_marks, "r", encoding="utf-8") as f:
+                                marks_data = json.load(f)
+                            is_parent_marks = True
+                            if self.on_log:
+                                self.on_log(f"  Using parent marks.json for {folder_name}")
+                        except Exception:
+                            pass
+
+                if not marks_data:
                     if self.on_log:
-                        self.on_log(f"  Skipping {folder_name}: No marks.json")
+                        self.on_log(f"  Skipping {folder_name}: No valid marks data found")
                     continue
 
-                with open(marks_path, "r", encoding="utf-8") as f:
-                    marks_data = json.load(f)
+                if is_parent_marks:
+                    # Filter keys to only include those belonging to this folder
+                    filtered_marks = {}
+                    for k, v in marks_data.items():
+                        # Keys might be "P01/..." or "P01\..."
+                        if k.startswith(folder_name + "/") or k.startswith(folder_name + "\\"):
+                            filtered_marks[k] = v
+                    marks_data = filtered_marks
+
+                if not marks_data:
+                    if self.on_log:
+                        self.on_log(f"  Skipping {folder_name}: No marks found for this project in parent marks.json")
+                    continue
 
                 total_cases = len(marks_data)
                 camera_hint = None

@@ -4,6 +4,7 @@ Architecture: SignalBranch (1D Conv + LSTM) | VideoBranch (LSTM) → Fusion → 
 Training uses 70/30 project-level split to prevent data leakage.
 """
 import os
+import time as _time
 import json
 import numpy as np
 import torch
@@ -93,7 +94,10 @@ class MultimodalDataset:
 class MultimodalTrainer:
     def __init__(self, base_models_dir="models",
                  on_log=None, on_metrics=None, on_finished=None,
-                 on_extraction_progress=None):
+                 on_extraction_progress=None,
+                 # Aliases accepted from brain.py router
+                 on_epoch=None, on_phase_change=None,
+                 cam_config=None, on_start_extraction=None):
         self.base_models_dir = os.path.join(base_models_dir, "distraction_detector", "multimodal")
         self.model = None
         self.scaler_mean = None
@@ -105,13 +109,14 @@ class MultimodalTrainer:
             "name": "Distraction Detector",
         }
         self.model_path = None
-        self._camera_config = {}
-        self._current_lr = 0.0001
+        self._camera_config = cam_config or {}
 
         self.on_log = on_log
-        self.on_metrics = on_metrics
+        # on_epoch is an alias for on_metrics (brain.py uses on_epoch)
+        self.on_metrics = on_metrics or on_epoch
         self.on_finished = on_finished
         self.on_extraction_progress = on_extraction_progress
+        self.on_phase_change = on_phase_change
 
     def load_model(self, model_path):
         import torch
@@ -178,7 +183,7 @@ class MultimodalTrainer:
         val_projects = [project_paths[i] for i in val_idx]
         return train_projects, val_projects
 
-    def train(self, signal_windows, video_windows, labels, project_ids, model_name, epochs, lr, project_paths, early_stop_patience=15, base_model_path=None):
+    def train(self, signal_windows, video_windows, labels, project_ids, model_name, epochs, lr, project_paths, early_stop_patience=15, base_model_path=None, batch_size=32, weight_decay=1e-4, check_running_callback=None):
         from sklearn.metrics import f1_score, accuracy_score
 
         try:
@@ -223,9 +228,9 @@ class MultimodalTrainer:
             val_sig_norm = [self._normalize_window(w, overall_mean, overall_std) for w in val_sig]
 
             train_dataset = MultimodalDataset._Impl(train_sig_norm, train_vid, train_lbl)
-            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, drop_last=False)
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
             val_dataset = MultimodalDataset._Impl(val_sig_norm, val_vid, val_lbl) if val_sig else None
-            val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False) if val_dataset else None
+            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False) if val_dataset else None
 
             pos_count = sum(train_lbl)
             neg_count = len(train_lbl) - pos_count
@@ -242,7 +247,7 @@ class MultimodalTrainer:
                 if self.on_log:
                     self.on_log("Resuming training with loaded model weights.")
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-            optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-4)
+            optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=5, factor=0.5)
 
             if "history" not in self.metadata or not self.metadata["history"] or not self.metadata["history"].get("train_loss"):
@@ -253,14 +258,34 @@ class MultimodalTrainer:
             patience_counter = 0
 
             if self.on_log:
-                self.on_log(f"Training multimodal model '{model_name}' for {epochs} epochs...")
+                self.on_log(f"Training multimodal model '{model_name}' for {epochs} epochs (batch_size={batch_size}, weight_decay={weight_decay})...")
+
+            # Emit dataset stats for frontend display
+            dataset_stats = {
+                "total_windows": len(train_lbl) + len(val_lbl),
+                "train_windows": len(train_lbl),
+                "val_windows": len(val_lbl),
+                "train_positive": int(sum(train_lbl)),
+                "train_negative": int(len(train_lbl) - sum(train_lbl)),
+                "val_positive": int(sum(val_lbl)) if val_lbl else 0,
+                "val_negative": int(len(val_lbl) - sum(val_lbl)) if val_lbl else 0,
+                "class_balance_ratio": float(sum(train_lbl) / max(len(train_lbl), 1)),
+            }
+            if self.on_metrics:
+                self.on_metrics({"type": "dataset_stats", **dataset_stats})
 
             for epoch in range(1, epochs + 1):
-                for pg in optimizer.param_groups:
-                    pg['lr'] = self._current_lr
+                if check_running_callback and not check_running_callback():
+                    if self.on_log:
+                        self.on_log("Training stopped by user.")
+                    break
+
+                epoch_start = _time.time()
                 self.model.train()
                 train_losses, train_preds, train_targets = [], [], []
                 for sig_batch, vid_batch, lbl_batch in train_loader:
+                    if check_running_callback and not check_running_callback():
+                        break
                     optimizer.zero_grad()
                     output = self.model(sig_batch, vid_batch)
                     loss = criterion(output, lbl_batch)
@@ -305,6 +330,9 @@ class MultimodalTrainer:
                                 self.on_log(f"Early stopping at epoch {epoch} (no improvement for {early_stop_patience} epochs)")
                             break
 
+                epoch_time = _time.time() - epoch_start
+                current_lr = optimizer.param_groups[0]['lr']
+
                 self.metadata["history"]["train_loss"].append(float(train_loss))
                 self.metadata["history"]["train_acc"].append(float(train_acc))
                 self.metadata["history"]["train_f1"].append(float(train_f1))
@@ -321,6 +349,8 @@ class MultimodalTrainer:
                         "val_acc": float(val_acc),
                         "val_f1": float(val_f1),
                         "train_f1": float(train_f1),
+                        "lr": float(current_lr),
+                        "epoch_time": round(epoch_time, 2),
                     })
 
             if best_state is not None:
@@ -343,7 +373,8 @@ class MultimodalTrainer:
                 "epochs_requested": epochs,
                 "epochs_completed": epoch,
                 "learning_rate": lr,
-                "batch_size": 32,
+                "batch_size": batch_size,
+                "weight_decay": weight_decay,
                 "early_stop_patience": early_stop_patience,
                 "timestamp": datetime.now().isoformat(),
                 "pytorch_version": torch.__version__,

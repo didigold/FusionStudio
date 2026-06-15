@@ -343,14 +343,18 @@ interface AppState {
   setBrainHistory: (h: any) => void
   brainArchitecture: 'multimodal' | 'legacy'
   setBrainArchitecture: (a: 'multimodal' | 'legacy') => void
-  brainModelName: string
-  setBrainModelName: (n: string) => void
   brainEpochs: number
   setBrainEpochs: (e: number) => void
   brainLR: number
   setBrainLR: (lr: number) => void
   brainPatience: number
   setBrainPatience: (p: number) => void
+  brainBatchSize: number
+  setBrainBatchSize: (b: number) => void
+  brainWeightDecay: number
+  setBrainWeightDecay: (w: number) => void
+  brainVideoFps: number
+  setBrainVideoFps: (f: number) => void
   brainTraining: boolean
   setBrainTraining: (v: boolean) => void
   brainPhase: string
@@ -360,6 +364,8 @@ interface AppState {
   brainEpochData: any[]
   addBrainEpochData: (d: any) => void
   clearBrainEpochData: () => void
+  brainDatasetStats: any
+  setBrainDatasetStats: (s: any) => void
   brainAnalysisFile: string
   setBrainAnalysisFile: (f: string) => void
   brainAnalysisVideo: string
@@ -684,14 +690,18 @@ export const useAppStore = create<AppState>((set) => ({
   setBrainHistory: (h) => set({ brainHistory: h }),
   brainArchitecture: 'multimodal',
   setBrainArchitecture: (a) => set({ brainArchitecture: a }),
-  brainModelName: 'distraction_detector',
-  setBrainModelName: (n) => set({ brainModelName: n }),
-  brainEpochs: 100,
+  brainEpochs: 150,
   setBrainEpochs: (e) => set({ brainEpochs: e }),
   brainLR: 0.001,
   setBrainLR: (lr) => set({ brainLR: lr }),
-  brainPatience: 15,
+  brainPatience: 20,
   setBrainPatience: (p) => set({ brainPatience: p }),
+  brainBatchSize: 32,
+  setBrainBatchSize: (b) => set({ brainBatchSize: b }),
+  brainWeightDecay: 0.0001,
+  setBrainWeightDecay: (w) => set({ brainWeightDecay: w }),
+  brainVideoFps: 5,
+  setBrainVideoFps: (f) => set({ brainVideoFps: f }),
   brainTraining: false,
   setBrainTraining: (v) => set({ brainTraining: v }),
   brainPhase: '',
@@ -701,6 +711,8 @@ export const useAppStore = create<AppState>((set) => ({
   brainEpochData: [],
   addBrainEpochData: (d) => set((s) => ({ brainEpochData: [...s.brainEpochData, d] })),
   clearBrainEpochData: () => set({ brainEpochData: [] }),
+  brainDatasetStats: null,
+  setBrainDatasetStats: (s) => set({ brainDatasetStats: s }),
   brainAnalysisFile: '',
   setBrainAnalysisFile: (f) => set({ brainAnalysisFile: f }),
   brainAnalysisVideo: '',

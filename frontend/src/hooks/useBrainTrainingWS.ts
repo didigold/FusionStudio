@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 
 export function useBrainTrainingWS() {
-  const { addLog, setBrainTraining, setBrainPhase, setBrainPhaseProgress, addBrainEpochData } = useAppStore()
+  const { addLog, setBrainTraining, setBrainPhase, setBrainPhaseProgress, addBrainEpochData, setBrainDatasetStats } = useAppStore()
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
@@ -33,10 +33,23 @@ export function useBrainTrainingWS() {
             const now = performance.now();
             if (now - lastEpochTimeRef.current >= 100) {
               lastEpochTimeRef.current = now;
-              addBrainEpochData({ epoch: data.epoch, loss: data.loss, acc: data.acc, val_loss: data.val_loss, val_acc: data.val_acc })
+              addBrainEpochData({
+                epoch: data.epoch,
+                loss: data.loss,
+                acc: data.acc,
+                val_loss: data.val_loss,
+                val_acc: data.val_acc,
+                train_f1: data.train_f1,
+                val_f1: data.val_f1,
+                lr: data.lr,
+                epoch_time: data.epoch_time,
+              })
             }
             break
           }
+          case 'dataset_stats':
+            setBrainDatasetStats(data);
+            break
           case 'finished': setBrainTraining(false); setBrainPhase('done'); addLog('Training completed successfully!'); break
           case 'error': setBrainTraining(false); setBrainPhase('error'); addLog(`Error: ${data.message}`); break
         }
@@ -44,7 +57,7 @@ export function useBrainTrainingWS() {
     }
     ws.onclose = () => { wsRef.current = null; if (mountedRef.current) reconnectRef.current = setTimeout(connect, 3000) }
     ws.onerror = () => ws.close()
-  }, [addLog, setBrainTraining, setBrainPhase, setBrainPhaseProgress, addBrainEpochData])
+  }, [addLog, setBrainTraining, setBrainPhase, setBrainPhaseProgress, addBrainEpochData, setBrainDatasetStats])
 
   useEffect(() => {
     mountedRef.current = true; connect()

@@ -60,7 +60,7 @@ class MLEngine:
                 return pkl_path
         return None
 
-    def train(self, dataset_csv, model_name, epochs, lr, project_paths):
+    def train(self, dataset_csv, model_name, epochs, lr, project_paths, check_running_callback=None):
         try:
             if self.on_log:
                 self.on_log("Preparing dataset...")
@@ -85,6 +85,11 @@ class MLEngine:
                 self.on_log(f"Training AI Brain '{model_name}' for {epochs} epochs...")
 
             for epoch in range(1, epochs + 1):
+                if check_running_callback and not check_running_callback():
+                    if self.on_log:
+                        self.on_log("Training stopped by user.")
+                    break
+
                 self.model.partial_fit(X, y, classes=classes)
 
                 y_pred = self.model.predict(X)
