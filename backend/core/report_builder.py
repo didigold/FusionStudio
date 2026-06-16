@@ -1279,12 +1279,12 @@ class MatplotlibReportBuilder:
                     t0, t2 = milestones[0]['time'], milestones[2]['time']
                     ok_m02 = False
                     if t0 is not None and t2 is not None:
-                        ok_m02 = 7.0 <= (t2 - t0) <= 8.0
+                        ok_m02 = 6.0 <= (t2 - t0) <= 8.0
                     lbl_m02 = f"{(t2 - t0):.2f}s" if (t0 is not None and t2 is not None) else "--"
                     
                     tax.annotate("", xy=(x_coords[2], 0.22), xytext=(x_coords[0], 0.22),
                                  arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                    tax.text((x_coords[0] + x_coords[2])/2, 0.25, "7 - 8s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                    tax.text((x_coords[0] + x_coords[2])/2, 0.25, "6 - 8s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
                     tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
                     tax.text((x_coords[0] + x_coords[2])/2, 0.22, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
                              bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
@@ -1292,7 +1292,7 @@ class MatplotlibReportBuilder:
                 # M0 -> M3/M4 End Bracket
                 target_idx = 3 if num_m == 4 else 4
                 if milestones[target_idx].get('enabled', True):
-                    target_limit_lbl = "12 - 13s" if num_m == 4 else "13 - 14s"
+                    target_limit_lbl = "\u2264 13s" if num_m == 4 else "13 - 14s"
                     t0 = milestones[0]['time']
                     t_end = milestones[target_idx]['time'] if num_m > target_idx else None
                     ok_end = False

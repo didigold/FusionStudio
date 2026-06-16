@@ -674,7 +674,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                     t2 = signal_times.get("phase_1")
                     ok_m02 = False
                     if t0 is not None and t2 is not None:
-                        ok_m02 = 7.0 <= (t2 - t0) <= 8.0
+                        ok_m02 = 6.0 <= (t2 - t0) <= 8.0
                     if not ok_m02:
                         is_unresponsive_pass = False
                 
