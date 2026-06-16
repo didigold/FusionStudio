@@ -105,8 +105,8 @@ if __name__ == "__main__":
                 pass
             time.sleep(0.1)
             
-        # Enforce minimum splash screen display duration of 2.5 seconds
-        min_splash_time = 2.5
+        # Enforce minimum splash screen display duration of 5.0 seconds
+        min_splash_time = 5.0
         elapsed = time.time() - start_time
         if elapsed < min_splash_time:
             time.sleep(min_splash_time - elapsed)
