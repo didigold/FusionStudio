@@ -932,8 +932,8 @@ async def gaze_preview(req: GazePreviewRequest):
             show_thresholds=True
         )
         
-        temp_dir = os.path.abspath("temp")
-        os.makedirs(temp_dir, exist_ok=True)
+        import tempfile
+        temp_dir = tempfile.gettempdir()
         preview_output_path = os.path.join(temp_dir, "gaze_preview.png")
         
         builder = MatplotlibReportBuilder(config)

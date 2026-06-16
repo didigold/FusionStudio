@@ -170,7 +170,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
     }
     setIsDetecting(true);
     try {
-      const response = await fetch('http://localhost:8001/api/analysis/detect/audio', {
+      const response = await fetch('/api/analysis/detect/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
