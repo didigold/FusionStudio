@@ -6,6 +6,24 @@ from ctypes import wintypes
 
 IDIADA_ORANGE = '#F39200'
 
+def user_data_path(relative_path=""):
+    app_data = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or os.path.expanduser("~")
+    base_dir = os.path.join(app_data, "FusionStudio_Pro")
+    if relative_path:
+        if relative_path.startswith('assets/'):
+            relative_path = 'backend/' + relative_path
+        elif relative_path == 'models' or relative_path.startswith('models/'):
+            relative_path = 'backend/' + relative_path
+        elif relative_path == 'config' or relative_path.startswith('config/'):
+            relative_path = 'backend/' + relative_path
+        elif not relative_path.startswith('backend/'):
+            relative_path = 'backend/assets/' + relative_path
+        full_path = os.path.join(base_dir, relative_path)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        return full_path
+    os.makedirs(base_dir, exist_ok=True)
+    return base_dir
+
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         base_path = sys._MEIPASS

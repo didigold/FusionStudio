@@ -23,8 +23,8 @@ class VideoFeatureExtractor:
         self.on_log = on_log
         self.on_progress = on_progress
         if cache_dir is None:
-            from backend.core.utils import resource_path
-            cache_dir = os.path.join(resource_path("models"), "distraction_detector", "multimodal", "video_cache")
+            from backend.core.utils import user_data_path
+            cache_dir = os.path.join(user_data_path("models"), "distraction_detector", "multimodal", "video_cache")
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, exist_ok=True)
         self._landmark_indices = {

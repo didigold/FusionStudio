@@ -86,7 +86,10 @@ async def list_templates():
 
 @router.get("/gauge_rules")
 async def gauge_rules():
-    rules_path = resource_path("config/gauge_rules.json")
+    from backend.core.utils import user_data_path
+    rules_path = user_data_path("config/gauge_rules.json")
+    if not os.path.exists(rules_path):
+        rules_path = resource_path("config/gauge_rules.json")
     if os.path.exists(rules_path):
         with open(rules_path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -1085,10 +1088,16 @@ class GaugeFileExistsRequest(BaseModel):
 
 @router.post("/gauge_rules/read_file")
 async def read_gauge_rules_file(req: GaugeFileReadRequest):
-    if not os.path.exists(req.file_path):
+    file_path = req.file_path
+    if file_path == "config/gauge_rules.json":
+        from backend.core.utils import user_data_path
+        file_path = user_data_path("config/gauge_rules.json")
+        if not os.path.exists(file_path):
+            file_path = resource_path("config/gauge_rules.json")
+    if not os.path.exists(file_path):
         return {"error": "File not found"}
     try:
-        with open(req.file_path, "r", encoding="utf-8") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = json.load(f)
             if isinstance(content, dict):
                 return {"rules": content}
@@ -1100,10 +1109,14 @@ async def read_gauge_rules_file(req: GaugeFileReadRequest):
 @router.post("/gauge_rules/write_file")
 async def write_gauge_rules_file(req: GaugeFileWriteRequest):
     try:
-        parent_dir = os.path.dirname(req.file_path)
+        file_path = req.file_path
+        if file_path == "config/gauge_rules.json":
+            from backend.core.utils import user_data_path
+            file_path = user_data_path("config/gauge_rules.json")
+        parent_dir = os.path.dirname(file_path)
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
-        with open(req.file_path, "w", encoding="utf-8") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(req.rules, f, indent=2)
         return {"status": "success"}
     except Exception as e:
@@ -1112,7 +1125,13 @@ async def write_gauge_rules_file(req: GaugeFileWriteRequest):
 
 @router.post("/gauge_rules/exists")
 async def check_gauge_rules_exists(req: GaugeFileExistsRequest):
-    return {"exists": os.path.exists(req.file_path) and os.path.isfile(req.file_path)}
+    file_path = req.file_path
+    if file_path == "config/gauge_rules.json":
+        from backend.core.utils import user_data_path
+        if os.path.exists(user_data_path("config/gauge_rules.json")):
+            return {"exists": True}
+        file_path = resource_path("config/gauge_rules.json")
+    return {"exists": os.path.exists(file_path) and os.path.isfile(file_path)}
 
 
 class OpenFileRequest(BaseModel):

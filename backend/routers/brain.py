@@ -82,12 +82,14 @@ def clean_nans_infs(obj):
 
 @router.get("/models")
 async def list_models():
-    models_dir = resource_path("models")
-    if not os.path.exists(models_dir):
-        return {"models": []}
-
+    from backend.core.utils import user_data_path
+    dirs_to_check = [resource_path("models"), user_data_path("models")]
     result = []
-    for root, dirs, files in os.walk(models_dir):
+    seen_paths = set()
+    for models_dir in dirs_to_check:
+        if not os.path.exists(models_dir):
+            continue
+        for root, dirs, files in os.walk(models_dir):
         for f in files:
             if f == "model.pkl" or f == "model.pt":
                 rel = os.path.relpath(root, models_dir)
@@ -121,7 +123,9 @@ async def list_models():
                             entry["metadata"] = data["metadata"]
                     except Exception:
                         pass
-                result.append(entry)
+                if entry["path"] not in seen_paths:
+                    result.append(entry)
+                    seen_paths.add(entry["path"])
     return clean_nans_infs({"models": result})
 
 
@@ -133,12 +137,13 @@ async def delete_model(req: DeleteModelRequest):
         return {"status": "not_found"}
 
     # Safety: only allow deletion within the models directory
-    models_dir = resource_path("models")
+    from backend.core.utils import user_data_path
+    models_dir = user_data_path("models")
     try:
         abs_model = os.path.abspath(model_path)
         abs_models = os.path.abspath(models_dir)
         if not abs_model.startswith(abs_models):
-            return {"status": "forbidden", "message": "Path outside models directory"}
+            return {"status": "forbidden", "message": "Path outside user models directory"}
     except Exception:
         return {"status": "error", "message": "Invalid path"}
 
@@ -154,33 +159,37 @@ async def delete_model(req: DeleteModelRequest):
 
 @router.get("/history")
 async def get_history():
-    models_dir = resource_path("models")
+    from backend.core.utils import user_data_path
+    dirs_to_check = [resource_path("models"), user_data_path("models")]
     result = {"mlp": None, "multimodal": None}
 
-    # MLP history
-    for root, dirs, files in os.walk(os.path.join(models_dir, "distraction_detector", "mlp") if os.path.exists(os.path.join(models_dir, "distraction_detector")) else models_dir):
-        for f in files:
-            if f == "model.pkl":
+    for models_dir in dirs_to_check:
+        if not os.path.exists(models_dir):
+            continue
+        # MLP history
+        for root, dirs, files in os.walk(os.path.join(models_dir, "distraction_detector", "mlp") if os.path.exists(os.path.join(models_dir, "distraction_detector")) else models_dir):
+            for f in files:
+                if f == "model.pkl":
+                    try:
+                        import joblib
+                        data = joblib.load(os.path.join(root, f))
+                        meta = data.get("metadata", {})
+                        result["mlp"] = {
+                            "name": meta.get("name", "MLP"),
+                            "projects": meta.get("projects", []),
+                            "history": meta.get("history", {}),
+                        }
+                    except Exception:
+                        pass
+
+        # Multimodal history  
+        for root, dirs, files in os.walk(os.path.join(models_dir, "distraction_detector", "multimodal") if os.path.exists(os.path.join(models_dir, "distraction_detector")) else models_dir):
+            if "training_history.json" in files:
                 try:
-                    import joblib
-                    data = joblib.load(os.path.join(root, f))
-                    meta = data.get("metadata", {})
-                    result["mlp"] = {
-                        "name": meta.get("name", "MLP"),
-                        "projects": meta.get("projects", []),
-                        "history": meta.get("history", {}),
-                    }
+                    with open(os.path.join(root, "training_history.json")) as hf:
+                        result["multimodal"] = json.load(hf)
                 except Exception:
                     pass
-
-    # Multimodal history  
-    for root, dirs, files in os.walk(os.path.join(models_dir, "distraction_detector", "multimodal") if os.path.exists(os.path.join(models_dir, "distraction_detector")) else models_dir):
-        if "training_history.json" in files:
-            try:
-                with open(os.path.join(root, "training_history.json")) as hf:
-                    result["multimodal"] = json.load(hf)
-            except Exception:
-                pass
 
     return clean_nans_infs(result)
 
@@ -215,8 +224,9 @@ async def train_legacy(req: TrainLegacyRequest):
                     on_log=lambda m: emit({"type": "log", "message": m}),
                     on_progress=lambda v: emit({"type": "progress", "value": v}),
                 )
+                from backend.core.utils import user_data_path
                 engine = MLEngine(
-                    resource_path("models"),
+                    user_data_path("models"),
                     on_log=lambda m: emit({"type": "log", "message": m}),
                     on_epoch_progress=lambda ep, loss, acc: emit({
                         "type": "epoch",
@@ -234,7 +244,7 @@ async def train_legacy(req: TrainLegacyRequest):
                     return
 
                 csv_path = os.path.join(
-                    resource_path("models"), "distraction_detector", "mlp",
+                    user_data_path("models"), "distraction_detector", "mlp",
                     f"train_{req.model_name}.csv"
                 )
                 os.makedirs(os.path.dirname(csv_path), exist_ok=True)
@@ -302,8 +312,9 @@ async def train_multimodal(req: TrainMultimodalRequest):
                 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 model_name = f"distraction_detector_{timestamp_str}"
 
+                from backend.core.utils import user_data_path
                 output_dir = os.path.join(
-                    resource_path("models"), "distraction_detector", "multimodal",
+                    user_data_path("models"), "distraction_detector", "multimodal",
                     f"run_{model_name}"
                 )
                 os.makedirs(output_dir, exist_ok=True)

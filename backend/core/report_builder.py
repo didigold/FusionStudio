@@ -309,7 +309,10 @@ class MatplotlibReportBuilder:
             if not isinstance(all_rules, dict):
                 config_path = self.config.get('gauge_rules_path')
                 if not config_path or not os.path.exists(config_path):
-                    config_path = resource_path('config/gauge_rules.json')
+                    from backend.core.utils import user_data_path
+                    config_path = user_data_path('config/gauge_rules.json')
+                    if not os.path.exists(config_path):
+                        config_path = resource_path('config/gauge_rules.json')
                 if os.path.exists(config_path):
                     with open(config_path, 'r', encoding='utf-8') as f:
                         all_rules = json.load(f)

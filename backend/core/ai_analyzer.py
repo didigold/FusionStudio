@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 from backend.core.ml_engine import MLEngine
-from backend.core.utils import resource_path
+from backend.core.utils import resource_path, user_data_path
 
 
 class AIAnalyzer:
@@ -16,7 +16,7 @@ class AIAnalyzer:
         self.on_progress = on_progress
         self.on_finished = on_finished
         self.on_error = on_error
-        self.ml_engine = MLEngine(resource_path("models"))
+        self.ml_engine = MLEngine(user_data_path("models"))
 
     def analyze(self, tracking_mf4, video_path, model_path=None):
         try:
@@ -46,7 +46,7 @@ class AIAnalyzer:
             active_model = model_path
             if not active_model:
                 from backend.core.multimodal_engine import MultimodalTrainer
-                temp_trainer = MultimodalTrainer(resource_path("models"))
+                temp_trainer = MultimodalTrainer(user_data_path("models"))
                 latest_pt = temp_trainer.find_latest_model()
                 if latest_pt:
                     active_model = latest_pt
@@ -111,7 +111,7 @@ class AIAnalyzer:
             from backend.core.multimodal_engine import MultimodalTrainer
             from backend.core.video_feature_extractor import VideoFeatureExtractor
 
-            trainer = MultimodalTrainer(resource_path("models"))
+            trainer = MultimodalTrainer(user_data_path("models"))
             if not model_path:
                 model_path = trainer.find_latest_model()
             if model_path is None:

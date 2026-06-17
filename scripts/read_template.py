@@ -1,7 +1,8 @@
 import pandas as pd
 import xlwings as xw
 
-template_path = r"C:\Software\OSM\FusionStudio\assets\templates\Driver_Engagement.xlsx"
+import os
+template_path = os.path.join(os.path.dirname(__file__), "..", "backend", "assets", "templates", "Driver_Engagement.xlsx")
 
 try:
     df_dist = pd.read_excel(template_path, sheet_name="DISTRACTION", header=None, nrows=10)

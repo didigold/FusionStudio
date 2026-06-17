@@ -1,7 +1,8 @@
 import pandas as pd
 import xlwings as xw
 
-template_path = r"C:\Software\OSM\FusionStudio\assets\templates\Driver_Engagement.xlsx"
+import os
+template_path = os.path.join(os.path.dirname(__file__), "..", "backend", "assets", "templates", "Driver_Engagement.xlsx")
 
 try:
     # Let's just use openpyxl via pandas to read it without opening excel
