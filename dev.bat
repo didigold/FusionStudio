@@ -1,6 +1,6 @@
 @echo off
-title FusionStudio Pro - Dev Launcher
-echo Starting FusionStudio Pro Development environment...
+title FusionStudio - Dev Launcher
+echo Starting FusionStudio Development environment...
 
 start "FusionStudio Backend" cmd /k "set FUSIONSTUDIO_DEV=1 && python -m uvicorn backend.main:app --reload --port 8001"
 

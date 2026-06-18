@@ -76,7 +76,7 @@ if __name__ == "__main__":
     
     # Create window (uses Edge Webview2 under the hood)
     window = webview.create_window(
-        title="FusionStudio Pro",
+        title="FusionStudio",
         url=initial_url,
         width=1280,
         height=800,

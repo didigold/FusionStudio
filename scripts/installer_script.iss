@@ -4,13 +4,13 @@
 
 [Setup]
 AppId={{928AD631-4FEF-407E-971D-3A252E9B5690}}
-AppName=FusionStudio Pro
+AppName=FusionStudio
 AppVersion={#AppVersion}
-DefaultDirName={autopf}\FusionStudio_Pro
-DefaultGroupName=FusionStudio Pro
-UninstallDisplayIcon={app}\FusionStudio_Pro.exe
+DefaultDirName={autopf}\FusionStudio
+DefaultGroupName=FusionStudio
+UninstallDisplayIcon={app}\FusionStudio.exe
 OutputDir=..\dist
-OutputBaseFilename=FusionStudio_Pro_Setup
+OutputBaseFilename=FusionStudio_Setup
 SetupIconFile=..\backend\assets\icon.ico
 Compression=lzma2/max
 SolidCompression=yes
@@ -33,11 +33,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\FusionStudio_Pro\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\FusionStudio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\FusionStudio Pro"; Filename: "{app}\FusionStudio_Pro.exe"
-Name: "{autodesktop}\FusionStudio Pro"; Filename: "{app}\FusionStudio_Pro.exe"; Tasks: desktopicon
+Name: "{group}\FusionStudio"; Filename: "{app}\FusionStudio.exe"
+Name: "{autodesktop}\FusionStudio"; Filename: "{app}\FusionStudio.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\FusionStudio_Pro.exe"; Description: "{cm:LaunchProgram,FusionStudio Pro}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\FusionStudio.exe"; Description: "{cm:LaunchProgram,FusionStudio}"; Flags: nowait postinstall skipifsilent

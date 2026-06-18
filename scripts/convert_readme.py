@@ -8,7 +8,7 @@ def main():
     project_root = os.path.abspath(os.path.join(current_dir, ".."))
     
     readme_path = os.path.join(project_root, "README.md")
-    pdf_path = os.path.join(project_root, "FusionStudio_Pro_Manual.pdf")
+    pdf_path = os.path.join(project_root, "FusionStudio_Manual.pdf")
     
     if not os.path.exists(readme_path):
         print(f"[ERROR] README.md not found at {readme_path}")
@@ -160,7 +160,7 @@ def main():
         if i > 0:
             page.insert_text(
                 fitz.Point(36, 30),
-                "FusionStudio Pro - User Manual",
+                "FusionStudio - User Manual",
                 fontsize=8,
                 color=(0.5, 0.5, 0.5)
             )

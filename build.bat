@@ -1,7 +1,7 @@
 @echo off
-title FusionStudio Pro - Desktop Packager
+title FusionStudio - Desktop Packager
 echo ==================================================
-echo Starting FusionStudio Pro Packaging process...
+echo Starting FusionStudio Packaging process...
 echo ==================================================
 echo.
 
@@ -19,7 +19,7 @@ if %errorlevel% neq 0 (
 echo.
 echo ==================================================
 echo [SUCCESS] Standalone app folder is ready!
-echo Location: dist\FusionStudio_Pro\
+echo Location: dist\FusionStudio\
 echo ==================================================
 echo.
 pause

@@ -90,42 +90,42 @@ async def list_models():
         if not os.path.exists(models_dir):
             continue
         for root, dirs, files in os.walk(models_dir):
-        for f in files:
-            if f == "model.pkl" or f == "model.pt":
-                rel = os.path.relpath(root, models_dir)
-                parts = rel.replace("\\", "/").split("/")
-                architecture = parts[0] if len(parts) > 0 else "unknown"
-                variant = parts[1] if len(parts) > 1 else ""
-                size = os.path.getsize(os.path.join(root, f))
-                entry = {
-                    "path": os.path.join(root, f),
-                    "architecture": architecture,
-                    "variant": variant,
-                    "size_mb": round(size / (1024 * 1024), 2),
-                    "metadata": None,
-                }
-                # Try to load metadata from metadata.json or training_history.json
-                meta_path = os.path.join(root, "metadata.json")
-                if not os.path.exists(meta_path):
-                    meta_path = os.path.join(root, "training_history.json")
-                if os.path.exists(meta_path):
-                    try:
-                        with open(meta_path) as hf:
-                            entry["metadata"] = json.load(hf)
-                    except Exception:
-                        pass
-                # Try to load metadata from model.pkl (joblib)
-                elif f == "model.pkl":
-                    try:
-                        import joblib
-                        data = joblib.load(os.path.join(root, f))
-                        if isinstance(data, dict) and "metadata" in data:
-                            entry["metadata"] = data["metadata"]
-                    except Exception:
-                        pass
-                if entry["path"] not in seen_paths:
-                    result.append(entry)
-                    seen_paths.add(entry["path"])
+            for f in files:
+                if f == "model.pkl" or f == "model.pt":
+                    rel = os.path.relpath(root, models_dir)
+                    parts = rel.replace("\\", "/").split("/")
+                    architecture = parts[0] if len(parts) > 0 else "unknown"
+                    variant = parts[1] if len(parts) > 1 else ""
+                    size = os.path.getsize(os.path.join(root, f))
+                    entry = {
+                        "path": os.path.join(root, f),
+                        "architecture": architecture,
+                        "variant": variant,
+                        "size_mb": round(size / (1024 * 1024), 2),
+                        "metadata": None,
+                    }
+                    # Try to load metadata from metadata.json or training_history.json
+                    meta_path = os.path.join(root, "metadata.json")
+                    if not os.path.exists(meta_path):
+                        meta_path = os.path.join(root, "training_history.json")
+                    if os.path.exists(meta_path):
+                        try:
+                            with open(meta_path) as hf:
+                                entry["metadata"] = json.load(hf)
+                        except Exception:
+                            pass
+                    # Try to load metadata from model.pkl (joblib)
+                    elif f == "model.pkl":
+                        try:
+                            import joblib
+                            data = joblib.load(os.path.join(root, f))
+                            if isinstance(data, dict) and "metadata" in data:
+                                entry["metadata"] = data["metadata"]
+                        except Exception:
+                            pass
+                    if entry["path"] not in seen_paths:
+                        result.append(entry)
+                        seen_paths.add(entry["path"])
     return clean_nans_infs({"models": result})
 
 

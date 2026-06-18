@@ -8,7 +8,7 @@ IDIADA_ORANGE = '#F39200'
 
 def user_data_path(relative_path=""):
     app_data = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or os.path.expanduser("~")
-    base_dir = os.path.join(app_data, "FusionStudio_Pro")
+    base_dir = os.path.join(app_data, "FusionStudio")
     if relative_path:
         if relative_path.startswith('assets/'):
             relative_path = 'backend/' + relative_path

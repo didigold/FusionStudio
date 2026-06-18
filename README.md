@@ -1,4 +1,4 @@
-# ⚡ FusionStudio Pro
+# ⚡ FusionStudio
 ## v26.0 — Automotive Safety Intelligence Platform
 
 A professional desktop & web application for **ADAS / DMS compliance testing**.
@@ -36,18 +36,18 @@ Developed for **internal use** at [Applus+ IDIADA](https://www.idiada.com/) — 
 For end-users and test engineers running the packaged application, there are **no software prerequisites**. You do not need Python, Node.js, or local libraries installed on your machine. The app is fully portable.
 
 ### Double-Click Launch
-1. Open the distributed project directory and locate the standalone folder: `dist/FusionStudio_Pro/`.
-2. Locate and double-click the executable: `FusionStudio_Pro.exe`.
+1. Open the distributed project directory and locate the standalone folder: `dist/FusionStudio/`.
+2. Locate and double-click the executable: `FusionStudio.exe`.
 3. The application will initialize, displaying a custom loading splash animation while starting background processing layers. Once ready, the main application window will open automatically.
 
-> **Tip for engineers:** If the application fails to start or says a port is occupied, ensure no previous background instances are running. You can close stale instances from Windows Task Manager or run `taskkill /f /im FusionStudio_Pro.exe` in Command Prompt.
+> **Tip for engineers:** If the application fails to start or says a port is occupied, ensure no previous background instances are running. You can close stale instances from Windows Task Manager or run `taskkill /f /im FusionStudio.exe` in Command Prompt.
 
 ---
 
 ## 📂 Project Directory Layout
 
 ```
-FusionStudio Pro/
+FusionStudio/
 ├── backend/                  # FastAPI Application (Python)
 │   ├── assets/               # Branding fonts, templates, and raw icons
 │   │   ├── fonts/            # Montserrat font family (all weights)
@@ -101,7 +101,7 @@ The **File Fusion** tab is your data preparation workspace. Before any analysis 
 
 #### What it does under the hood
 
-FusionStudio Pro's data model assumes a **Master + Satellite** architecture:
+FusionStudio's data model assumes a **Master + Satellite** architecture:
 
 - **Master MF4** — the vehicle's primary CAN/Ethernet bus log (contains acceleration, speed, braking events, ADAS system states, etc.). This is the authoritative time reference.
 - **Satellite Files** — secondary recordings captured by peripheral sensors at a different clock (e.g., eye-tracker outputs, acoustic microphone readings). These have their own timestamps that need aligning.
@@ -295,7 +295,7 @@ The synchronized video player is the engineer's ground truth — you use it to *
 
 ### 6. 🧠 Gaze Analysis: Gaze Logic (Rules Engine)
 
-The **Gaze Logic** tab is the engine room of compliance evaluation. Instead of hard-coding pass/fail criteria into the application, FusionStudio Pro reads all rules from a live JSON configuration, which you can edit directly here. This design allows the same application to be used across different regulatory frameworks and OEM-specific protocols without redeployment.
+The **Gaze Logic** tab is the engine room of compliance evaluation. Instead of hard-coding pass/fail criteria into the application, FusionStudio reads all rules from a live JSON configuration, which you can edit directly here. This design allows the same application to be used across different regulatory frameworks and OEM-specific protocols without redeployment.
 
 ![Gaze Logic Tab](backend/assets/readme_images/gaze_logic_tab.png)
 
@@ -469,7 +469,7 @@ The **Report Generator** is where everything comes together. After fusion, calib
 
 ### 10. 🤖 HuMind (ML Models)
 
-The **HuMind** tab is FusionStudio Pro's machine learning management console. It exposes the lifecycle of the AI models used to automate driver state detection.
+The **HuMind** tab is FusionStudio's machine learning management console. It exposes the lifecycle of the AI models used to automate driver state detection.
 
 #### What it does under the hood
 
@@ -508,7 +508,7 @@ The **System Diagnostics** tab is your real-time application terminal window. Ev
 | Fusion produces no output | Look for `FileNotFoundError` or `Permission denied` messages — the source path or master file might be misconfigured |
 | Report shows blank cells  | Look for `Signal not found` warnings — the signal name in `gauge_rules.json` doesn't match what's in the fused MF4   |
 | Audio Autodetect fails    | Look for `FFT returned no peaks` — the sound pressure channel might be empty or mislabeled                           |
-| App hangs unexpectedly    | Look for `WebSocket disconnected` — the backend may have crashed; restart the executable `FusionStudio_Pro.exe`      |
+| App hangs unexpectedly    | Look for `WebSocket disconnected` — the backend may have crashed; restart the executable `FusionStudio.exe`      |
 
 > **Pro tip:** Keep this tab open in a second browser window while working. The microsecond timestamps help you correlate backend processing time with UI interactions during troubleshooting.
 
@@ -522,7 +522,7 @@ Follow these steps to process a new test campaign from raw files to a final repo
 
 ### Step 1 — Fuse Raw Signals
 
-1. Launch FusionStudio Pro: `.\dev.bat`
+1. Launch FusionStudio: `.\dev.bat`
 2. Go to **File Fusion**
 3. Set the **Source Path** to your campaign root directory. The sandbox populates automatically.
 4. Select the participants you want to process (or click **All**)
@@ -586,7 +586,7 @@ Follow these steps to process a new test campaign from raw files to a final repo
 
 ## 🛠️ Developer Setup & Tech Stack
 
-If you are developing or building FusionStudio Pro from source:
+If you are developing or building FusionStudio from source:
 
 ### Development Prerequisites
 - **Python 3.11+** (must be on system `PATH`)

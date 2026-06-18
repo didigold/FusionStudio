@@ -40,7 +40,7 @@ def build():
         path = os.path.join(project_root, d)
         if os.path.exists(path):
             shutil.rmtree(path, ignore_errors=True)
-    spec_path = os.path.join(project_root, "FusionStudio_Pro.spec")
+    spec_path = os.path.join(project_root, "FusionStudio.spec")
     if os.path.exists(spec_path):
         os.remove(spec_path)
     
@@ -63,7 +63,7 @@ def build():
         "--noconsole",
         "--clean",
         "--noconfirm",
-        "--name=FusionStudio_Pro",
+        "--name=FusionStudio",
         "--icon=backend/assets/icon.ico",
         
         # Add backend project resources
@@ -119,14 +119,14 @@ def build():
         run_command(f'"{inno_compiler}" /DAppVersion="{app_version}" "{iss_path}"', cwd=project_root)
         print("\n" + "="*50)
         print("--- Installer Compiled Successfully ---")
-        print(f"Setup installer available at:\n{os.path.join(project_root, 'dist', 'FusionStudio_Pro_Setup.exe')}")
+        print(f"Setup installer available at:\n{os.path.join(project_root, 'dist', 'FusionStudio_Setup.exe')}")
         print("="*50)
     else:
         print("\n" + "="*50)
         print("--- Build Finished Successfully ---")
         print("[INFO] Inno Setup compiler (ISCC.exe) not found.")
         print("Standalone folder is compiled, but no setup installer was created.")
-        print(f"Standalone application folder is available at:\n{os.path.join(project_root, 'dist', 'FusionStudio_Pro')}")
+        print(f"Standalone application folder is available at:\n{os.path.join(project_root, 'dist', 'FusionStudio')}")
         print("="*50)
 
 if __name__ == "__main__":
