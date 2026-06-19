@@ -114,5 +114,24 @@ if __name__ == "__main__":
         # Redirect window to final FastAPI url
         window.load_url(backend_url)
         
+    # Resolve a persistent user data directory (storage_path) for WebView2.
+    # When packaged in an EXE and installed to Program Files, standard paths
+    # like the EXE directory are read-only. Specifying a path in %APPDATA% (or
+    # standard equivalents) guarantees that cookies and localStorage persist.
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            storage_path = os.path.join(appdata, "FusionStudio")
+        else:
+            storage_path = os.path.expanduser("~/.fusionstudio")
+    elif sys.platform == "darwin":
+        storage_path = os.path.expanduser("~/Library/Application Support/FusionStudio")
+    else:
+        storage_path = os.path.expanduser("~/.config/fusionstudio")
+
+    storage_path = os.path.abspath(storage_path)
+    os.makedirs(storage_path, exist_ok=True)
+
     # Start webview loop (blocks until window is closed)
-    webview.start(check_backend_ready, http_server=True)
+    # We must explicitly disable private_mode to enable disk-backed localStorage and cache.
+    webview.start(check_backend_ready, http_server=True, private_mode=False, storage_path=storage_path)

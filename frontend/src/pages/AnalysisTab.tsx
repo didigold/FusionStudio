@@ -27,9 +27,10 @@ import { AudioTab } from '@/components/analysis/AudioTab'
 import { TrackingTab } from '@/components/analysis/TrackingTab'
 import { GazeTimeTab } from '@/components/analysis/GazeTimeTab'
 import { GazeLogicTab } from '@/components/analysis/GazeLogicTab'
+import { MisuseTimeTab } from '@/components/analysis/MisuseTimeTab'
+import { MisuseLogicTab } from '@/components/analysis/MisuseLogicTab'
 import { LogTab } from '@/components/analysis/LogTab'
 import { AnalysisSidebar } from '@/components/analysis/AnalysisSidebar'
-import { PlaceholderTab } from '@/components/analysis/PlaceholderTab'
 import { MetadataTab } from '@/components/analysis/MetadataTab'
 import ClassificationTab from './ClassificationTab'
 import ReportingTab from './ReportingTab'
@@ -562,9 +563,7 @@ export default function AnalysisTab() {
                   transition={{ duration: 0.25, ease: "easeOut" }}
                   className="h-full w-full min-h-0 overflow-hidden flex flex-col"
                 >
-                  <ScrollArea className="flex-1">
-                    <PlaceholderTab label="Misuse Time" />
-                  </ScrollArea>
+                  <MisuseTimeTab />
                 </motion.div>
               )}
               {activeTab === 'misuse-logic' && (
@@ -576,9 +575,7 @@ export default function AnalysisTab() {
                   transition={{ duration: 0.25, ease: "easeOut" }}
                   className="h-full w-full min-h-0 overflow-hidden flex flex-col"
                 >
-                  <ScrollArea className="flex-1">
-                    <PlaceholderTab label="Misuse Logic" />
-                  </ScrollArea>
+                  <MisuseLogicTab />
                 </motion.div>
               )}
               {activeTab === 'classification' && (

@@ -247,8 +247,24 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
 
     basename = os.path.splitext(os.path.basename(file_path))[0]
     target_category = None
-    if "ADDW" in basename.upper():
-        path_lower = file_path.replace('\\', '/').lower()
+
+    # Detect Occupant Monitoring (OM) / Misuse categories based on folder path
+    path_lower = file_path.replace('\\', '/').lower()
+    if "out of position" in path_lower or "oop" in path_lower:
+        if "initial phase" in path_lower or "initial_phase" in path_lower:
+            target_category = "OoP \u2014 Initial Phase"
+        elif "change of status" in path_lower or "change_of_status" in path_lower:
+            target_category = "OoP \u2014 Change of Status"
+        elif "15 minutes" in path_lower or "15 min" in path_lower:
+            target_category = "OoP \u2014 15 min Warning"
+    elif "correct belt" in path_lower or "correct_belt" in path_lower or "csr" in path_lower or "seatbelt" in path_lower or "belt routing" in path_lower:
+        if "initial phase" in path_lower or "initial_phase" in path_lower:
+            target_category = "CSR \u2014 Initial Phase"
+        elif "change of status" in path_lower or "change_of_status" in path_lower:
+            target_category = "CSR \u2014 Change of Status"
+
+    if target_category is None:
+        if "ADDW" in basename.upper():
         if "high speed" in path_lower:
             target_category = "High Speed"
         elif "low speed" in path_lower:
@@ -402,7 +418,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
         first_match_time = None
 
         eval_start = mask_start
-        if "Unresponsive" in target_category:
+        if "Unresponsive" in target_category or "OoP" in target_category or "CSR" in target_category:
             eval_start = tgaze
 
         if sig_name == "SoundPressure":
@@ -477,7 +493,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                         break
         signal_times[sig_name] = first_match_time
 
-    if "Unresponsive" in target_category:
+    if "Unresponsive" in target_category or "OoP" in target_category or "CSR" in target_category:
         for idx, phase in enumerate(unresponsive_phases):
             sig_name = phase.get('signal')
             if not sig_name or sig_name not in signals:
@@ -614,7 +630,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
     t_event = "No warn"
     t_event_color = "red"
     
-    if "Unresponsive" in target_category:
+    if "Unresponsive" in target_category or "OoP" in target_category or "CSR" in target_category:
         # 1. Compute t_event
         active_phases_with_trigger = []
         for idx, phase in enumerate(unresponsive_phases):
@@ -631,79 +647,141 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             # 2. Compute t_event_color (PASS/FAIL validation based on active milestones)
             is_unresponsive_pass = True
             is_dtr = "DTR" in target_category
+            is_sle = "SLE" in target_category
             num_milestones = len(unresponsive_phases) + 1
             
-            for i in range(num_milestones - 1):
-                step_enabled = unresponsive_phases[i].get('enabled', True)
-                if not step_enabled:
-                    continue
-                
-                t_next = signal_times.get(f"phase_{i}")
-                if i == 0:
-                    t_curr = tgaze
-                else:
-                    t_curr = signal_times.get(f"phase_{i-1}") if unresponsive_phases[i-1].get('enabled', True) else None
-                
-                delta = None
-                if t_curr is not None and t_next is not None:
-                    delta = t_next - t_curr
-                
-                ok = False
-                if is_dtr:
+            if is_dtr or is_sle:
+                for i in range(num_milestones - 1):
+                    step_enabled = unresponsive_phases[i].get('enabled', True)
+                    if not step_enabled:
+                        continue
+                    
+                    t_next = signal_times.get(f"phase_{i}")
                     if i == 0:
-                        ok = delta is not None and 3.0 <= delta <= 4.0
-                    elif i == 1:
-                        ok = delta is not None and delta <= 4.0
-                    elif i == 2:
-                        if num_milestones == 4:
+                        t_curr = tgaze
+                    else:
+                        t_curr = signal_times.get(f"phase_{i-1}") if unresponsive_phases[i-1].get('enabled', True) else None
+                    
+                    delta = None
+                    if t_curr is not None and t_next is not None:
+                        delta = t_next - t_curr
+                    
+                    ok = False
+                    if is_dtr:
+                        if i == 0:
+                            ok = delta is not None and 3.0 <= delta <= 4.0
+                        elif i == 1:
+                            ok = delta is not None and delta <= 4.0
+                        elif i == 2:
+                            if num_milestones == 4:
+                                ok = delta is not None and delta <= 5.0
+                            else:
+                                ok = delta is not None and delta < 1.0
+                        elif i == 3:
                             ok = delta is not None and delta <= 5.0
-                        else:
-                            ok = delta is not None and delta < 1.0
-                    elif i == 3:
-                        ok = delta is not None and delta <= 5.0
+                    else:
+                        if i == 0:
+                            ok = delta is not None and delta <= 7.0
+                        elif i == 1:
+                            ok = delta is not None and delta <= 5.0
+                    
+                    if not ok:
+                        is_unresponsive_pass = False
+                
+                # Evaluate compound brackets
+                if is_dtr:
+                    if len(unresponsive_phases) >= 2 and unresponsive_phases[1].get('enabled', True):
+                        t0 = tgaze
+                        t2 = signal_times.get("phase_1")
+                        ok_m02 = False
+                        if t0 is not None and t2 is not None:
+                            ok_m02 = 6.0 <= (t2 - t0) <= 8.0
+                        if not ok_m02:
+                            is_unresponsive_pass = False
+                    
+                    target_idx = 2 if len(unresponsive_phases) == 3 else 3
+                    if len(unresponsive_phases) > target_idx and unresponsive_phases[target_idx].get('enabled', True):
+                        t0 = tgaze
+                        t_end = signal_times.get(f"phase_{target_idx}")
+                        ok_end = False
+                        if t0 is not None and t_end is not None:
+                            if len(unresponsive_phases) == 3:
+                                ok_end = (t_end - t0) <= 13.0
+                            else:
+                                ok_end = 13.0 <= (t_end - t0) <= 14.0
+                        if not ok_end:
+                            is_unresponsive_pass = False
                 else:
-                    if i == 0:
-                        ok = delta is not None and delta <= 7.0
-                    elif i == 1:
-                        ok = delta is not None and delta <= 5.0
-                
-                if not ok:
-                    is_unresponsive_pass = False
-            
-            # Evaluate compound brackets
-            if is_dtr:
-                if len(unresponsive_phases) >= 2 and unresponsive_phases[1].get('enabled', True):
-                    t0 = tgaze
-                    t2 = signal_times.get("phase_1")
-                    ok_m02 = False
-                    if t0 is not None and t2 is not None:
-                        ok_m02 = 6.0 <= (t2 - t0) <= 8.0
-                    if not ok_m02:
-                        is_unresponsive_pass = False
-                
-                target_idx = 2 if len(unresponsive_phases) == 3 else 3
-                if len(unresponsive_phases) > target_idx and unresponsive_phases[target_idx].get('enabled', True):
-                    t0 = tgaze
-                    t_end = signal_times.get(f"phase_{target_idx}")
-                    ok_end = False
-                    if t0 is not None and t_end is not None:
-                        if len(unresponsive_phases) == 3:
-                            ok_end = (t_end - t0) <= 13.0
-                        else:
-                            ok_end = 13.0 <= (t_end - t0) <= 14.0
-                    if not ok_end:
-                        is_unresponsive_pass = False
+                    # SLE: compound M0->M_last must be <= 12s
+                    target_idx = len(unresponsive_phases) - 1
+                    if len(unresponsive_phases) > target_idx and target_idx >= 0 and unresponsive_phases[target_idx].get('enabled', True):
+                        t0 = tgaze
+                        t_end = signal_times.get(f"phase_{target_idx}")
+                        ok_sle_total = False
+                        if t0 is not None and t_end is not None:
+                            ok_sle_total = (t_end - t0) <= 12.0
+                        if not ok_sle_total:
+                            is_unresponsive_pass = False
             else:
-                # SLE: compound M0->M_last must be <= 12s
-                target_idx = len(unresponsive_phases) - 1
-                if len(unresponsive_phases) > target_idx and target_idx >= 0 and unresponsive_phases[target_idx].get('enabled', True):
-                    t0 = tgaze
-                    t_end = signal_times.get(f"phase_{target_idx}")
-                    ok_sle_total = False
-                    if t0 is not None and t_end is not None:
-                        ok_sle_total = (t_end - t0) <= 12.0
-                    if not ok_sle_total:
+                # Dynamic validation for Misuse categories (OoP, CSR)
+                def check_time_constraint(delta: float, constraint_str: str, unit: str = "s") -> bool:
+                    if not constraint_str:
+                        return True
+                    s = constraint_str.strip().replace(" ", "")
+                    val = delta
+                    if unit == "min":
+                        val = delta / 60.0
+                    
+                    import re
+                    m = re.match(r'^([<>=≤≥!=]+)?([\d.]+)', s)
+                    if not m:
+                        return True
+                    op, num_str = m.groups()
+                    try:
+                        limit = float(num_str)
+                    except ValueError:
+                        return True
+                        
+                    if not op:
+                        return val <= limit
+                        
+                    if op in (">", "≥", ">="):
+                        return val >= limit
+                    elif op in ("<", "≤", "<="):
+                        return val <= limit
+                    elif op == "==":
+                        return abs(val - limit) < 1e-6
+                    elif op == "!=":
+                        return abs(val - limit) >= 1e-6
+                    return True
+
+                for i in range(len(unresponsive_phases)):
+                    phase = unresponsive_phases[i]
+                    if not phase.get('enabled', True):
+                        continue
+                    t_next = signal_times.get(f"phase_{i}")
+                    if t_next is None:
                         is_unresponsive_pass = False
+                        break
+                    
+                    # Compute delta from previous active phase
+                    t_curr = tgaze
+                    if i > 0:
+                        prev_t = None
+                        for p_idx in range(i - 1, -1, -1):
+                            if unresponsive_phases[p_idx].get('enabled', True):
+                                prev_t = signal_times.get(f"phase_{p_idx}")
+                                break
+                        if prev_t is not None:
+                            t_curr = prev_t
+                    
+                    delta = t_next - t_curr
+                    tc = phase.get('timeConstraint')
+                    tcu = phase.get('timeConstraintUnit', 's')
+                    if tc:
+                        if not check_time_constraint(delta, tc, tcu):
+                            is_unresponsive_pass = False
+                            break
             
             t_event_color = "green" if is_unresponsive_pass else "red"
         else:

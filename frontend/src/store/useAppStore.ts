@@ -32,6 +32,26 @@ export interface UnresponsivePhase {
   mask?: number | string
 }
 
+export interface MisusePhase {
+  phaseName: string
+  alertType: 'visual' | 'audio' | 'visual+audio' | 'signal'
+  signal: string
+  operator?: string
+  value?: number | string
+  min_freq?: number
+  max_freq?: number
+  threshold?: number
+  timeConstraint?: string
+  timeConstraintUnit?: 's' | 'min'
+  periodRepetition?: number
+  speedCondition?: string
+  verificationMethod?: 'signal' | 'manual' | 'video' | 'CAN'
+  enabled?: boolean
+  mask?: number | string
+  speedMode?: 'manual' | 'signal'
+  speedSignal?: string
+}
+
 export interface GaugeConfig {
   min: number
   max: number
@@ -112,6 +132,28 @@ const DEFAULT_UNRESPONSIVE_CRITERIA: Record<string, UnresponsivePhase[]> = {
   "Unresponsive driver (SLE)": [
     { phaseName: "Distinct Warning", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true },
     { phaseName: "Emergency Function", signal: "SoundPressure", min_freq: 1500, max_freq: 3000, threshold: 0.5, enabled: true }
+  ]
+}
+
+const DEFAULT_MISUSE_CRITERIA: Record<string, MisusePhase[]> = {
+  "OoP \u2014 Initial Phase": [
+    { phaseName: "Detection", alertType: "visual", signal: "", enabled: true, verificationMethod: "video" },
+    { phaseName: "Audio Warning", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, speedCondition: "40", speedMode: "manual", verificationMethod: "signal" }
+  ],
+  "OoP \u2014 Change of Status": [
+    { phaseName: "Detection", alertType: "signal", signal: "FaceOnFacia", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous" }
+  ],
+  "OoP \u2014 15 min Warning": [
+    { phaseName: "Detection", alertType: "signal", signal: "FaceOnFacia", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous" }
+  ],
+  "CSR \u2014 Initial Phase": [
+    { phaseName: "Detection", alertType: "visual", signal: "", enabled: true, verificationMethod: "video" },
+    { phaseName: "Audio Warning", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, speedCondition: "40", speedMode: "manual", verificationMethod: "signal" },
+    { phaseName: "Audio Duration", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, timeConstraint: "≥90", timeConstraintUnit: "s", verificationMethod: "signal", mask: "previous" }
+  ],
+  "CSR \u2014 Change of Status": [
+    { phaseName: "Detection", alertType: "signal", signal: "LapBeltOnly", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous" },
+    { phaseName: "Audio Duration", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, timeConstraint: "\u226590", timeConstraintUnit: "s", verificationMethod: "signal", mask: "previous" }
   ]
 }
 
@@ -382,6 +424,8 @@ interface AppState {
   setPassCriteria: (pc: Record<string, PassConfig>) => void
   unresponsiveCriteria: Record<string, UnresponsivePhase[]>
   setUnresponsiveCriteria: (uc: Record<string, UnresponsivePhase[]>) => void
+  misuseCriteria: Record<string, MisusePhase[]>
+  setMisuseCriteria: (mc: Record<string, MisusePhase[]>) => void
   gaugeRules: Record<string, GaugeConfig>
   setGaugeRules: (gr: Record<string, GaugeConfig>) => void
   loadedFiles: Record<string, string>
@@ -729,6 +773,8 @@ export const useAppStore = create<AppState>((set) => ({
   setPassCriteria: (pc) => set({ passCriteria: pc }),
   unresponsiveCriteria: DEFAULT_UNRESPONSIVE_CRITERIA,
   setUnresponsiveCriteria: (uc) => set({ unresponsiveCriteria: uc }),
+  misuseCriteria: DEFAULT_MISUSE_CRITERIA,
+  setMisuseCriteria: (mc) => set({ misuseCriteria: mc }),
   gaugeRules: DEFAULT_GAUGE_RULES,
   setGaugeRules: (gr) => set({ gaugeRules: gr }),
   loadedFiles: {},
