@@ -265,38 +265,38 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
 
     if target_category is None:
         if "ADDW" in basename.upper():
-        if "high speed" in path_lower:
-            target_category = "High Speed"
-        elif "low speed" in path_lower:
-            target_category = "Low Speed"
+            if "high speed" in path_lower:
+                target_category = "High Speed"
+            elif "low speed" in path_lower:
+                target_category = "Low Speed"
+            else:
+                target_category = "High Speed"
         else:
-            target_category = "High Speed"
-    else:
-        match_d = re.match(r'^D(\d+)', basename)
-        if match_d:
-            num = int(match_d.group(1))
-            if 1 <= num <= 9:
-                target_category = "Long Distraction (NDT)"
-            elif 10 <= num <= 15:
-                target_category = "Long Distraction (DT)"
-            elif (16 <= num <= 19) or num == 28 or (29 <= num <= 42):
-                target_category = "Short Distraction (NDT)"
-            elif 20 <= num <= 27:
-                target_category = "Short Distraction (DT)"
-        else:
-            match_f = re.match(r'^F(\d+)', basename)
-            if match_f:
-                num = int(match_f.group(1))
-                if num == 1:
-                    target_category = "Microsleep"
-                elif num == 2:
-                    target_category = "Sleep"
-                elif num == 3:
-                    target_category = "Drowsiness"
-                elif num == 4:
-                    target_category = "Unresponsive driver (SLE)"
-                elif num == 5:
-                    target_category = "Unresponsive driver (DTR)"
+            match_d = re.match(r'^D(\d+)', basename)
+            if match_d:
+                num = int(match_d.group(1))
+                if 1 <= num <= 9:
+                    target_category = "Long Distraction (NDT)"
+                elif 10 <= num <= 15:
+                    target_category = "Long Distraction (DT)"
+                elif (16 <= num <= 19) or num == 28 or (29 <= num <= 42):
+                    target_category = "Short Distraction (NDT)"
+                elif 20 <= num <= 27:
+                    target_category = "Short Distraction (DT)"
+            else:
+                match_f = re.match(r'^F(\d+)', basename)
+                if match_f:
+                    num = int(match_f.group(1))
+                    if num == 1:
+                        target_category = "Microsleep"
+                    elif num == 2:
+                        target_category = "Sleep"
+                    elif num == 3:
+                        target_category = "Drowsiness"
+                    elif num == 4:
+                        target_category = "Unresponsive driver (SLE)"
+                    elif num == 5:
+                        target_category = "Unresponsive driver (DTR)"
 
     if not target_category:
         target_category = "Long Distraction (NDT)"
@@ -863,9 +863,9 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
 
     try:
         mtime = os.path.getmtime(file_path)
-        test_date = datetime.fromtimestamp(mtime)
+        test_date = datetime.fromtimestamp(mtime).astimezone()
     except Exception:
-        test_date = datetime.now()
+        test_date = datetime.now().astimezone()
 
     return {
         'filename': os.path.basename(file_path),

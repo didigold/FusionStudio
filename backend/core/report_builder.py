@@ -1341,7 +1341,20 @@ class MatplotlibReportBuilder:
         if not (category and "Unresponsive" in category):
             fax.axhline(y=0.9, xmin=0, xmax=1, color=self.COLORS['border_light'], linewidth=1)
         test_date = self.config.get('test_date', datetime.now())
-        lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}"
+        if test_date.tzinfo is not None:
+            tz_str = test_date.strftime('%Z')
+            offset = test_date.strftime('%z')
+            if offset:
+                offset_str = f"UTC{offset[:3]}:{offset[3:]}"
+                if tz_str and tz_str != offset:
+                    tz_suffix = f" {tz_str} ({offset_str})"
+                else:
+                    tz_suffix = f" ({offset_str})"
+            else:
+                tz_suffix = f" {tz_str}" if tz_str else ""
+            lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}{tz_suffix}"
+        else:
+            lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}"
         if self.config.get('filename'): lt += f" | File: {self.config.get('filename')}"
         if self.config.get('vehicle'): lt += f" | Vehicle: {self.config.get('vehicle')}"
         fax.text(0.0, 0.4, lt, fontsize=6, color=self.COLORS['text_light'], ha='left', va='center')
