@@ -264,14 +264,20 @@ async def scan_analysis(req: ScanRequest):
     scan_root = fusion_results_dir if os.path.exists(fusion_results_dir) else req.source_dir
 
     def _find_cameras():
-        cams: set[int] = set()
+        cams = set()
         for root, dirs, files in os.walk(scan_root):
             for f in files:
                 if f.lower().endswith(".avi"):
                     m = re.search(r'_cam(\d+)\.avi$', f, re.I)
                     if m:
                         cams.add(int(m.group(1)))
-        return sorted(cams)
+                    else:
+                        m_str = re.search(r'_(CAM_[A-Za-z0-9_-]+)\.avi$', f, re.I)
+                        if m_str:
+                            cams.add(m_str.group(1))
+        ints = sorted([c for c in cams if isinstance(c, int)])
+        strs = sorted([c for c in cams if isinstance(c, str)])
+        return ints + strs
 
     available_cameras = await loop.run_in_executor(None, _find_cameras)
     return {"results": results, "available_cameras": available_cameras}
@@ -793,12 +799,15 @@ def _run_ffmpeg_sync(cmd: list, creationflags: int) -> int:
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             creationflags=creationflags
         )
-        process.wait()
+        _, stderr = process.communicate()
+        if process.returncode != 0 and stderr:
+            logger.error(f"FFmpeg stderr: {stderr.decode('utf-8', 'replace')[-1000:]}")
         return process.returncode
-    except Exception:
+    except Exception as e:
+        logger.error(f"FFmpeg process exception: {e}")
         return -1
 
 
@@ -834,7 +843,8 @@ async def get_media(path: str, request: Request):
         if not os.path.exists(mp4_path):
             transcode_event = asyncio.Event()
             transcoding_tasks[mp4_path] = transcode_event
-            tmp_path = mp4_path + f".{uuid.uuid4().hex}.tmp.mp4"
+            # Use a short temp filename to avoid exceeding Windows MAX_PATH (260)
+            tmp_path = os.path.join(cache_dir, f"_tmp_{uuid.uuid4().hex[:8]}.mp4")
             
             try:
                 logger.info(f"Transcoding AVI to MP4 for browser playback: {path} -> {mp4_path}")

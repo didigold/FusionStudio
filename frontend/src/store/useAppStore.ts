@@ -280,10 +280,10 @@ interface AppState {
   updateFileStatus: (filePath: string, status: Partial<{ has_tracking: boolean; has_marks: boolean; has_report: boolean }>) => void
   analysisExpandedAll: boolean | null
   setAnalysisExpandedAll: (v: boolean | null) => void
-  analysisAvailableCameras: number[]
-  setAnalysisAvailableCameras: (c: number[]) => void
-  analysisSelectedCamera: number
-  setAnalysisSelectedCamera: (c: number) => void
+  analysisAvailableCameras: (number | string)[]
+  setAnalysisAvailableCameras: (c: (number | string)[]) => void
+  analysisSelectedCamera: number | string
+  setAnalysisSelectedCamera: (c: number | string) => void
   analysisChannels: any[]
   setAnalysisChannels: (c: any[]) => void
   analysisSignalData: { timestamps: number[]; values: number[]; unit: string; name: string } | null

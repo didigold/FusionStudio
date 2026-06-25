@@ -11,12 +11,12 @@ export function getOmScenarioName(filePath: string): string {
   const isOM = parts.some(p => p === 'OM' || p === 'Out of Position' || p === 'Correct Seatbelt Routing' || p === 'Correct Belt Routing' || p === 'Stature Detection');
   
   if (!isOM || parts.length < 3) {
-    return filePath.split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '') || filePath;
+    return filePath.split(/[\\/]/).pop()?.replace(/\.mf4$/i, '').replace(/_tracking$/i, '') || filePath;
   }
   
   const parent = parts[parts.length - 2];
   const grandparent = parts[parts.length - 3];
-  const fileName = parts[parts.length - 1].replace('.mf4', '').replace('_tracking', '');
+  const fileName = parts[parts.length - 1].replace(/\.mf4$/i, '').replace(/_tracking$/i, '');
   
   // If parent is a short modifier like 20cm or Left, include grandparent
   if (['20cm', 'center', 'left', 'right'].includes(parent.toLowerCase())) {

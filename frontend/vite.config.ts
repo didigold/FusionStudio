@@ -20,6 +20,7 @@ export default defineConfig({
         target: "http://127.0.0.1:8001",
         changeOrigin: true,
         ws: true,
+        timeout: 300000,       // 5 min – video transcoding on network drives can be slow
       },
     },
   },
