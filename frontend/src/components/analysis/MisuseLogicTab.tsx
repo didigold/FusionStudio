@@ -82,6 +82,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { getOmScenarioCategory } from "@/lib/utils";
 import { MisuseTimelineEditor } from "./MisuseTimelineEditor";
 
 const caseIdsMap: Record<string, string> = {
@@ -171,6 +172,15 @@ export function MisuseLogicTab() {
   const [activeCategory, setActiveCategory] = useState<string>(
     categoriesList[0],
   );
+
+  useEffect(() => {
+    if (analysisSelectedFile) {
+      const detectedCategory = getOmScenarioCategory(analysisSelectedFile);
+      if (detectedCategory && categoriesList.includes(detectedCategory)) {
+        setActiveCategory(detectedCategory);
+      }
+    }
+  }, [analysisSelectedFile]);
 
   // Filter signals state
   const [filterQuery, setFilterQuery] = useState("");

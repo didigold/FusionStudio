@@ -158,13 +158,13 @@ class DSMProcessor:
         self.log("[*] Pre-scanning Occlusion files to build template rows...")
         
         # 1. For each participant, collect their unique TCs per category
-        max_per_cat = {'LD': 0, 'SD': 0, 'PU': 0, 'F1': 0, 'F2': 0, 'F3': 0, 'F6': 0}
+        max_per_cat = {'LD': 0, 'SD': 0, 'PU': 0, 'F1': 0, 'F2': 0, 'F3': 0, 'F6': 0, 'F4': 0, 'F5': 0}
         
         for path in excel_paths:
             try:
                 df = pd.read_excel(path)
                 participant_cat_tcs = {'LD': set(), 'SD': set(), 'PU': set(), 
-                                       'F1': set(), 'F2': set(), 'F3': set(), 'F6': set()}
+                                       'F1': set(), 'F2': set(), 'F3': set(), 'F6': set(), 'F4': set(), 'F5': set()}
                 
                 for _, row in df.iterrows():
                     if "File Name" not in row:
@@ -199,7 +199,8 @@ class DSMProcessor:
                 self.log(f"[WARN] Could not read {path} for pre-scan: {e}")
         
         self.log(f"[*] Max TCs per participant — LD:{max_per_cat['LD']}, SD:{max_per_cat['SD']}, PU:{max_per_cat['PU']}, " +
-                 f"F3:{max_per_cat['F3']}, F6:{max_per_cat['F6']}, F1:{max_per_cat['F1']}, F2:{max_per_cat['F2']}")
+                 f"F3:{max_per_cat['F3']}, F6:{max_per_cat['F6']}, F1:{max_per_cat['F1']}, F2:{max_per_cat['F2']}, " +
+                 f"F4:{max_per_cat['F4']}, F5:{max_per_cat['F5']}")
         
         if all(v == 0 for v in max_per_cat.values()):
             self.log("[WARN] No occlusion TCs found.")
@@ -208,14 +209,16 @@ class DSMProcessor:
         # 2. Get the OCCLUSION sheet
         try:
             sheet = wb.sheets["OCCLUSION"]
+            # Clear placeholder values in D and E to prevent P01's data from being shifted/skipped
+            sheet.range("D4:E12").clear_contents()
         except Exception as e:
             self.log(f"[ERROR] OCCLUSION sheet not found: {e}")
             return
         
         # 3. Insert rows dynamically (bottom-up to prevent index shifting issues)
-        # Template base rows: LD=4, SD=5, PU=6, F3=7, F6=8, F1=9, F2=10
-        categories = ['F2', 'F1', 'F6', 'F3', 'PU', 'SD', 'LD']
-        base_rows = {'LD': 4, 'SD': 5, 'PU': 6, 'F3': 7, 'F6': 8, 'F1': 9, 'F2': 10}
+        # Template base rows: LD=4, SD=5, PU=6, F3=7, F6=8, F1=9, F2=10, F4=11, F5=12
+        categories = ['F5', 'F4', 'F2', 'F1', 'F6', 'F3', 'PU', 'SD', 'LD']
+        base_rows = {'LD': 4, 'SD': 5, 'PU': 6, 'F3': 7, 'F6': 8, 'F1': 9, 'F2': 10, 'F4': 11, 'F5': 12}
         inserted_counts = {c: 0 for c in categories}
         
         for cat in categories:
@@ -271,6 +274,10 @@ class DSMProcessor:
         f1_end = f1_start + max(max_per_cat['F1'], 1) - 1
         f2_start = f1_end + 1
         f2_end = f2_start + max(max_per_cat['F2'], 1) - 1
+        f4_start = f2_end + 1
+        f4_end = f4_start + max(max_per_cat['F4'], 1) - 1
+        f5_start = f4_end + 1
+        f5_end = f5_start + max(max_per_cat['F5'], 1) - 1
         
         # Driver State IMP + Scenarios DRO, NO-FAT
         imp_start = f3_start
@@ -297,7 +304,22 @@ class DSMProcessor:
         rng_f2.merge()
         rng_f2.value = "SLE"
         
-        fat_rng = sheet.range(f"A{f3_start}:A{f2_end}")
+        # Unresponsiveness UR + Scenarios SLE, DTR
+        ur_start = f4_start
+        ur_end = f5_end
+        rng_ur = sheet.range(f"B{ur_start}:B{ur_end}")
+        rng_ur.merge()
+        rng_ur.value = "UR"
+        
+        rng_f4_c = sheet.range(f"C{f4_start}:C{f4_end}")
+        rng_f4_c.merge()
+        rng_f4_c.value = "SLE"
+        
+        rng_f5_c = sheet.range(f"C{f5_start}:C{f5_end}")
+        rng_f5_c.merge()
+        rng_f5_c.value = "DTR"
+        
+        fat_rng = sheet.range(f"A{f3_start}:A{f5_end}")
         fat_rng.merge()
         fat_rng.value = "FATIGUE"
         
@@ -310,10 +332,13 @@ class DSMProcessor:
             'F6': (f6_start, f6_end),
             'F1': (f1_start, f1_end),
             'F2': (f2_start, f2_end),
+            'F4': (f4_start, f4_end),
+            'F5': (f5_start, f5_end)
         }
         
         self.log(f"[*] Occlusion template prepared: LD({ld_start}-{ld_end}), SD({sd_start}-{sd_end}), PU({pu_start}-{pu_end}), " +
-                 f"F3({f3_start}-{f3_end}), F6({f6_start}-{f6_end}), F1({f1_start}-{f1_end}), F2({f2_start}-{f2_end})")
+                 f"F3({f3_start}-{f3_end}), F6({f6_start}-{f6_end}), F1({f1_start}-{f1_end}), F2({f2_start}-{f2_end}), " +
+                 f"F4({f4_start}-{f4_end}), F5({f5_start}-{f5_end})")
 
     def detect_sheet(self, file_name, filtered_folder=None):
         """Detect which sheet a file belongs to based on its name prefix and source folder."""

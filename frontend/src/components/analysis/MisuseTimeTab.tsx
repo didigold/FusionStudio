@@ -55,6 +55,8 @@ import { analysisApi } from '@/api/analysisApi';
 import { UPlotChart } from './UPlotChart';
 import uPlot from 'uplot';
 import Waves from './Waves';
+import { getOmScenarioName } from '@/lib/utils';
+import { MisuseTimelineEditor } from './MisuseTimelineEditor';
 import { useTheme } from '@/hooks/useTheme';
 
 
@@ -148,8 +150,9 @@ export function MisuseTimeTab() {
 
   const videoFileName = useMemo(() => {
     if (!targetFile) return 'video.avi';
-    const base = targetFile.replace('_tracking.mf4', '').replace('.mf4', '').split(/[\\/]/).pop();
-    return `${base}_cam${analysisSelectedCamera}.avi`;
+    const base = getOmScenarioName(targetFile).split(' (Attempt')[0]; // For video naming, we probably don't want the attempt string, or maybe we do? Let's keep it safe. Actually, the video name is usually the file base name. Let's revert this logic for video name to just the file's basename.
+    const fileBase = targetFile.replace('_tracking.mf4', '').replace('.mf4', '').split(/[\\/]/).pop();
+    return `${fileBase}_cam${analysisSelectedCamera}.avi`;
   }, [targetFile, analysisSelectedCamera]);
 
   const isPlayingRef = useRef(false);
@@ -387,10 +390,10 @@ export function MisuseTimeTab() {
 
   const currentCaseIdx = findCaseIndex(targetFile);
   const prevCaseName = currentCaseIdx > 0
-    ? subjectCases[currentCaseIdx - 1].split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '')
+    ? getOmScenarioName(subjectCases[currentCaseIdx - 1])
     : null;
   const nextCaseName = currentCaseIdx < subjectCases.length - 1
-    ? subjectCases[currentCaseIdx + 1].split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '')
+    ? getOmScenarioName(subjectCases[currentCaseIdx + 1])
     : null;
 
   // Phase 2: Undo stack
@@ -1198,14 +1201,14 @@ export function MisuseTimeTab() {
                             <DropdownMenuLabel className="pt-1 text-[10px] font-bold text-muted-foreground/75 uppercase tracking-wider">Case</DropdownMenuLabel>
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="text-sm">
-                                    {targetFile?.split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '') || 'Select...'}
+                                    {targetFile ? getOmScenarioName(targetFile) : 'Select...'}
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
                                     <DropdownMenuSubContent className="max-h-[260px] overflow-y-auto bg-popover border-border text-popover-foreground">
                                         <DropdownMenuRadioGroup value={targetFile?.replace('_tracking.mf4', '.mf4') || ''} onValueChange={setAnalysisSelectedFile}>
                                             {subjectCases.map(c => (
                                                 <DropdownMenuRadioItem key={c} value={c} className="text-sm">
-                                                    {c.split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '') || c}
+                                                    {getOmScenarioName(c)}
                                                 </DropdownMenuRadioItem>
                                             ))}
                                         </DropdownMenuRadioGroup>

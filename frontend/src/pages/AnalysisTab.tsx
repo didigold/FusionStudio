@@ -11,11 +11,12 @@ import {
   FileChartColumnIncreasing,
   FileSearch,
   CheckSquare,
-  LayoutGrid
+  LayoutGrid,
+  AlertTriangle
 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { cn } from "@/lib/utils"
+import { cn, getOmScenarioName } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -31,6 +32,7 @@ import { MisuseTimeTab } from '@/components/analysis/MisuseTimeTab'
 import { MisuseLogicTab } from '@/components/analysis/MisuseLogicTab'
 import { LogTab } from '@/components/analysis/LogTab'
 import { AnalysisSidebar } from '@/components/analysis/AnalysisSidebar'
+import { FolderNavigator } from '@/components/analysis/FolderNavigator'
 import { MetadataTab } from '@/components/analysis/MetadataTab'
 import ClassificationTab from './ClassificationTab'
 import ReportingTab from './ReportingTab'
@@ -191,7 +193,7 @@ const RecordingNode = memo(function RecordingNode({
              />
           </div>
           <File className={cn("w-3.5 h-3.5 shrink-0", selectedPath === node.path ? "text-primary" : "text-muted-foreground")} />
-          <span className={cn("text-sm font-medium truncate", selectedPath === node.path && "text-primary font-bold")}>{node.name}</span>
+          <span className={cn("text-sm font-medium truncate", selectedPath === node.path && "text-primary font-bold")}>{getOmScenarioName(node.path)}</span>
         </div>
         <div className="flex gap-1 shrink-0 ml-2 relative z-10">
           <Badge 
@@ -331,6 +333,12 @@ export default function AnalysisTab() {
 
   const [selectionType, setSelectionType] = useState('all')
   const [activeTab, setActiveTab] = useState('audio')
+  const [bypassMismatch, setBypassMismatch] = useState(false)
+
+  // Reset bypass when tab or results change
+  useEffect(() => {
+    setBypassMismatch(false)
+  }, [activeTab, analysisResults])
 
   // Stable callback — won't invalidate memoized RecordingNode children
   const selectFile = useCallback((filePath: string) => {
@@ -373,6 +381,123 @@ export default function AnalysisTab() {
   const SHOW_RECORDINGS_TABS = ['audio', 'metadata', 'tracking', 'time-selector', 'logic', 'occupant-time', 'misuse-logic'];
   const shouldShowRecordings = SHOW_RECORDINGS_TABS.includes(activeTab);
 
+  // Check if we have OM structure to show FolderNavigator instead of Tree View
+  const isOMProject = useMemo(() => {
+    if (!analysisResults || analysisResults.length === 0) return false;
+    
+    // Check if any root node or immediate child matches OM keywords
+    for (const node of analysisResults) {
+      if (node.path && (
+          node.path.includes('OM') || 
+          node.path.includes('Out of Position') || 
+          node.path.includes('Correct Seatbelt Routing') || 
+          node.path.includes('Correct Belt Routing') || 
+          node.path.includes('Stature Detection')
+        )) {
+        return true;
+      }
+      if (node.children) {
+        for (const child of node.children) {
+          if (child.path && (
+              child.path.includes('OM') || 
+              child.path.includes('Out of Position') || 
+              child.path.includes('Correct Seatbelt Routing') || 
+              child.path.includes('Correct Belt Routing') || 
+              child.path.includes('Stature Detection')
+            )) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }, [analysisResults]);
+
+  const isGazeTab = ['tracking', 'time-selector', 'logic'].includes(activeTab);
+  const isOMTab = ['occupant-time', 'misuse-logic'].includes(activeTab);
+  const hasMismatch = analysisResults && analysisResults.length > 0 && ((isOMProject && isGazeTab) || (!isOMProject && isOMTab));
+
+  const renderMismatchWarning = () => {
+    const isOmMismatched = isOMProject && isGazeTab;
+    return (
+      <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col p-6 items-center justify-center text-center shadow-sm relative min-h-[350px]">
+        {/* Ambient glow circle */}
+        <div className="absolute w-[180px] h-[180px] rounded-full bg-amber-500/[0.02] blur-[40px] pointer-events-none" />
+        
+        <div className="w-16 h-16 rounded-full border border-amber-500/20 bg-amber-500/5 flex items-center justify-center mb-5 shrink-0 animate-pulse-sync">
+          <AlertTriangle className="w-7 h-7 text-amber-500" />
+        </div>
+
+        <h3 className="text-sm font-bold tracking-wider uppercase text-foreground mb-3">
+          Protocol Mismatch
+        </h3>
+        
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px] mb-6">
+          {isOmMismatched ? (
+            <>
+              The active folder contains <strong className="text-foreground font-semibold">Occupant Monitoring</strong> data, which is incompatible with the selected <strong className="text-foreground font-semibold">Gaze</strong> function.
+            </>
+          ) : (
+            <>
+              The active folder contains <strong className="text-foreground font-semibold">Gaze</strong> data, which is incompatible with the selected <strong className="text-foreground font-semibold">Occupant Monitoring</strong> function.
+            </>
+          )}
+        </p>
+
+        <div className="flex flex-col gap-2 w-full max-w-[200px] relative z-10">
+          {isOmMismatched ? (
+            <>
+              <Button 
+                size="sm" 
+                variant="default"
+                onClick={() => setActiveTab('misuse-logic')}
+                className="w-full text-xs font-bold"
+              >
+                Go to Misuse Logic
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => setActiveTab('occupant-time')}
+                className="w-full text-xs font-bold"
+              >
+                Go to Misuse Time
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                size="sm" 
+                variant="default"
+                onClick={() => setActiveTab('logic')}
+                className="w-full text-xs font-bold"
+              >
+                Go to Gaze Logic
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => setActiveTab('time-selector')}
+                className="w-full text-xs font-bold"
+              >
+                Go to Gaze Time
+              </Button>
+            </>
+          )}
+          
+          <Button 
+            size="xs" 
+            variant="ghost" 
+            className="text-[10px] text-muted-foreground/60 hover:text-foreground mt-2"
+            onClick={() => setBypassMismatch(true)}
+          >
+            Show recordings anyway
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-full gap-0 p-1 overflow-hidden">
       <AnimatePresence initial={false}>
@@ -384,94 +509,109 @@ export default function AnalysisTab() {
             transition={{ duration: 0.35, ease: "easeInOut" }}
             className="flex flex-col gap-6 overflow-hidden shrink-0"
           >
-            {/* Participant Status Panel */}
-            <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
-              <div className="p-4 border-b border-white/5 bg-surface-2/30">
-                <div className="flex items-center justify-between mb-4">
+            {hasMismatch && !bypassMismatch ? (
+              renderMismatchWarning()
+            ) : isOMProject ? (
+              <FolderNavigator 
+                results={analysisResults}
+                selectedPath={analysisSelectedFile}
+                onSelect={selectFile}
+                checkedFilesSet={checkedFilesSet}
+                onToggleCheck={toggleAnalysisFile}
+                onToggleFolder={toggleFolder}
+                selectionType={selectionType}
+                onSelectionChange={handleSelectionChange}
+                totalMF4Count={totalMF4Count}
+              />
+            ) : (
+              <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
+                <div className="p-4 border-b border-white/5 bg-surface-2/30">
+                  <div className="flex items-center justify-between mb-4">
+                     <div className="flex items-center gap-2">
+                        <LayoutGrid className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-bold tracking-tight text-foreground">Recordings</span>
+                     </div>
+                     <div className="flex gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="w-6 h-6 hover:bg-primary/10 hover:text-primary transition-colors"
+                          onClick={toggleExpand}
+                          title={isAllExpanded ? "Collapse All" : "Expand All"}
+                        >
+                          {isAllExpanded ? <ListChevronsDownUp className="w-3.5 h-3.5" /> : <ListChevronsUpDown className="w-3.5 h-3.5" />}
+                        </Button>
+                     </div>
+                  </div>
+
+                  {/* Radio Selection Group */}
+                  <RadioGroup 
+                    value={selectionType} 
+                    onValueChange={handleSelectionChange}
+                    className="flex gap-x-3 gap-y-2"
+                  >
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'none', label: 'None' },
+                    ].map((item) => (
+                      <div key={item.id} className="flex items-center space-x-1.5">
+                        <RadioGroupItem value={item.id} id={`r-${item.id}`} className="w-3 h-3 border-white/20" />
+                        <Label htmlFor={`r-${item.id}`} className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors">
+                          {item.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+
+                <ScrollArea className="flex-1 bg-background/30 scroll-fade-mask relative">
+                  <div className={cn("flex flex-col gap-0.5 p-2", analysisResults.length === 0 && "h-full min-h-[350px] justify-center items-center")}>
+                    {analysisResults.map((res, i) => (
+                      <RecordingNode 
+                        key={i} 
+                        node={res} 
+                        selectedPath={analysisSelectedFile} 
+                        onSelect={selectFile} 
+                        checkedFilesSet={checkedFilesSet}
+                        onToggleCheck={toggleAnalysisFile}
+                        onToggleFolder={toggleFolder}
+                        expandedAll={analysisExpandedAll}
+                      />
+                    ))}
+                    {analysisResults.length === 0 && (
+                      <div className="flex flex-col items-center justify-center gap-4 select-none w-full relative">
+                        {/* Ambient glow circle */}
+                        <div className="absolute w-[180px] h-[180px] rounded-full bg-white/[0.02] blur-[40px] pointer-events-none" />
+                        
+                        <div className="w-16 h-16 rounded-full border border-border dark:border-white/5 flex items-center justify-center animate-pulse-sync mb-1">
+                          <FileSearch className="w-6 h-6 stroke-[1.2] text-foreground" />
+                        </div>
+                        <div className="text-center space-y-1.5 animate-pulse-sync">
+                          <p className="text-sm tracking-[0.2em] font-extrabold uppercase text-foreground">
+                            No recordings found
+                          </p>
+                          <p className="text-xs uppercase tracking-wider opacity-60 font-mono text-muted-foreground">
+                            Enter a valid source path to scan
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+
+                <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between">
                    <div className="flex items-center gap-2">
-                      <LayoutGrid className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-bold tracking-tight text-foreground">Recordings</span>
+                      <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-sm font-bold text-primary tracking-tight">
+                        {analysisCheckedFiles.length} selected
+                      </span>
                    </div>
-                   <div className="flex gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="w-6 h-6 hover:bg-primary/10 hover:text-primary transition-colors"
-                        onClick={toggleExpand}
-                        title={isAllExpanded ? "Collapse All" : "Expand All"}
-                      >
-                        {isAllExpanded ? <ListChevronsDownUp className="w-3.5 h-3.5" /> : <ListChevronsUpDown className="w-3.5 h-3.5" />}
-                      </Button>
-                   </div>
+                   <span className="text-xs font-medium text-muted-foreground tracking-tight opacity-50">
+                      Total: {totalMF4Count} MF4
+                   </span>
                 </div>
-
-                {/* Radio Selection Group */}
-                <RadioGroup 
-                  value={selectionType} 
-                  onValueChange={handleSelectionChange}
-                  className="flex gap-x-3 gap-y-2"
-                >
-                  {[
-                    { id: 'all', label: 'All' },
-                    { id: 'none', label: 'None' },
-                  ].map((item) => (
-                    <div key={item.id} className="flex items-center space-x-1.5">
-                      <RadioGroupItem value={item.id} id={`r-${item.id}`} className="w-3 h-3 border-white/20" />
-                      <Label htmlFor={`r-${item.id}`} className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors">
-                        {item.label}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
               </div>
-
-              <ScrollArea className="flex-1 bg-background/30 scroll-fade-mask relative">
-                <div className={cn("flex flex-col gap-0.5 p-2", analysisResults.length === 0 && "h-full min-h-[350px] justify-center items-center")}>
-                  {analysisResults.map((res, i) => (
-                    <RecordingNode 
-                      key={i} 
-                      node={res} 
-                      selectedPath={analysisSelectedFile} 
-                      onSelect={selectFile} 
-                      checkedFilesSet={checkedFilesSet}
-                      onToggleCheck={toggleAnalysisFile}
-                      onToggleFolder={toggleFolder}
-                      expandedAll={analysisExpandedAll}
-                    />
-                  ))}
-                  {analysisResults.length === 0 && (
-                    <div className="flex flex-col items-center justify-center gap-4 select-none w-full relative">
-                      {/* Ambient glow circle */}
-                      <div className="absolute w-[180px] h-[180px] rounded-full bg-white/[0.02] blur-[40px] pointer-events-none" />
-                      
-                      <div className="w-16 h-16 rounded-full border border-border dark:border-white/5 flex items-center justify-center animate-pulse-sync mb-1">
-                        <FileSearch className="w-6 h-6 stroke-[1.2] text-foreground" />
-                      </div>
-                      <div className="text-center space-y-1.5 animate-pulse-sync">
-                        <p className="text-sm tracking-[0.2em] font-extrabold uppercase text-foreground">
-                          No recordings found
-                        </p>
-                        <p className="text-xs uppercase tracking-wider opacity-60 font-mono text-muted-foreground">
-                          Enter a valid source path to scan
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-
-              <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between">
-                 <div className="flex items-center gap-2">
-                    <CheckSquare className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-sm font-bold text-primary tracking-tight">
-                      {analysisCheckedFiles.length} selected
-                    </span>
-                 </div>
-                 <span className="text-xs font-medium text-muted-foreground tracking-tight opacity-50">
-                    Total: {totalMF4Count} MF4
-                 </span>
-              </div>
-            </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
