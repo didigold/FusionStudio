@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock, IdCardLanyard } from "lucide-react";
+import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock, IdCardLanyard, ArrowRight } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +33,14 @@ import { useTheme } from "@/hooks/useTheme";
 
 
 
+const PLACEHOLDERS = [
+  "Select project folder...",
+  "Path to your next project...",
+  "Select the folder that will guide you to Euro NCAP's Hall of Fame...",
+  "Let's load some signals...",
+  "Point to your project data..."
+];
+
 export function TopNav() {
   const {
     analysisSourcePath,
@@ -57,6 +65,53 @@ export function TopNav() {
 
   const [scanning, setScanning] = useState(false);
   const [userProfile, setUserProfile] = useState<{username: string}>({username: "Loading..."});
+  const [currentPlaceholder, setCurrentPlaceholder] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+    let phraseIndex = 0;
+    let charIndex = 0;
+    let isDeleting = false;
+    let timer: NodeJS.Timeout;
+
+    const tick = () => {
+      if (!isMounted) return;
+      const currentPhrase = PLACEHOLDERS[phraseIndex];
+
+      if (!isDeleting) {
+        // Typing
+        setCurrentPlaceholder(currentPhrase.substring(0, charIndex + 1));
+        charIndex++;
+
+        if (charIndex === currentPhrase.length) {
+          // Pause at end of phrase
+          isDeleting = true;
+          timer = setTimeout(tick, 3000);
+        } else {
+          timer = setTimeout(tick, 80 + Math.random() * 30); // smooth typing
+        }
+      } else {
+        // Deleting
+        setCurrentPlaceholder(currentPhrase.substring(0, charIndex - 1));
+        charIndex--;
+
+        if (charIndex === 0) {
+          isDeleting = false;
+          phraseIndex = (phraseIndex + 1) % PLACEHOLDERS.length;
+          timer = setTimeout(tick, 500);
+        } else {
+          timer = setTimeout(tick, 20); // fast deleting
+        }
+      }
+    };
+
+    tick();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/user/me")
@@ -194,6 +249,8 @@ export function TopNav() {
     }
   };
 
+  const isPathChanged = !!localPath && localPath.trim() !== (analysisSourcePath || "").trim();
+
   return (
     <>
       <style>{`
@@ -247,8 +304,33 @@ export function TopNav() {
           opacity: 1 !important;
           pointer-events: auto !important;
         }
+
+        @keyframes spin-fast {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .hover-spin-fast:hover svg {
+          animation: spin-fast 0.6s linear infinite;
+        }
+
+        @keyframes bounce-subtle {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        .hover-bounce-subtle:hover svg {
+          animation: bounce-subtle 0.5s ease-in-out infinite;
+        }
+
+        @keyframes sun-spin {
+          0% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.1); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+        .hover-sun-spin:hover svg {
+          animation: sun-spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
       `}</style>
-      <header className="relative w-full h-16 border-b border-border bg-background flex items-center justify-between px-8 z-40 sticky top-0">
+      <header className="relative w-full h-[52px] border-b border-border bg-background flex items-center justify-between px-8 z-40 sticky top-0">
         {/* Left Side: Brand Logo and Text */}
         <div className="flex items-center gap-2.5 shrink-0">
           <img
@@ -269,7 +351,7 @@ export function TopNav() {
             <img
               src="/assets/logos/APPLUS+IDIADA.png"
               alt="Applus Idiada"
-              className="h-[36px] object-contain opacity-80"
+              className="h-[28px] object-contain opacity-80"
               style={{ filter: isDark ? "brightness(0) invert(1)" : "brightness(0)" }}
             />
           </div>
@@ -318,9 +400,9 @@ export function TopNav() {
                       setDropdownOpen(false);
                     }, 150);
                   }}
-                  placeholder="Select project folder..."
+                  placeholder={currentPlaceholder}
                   style={{ outline: "none", border: "none", boxShadow: "none" }}
-                  className="bg-transparent text-xs text-foreground/90 placeholder:text-muted-foreground/50 w-full pl-2 pr-2 relative z-0"
+                  className="bg-transparent text-[13px] text-foreground/90 placeholder:text-muted-foreground/50 w-full pl-2 pr-2 relative z-0"
                 />
                 {/* Fade overlay — right edge */}
                 <div
@@ -385,17 +467,29 @@ export function TopNav() {
             </AnimatePresence>
           </div>
 
-          {/* Browse button */}
+          {/* Browse button or Submit arrow */}
           <Button
             type="button"
-            onClick={() => setBrowseOpen(true)}
+            onClick={() => {
+              if (isPathChanged) {
+                if (pendingConfig) {
+                  confirmPromptedPath(localPath);
+                } else {
+                  setAnalysisSourcePath(localPath);
+                  triggerScanForPath(localPath);
+                }
+              } else {
+                setBrowseOpen(true);
+              }
+            }}
             variant="outline"
-            size="icon"
-            className="w-9 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0"
-            title="Browse Folder"
+            className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0"
+            title={isPathChanged ? "Load Project Path" : "Browse Folder"}
           >
             {scanning ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+            ) : isPathChanged ? (
+              <ArrowRight className="w-3.5 h-3.5 text-primary animate-pulse" />
             ) : (
               <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
             )}
@@ -403,18 +497,16 @@ export function TopNav() {
         </div>
 
         {/* Right Side: Import/Save Config buttons and User Profile */}
-        <div className="flex items-center gap-3 shrink-0 justify-end ml-auto">
+        <div className="flex items-center gap-2 shrink-0 justify-end ml-auto">
           {/* Import / Save Config + Theme Toggle — unified icon group */}
-          <div className="flex items-center gap-1.5">
-            {/* Import Config */}
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               onClick={() =>
                 document.getElementById("global-import-config-input")?.click()
               }
               variant="outline"
-              size="icon"
-              className="w-9 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0"
+              className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-spin-fast"
               title="Import Configuration JSON"
             >
               <Cog className="w-3.5 h-3.5 text-muted-foreground" />
@@ -437,48 +529,47 @@ export function TopNav() {
               }}
             />
 
-            {/* Save Config */}
             <Button
               type="button"
               onClick={exportConfig}
               variant="outline"
-              size="icon"
-              className="w-9 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0"
+              className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-bounce-subtle"
               title="Save Configuration JSON"
             >
               <Save className="w-3.5 h-3.5 text-muted-foreground" />
             </Button>
 
-            {/* Theme Toggle */}
             <Button
               type="button"
               onClick={toggleTheme}
               variant="outline"
-              size="icon"
-              className="w-9 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent transition-all shrink-0"
+              className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent transition-all shrink-0 hover-sun-spin"
               title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               {isDark ? (
-                <Sun className="w-3.5 h-3.5 text-muted-foreground transition-transform hover:rotate-12 duration-200" />
+                <Sun className="w-3.5 h-3.5 text-muted-foreground" />
               ) : (
-                <Moon className="w-3.5 h-3.5 text-muted-foreground transition-transform hover:-rotate-12 duration-200" />
+                <Moon className="w-3.5 h-3.5 text-muted-foreground" />
               )}
             </Button>
           </div>
 
-          <div className="h-6 w-[1px] bg-border" />
-
-          {/* User profile */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full h-8 w-8 hover:bg-foreground/5"
+                variant="default"
+                className="h-9 pl-2 pr-1.5 py-1 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-all flex items-center gap-2 shadow-sm"
               >
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-surface-3 text-foreground flex items-center justify-center">
-                    <IdCardLanyard className="w-4 h-4 text-muted-foreground" />
+                <span className="text-[13px] font-bold tracking-wider uppercase px-2.5">
+                  {userProfile.username === "AT017769"
+                    ? "GOAT"
+                    : userProfile.username?.startsWith("AT")
+                    ? "STAFF"
+                    : "GUEST"}
+                </span>
+                <Avatar className="h-[26px] w-[26px]">
+                  <AvatarFallback className="bg-background text-foreground flex items-center justify-center">
+                    <IdCardLanyard className="w-4 h-4" />
                   </AvatarFallback>
                 </Avatar>
               </Button>
