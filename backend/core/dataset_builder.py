@@ -31,7 +31,9 @@ class DatasetBuilder:
                 if self.on_log:
                     self.on_log(f"Scanning folder: {os.path.basename(folder)}")
                 folder_name = os.path.basename(folder)
-                marks_path = os.path.join(folder, "marks.json")
+                marks_path = os.path.join(folder, "GA_marks.json")
+                if not os.path.exists(marks_path):
+                    marks_path = os.path.join(folder, "marks.json")
                 marks_data = {}
                 is_parent_marks = False
 
@@ -43,14 +45,16 @@ class DatasetBuilder:
                         pass
 
                 if not marks_data:
-                    parent_marks = os.path.join(os.path.dirname(folder), "marks.json")
+                    parent_marks = os.path.join(os.path.dirname(folder), "GA_marks.json")
+                    if not os.path.exists(parent_marks):
+                        parent_marks = os.path.join(os.path.dirname(folder), "marks.json")
                     if os.path.exists(parent_marks):
                         try:
                             with open(parent_marks, "r", encoding="utf-8") as f:
                                 marks_data = json.load(f)
                             is_parent_marks = True
                             if self.on_log:
-                                self.on_log(f"  Using parent marks.json for {folder_name}")
+                                self.on_log(f"  Using parent marks data for {folder_name}")
                         except Exception:
                             pass
 
@@ -192,7 +196,9 @@ class DatasetBuilder:
                 folder_name = os.path.basename(folder)
                 if self.on_log:
                     self.on_log(f"[Multimodal] Scanning: {folder_name}")
-                marks_path = os.path.join(folder, "marks.json")
+                marks_path = os.path.join(folder, "GA_marks.json")
+                if not os.path.exists(marks_path):
+                    marks_path = os.path.join(folder, "marks.json")
                 marks_data = {}
                 is_parent_marks = False
 
@@ -203,16 +209,18 @@ class DatasetBuilder:
                     except Exception:
                         pass
 
-                # If local marks.json doesn't exist or is empty, try the parent directory
+                # If local marks doesn't exist or is empty, try the parent directory
                 if not marks_data:
-                    parent_marks = os.path.join(os.path.dirname(folder), "marks.json")
+                    parent_marks = os.path.join(os.path.dirname(folder), "GA_marks.json")
+                    if not os.path.exists(parent_marks):
+                        parent_marks = os.path.join(os.path.dirname(folder), "marks.json")
                     if os.path.exists(parent_marks):
                         try:
                             with open(parent_marks, "r", encoding="utf-8") as f:
                                 marks_data = json.load(f)
                             is_parent_marks = True
                             if self.on_log:
-                                self.on_log(f"  Using parent marks.json for {folder_name}")
+                                self.on_log(f"  Using parent marks data for {folder_name}")
                         except Exception:
                             pass
 

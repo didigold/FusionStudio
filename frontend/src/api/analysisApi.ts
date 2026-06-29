@@ -33,16 +33,19 @@ export const analysisApi = {
 
   stopChronos: () => api.post('/stop/chronos'),
 
-  saveMarks: (file_path: string, marks: number[], source_dir = '') => {
-    const promise = api.post('/marks/save', { file_path, source_dir, marks })
+  saveMarks: (file_path: string, marks: number[], source_dir = '', marks_type = 'OM') => {
+    const promise = api.post('/marks/save', { file_path, source_dir, marks, marks_type })
     promise.then(() => {
       // Derive the base MF4 path (node.path in the tree is always the non-tracking file)
       const basePath = file_path.replace(/_tracking\.mf4$/i, '.mf4')
-      useAppStore.getState().updateFileStatus(basePath, { has_marks: marks.length > 0 })
+      const hasMarks = marks_type === 'OM' 
+        ? (marks.length > 0 && marks[0] !== -1)
+        : (marks.length > 0);
+      useAppStore.getState().updateFileStatus(basePath, { has_marks: hasMarks })
     }).catch(() => { /* silent */ })
     return promise
   },
 
-  loadMarks: (file_path: string, source_dir = '') =>
-    api.post('/marks/load', { file_path, source_dir }),
+  loadMarks: (file_path: string, source_dir = '', marks_type = 'OM') =>
+    api.post('/marks/load', { file_path, source_dir, marks_type }),
 }

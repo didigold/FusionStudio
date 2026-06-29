@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
+import { getOmScenarioCategory } from '../lib/utils'
 
 export interface SignalConfig {
   name: string
@@ -446,7 +447,7 @@ interface AppState {
   setPendingConfigName: (n: string | null) => void
 
   // Config actions
-  autoLoadChannelsAndMerge: (importedCategories?: Record<string, SignalConfig[]>, targetProtocol?: 'Euro NCAP' | 'GSR ADDW', targetResults?: any[]) => Promise<void>
+  autoLoadChannelsAndMerge: (importedCategories?: Record<string, SignalConfig[]>, targetProtocol?: 'Euro NCAP' | 'GSR ADDW', targetResults?: any[], isMisuse?: boolean) => Promise<void>
   importConfigJSON: (fileContent: string, fileName: string) => Promise<void>
   confirmPromptedPath: (path: string) => Promise<boolean>
   exportConfig: () => Promise<void>
@@ -798,25 +799,33 @@ export const useAppStore = create<AppState>((set) => ({
   setPendingConfigName: (n) => set({ pendingConfigName: n }),
 
   // Config actions implementation
-  autoLoadChannelsAndMerge: async (importedCategories, targetProtocol, targetResults) => {
+  autoLoadChannelsAndMerge: async (importedCategories, targetProtocol, targetResults, isMisuse) => {
     const state = useAppStore.getState()
     const activeProtocol = targetProtocol || state.protocol
-    const targetCategoriesList = activeProtocol === 'Euro NCAP' 
+    const targetCategoriesList = isMisuse
       ? [
-          "Long Distraction (NDT)",
-          "Long Distraction (DT)",
-          "Short Distraction (NDT)",
-          "Short Distraction (DT)",
-          "Microsleep",
-          "Sleep",
-          "Drowsiness",
-          "Unresponsive driver (SLE)",
-          "Unresponsive driver (DTR)"
+          "OoP \u2014 Initial Phase",
+          "OoP \u2014 Change of Status",
+          "OoP \u2014 15 min Warning",
+          "CSR \u2014 Initial Phase",
+          "CSR \u2014 Change of Status"
         ]
-      : [
-          "High Speed",
-          "Low Speed"
-        ]
+      : (activeProtocol === 'Euro NCAP' 
+          ? [
+              "Long Distraction (NDT)",
+              "Long Distraction (DT)",
+              "Short Distraction (NDT)",
+              "Short Distraction (DT)",
+              "Microsleep",
+              "Sleep",
+              "Drowsiness",
+              "Unresponsive driver (SLE)",
+              "Unresponsive driver (DTR)"
+            ]
+          : [
+              "High Speed",
+              "Low Speed"
+            ])
 
     const activeResults = targetResults || state.analysisResults
 
@@ -898,9 +907,87 @@ export const useAppStore = create<AppState>((set) => ({
     const newLoadedFiles = { ...state.loadedFiles }
     const toastId = toast.loading("Auto-loading MF4 data...")
 
+    if (isMisuse) {
+      const representativeFile = mdfFiles.find(f => getOmScenarioCategory(f) !== null) || mdfFiles[0]
+      try {
+        const response = await fetch('/api/analysis/channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: representativeFile })
+        })
+        const data = await response.json()
+        if (data.channels && Array.isArray(data.channels)) {
+          const names = data.channels.map((ch: any) => ch.name).sort()
+          const filteredNames = names.filter((name: string) => name.toLowerCase() !== 't' && name.toLowerCase() !== 'time')
+
+          for (const category of targetCategoriesList) {
+            const existingCategoryConfig = newConfigs[category] || []
+            const isConfigValid = existingCategoryConfig && Array.isArray(existingCategoryConfig)
+
+            const rebuiltList: SignalConfig[] = [
+              isConfigValid
+                ? existingCategoryConfig.find(sig => sig && sig.name === 'SoundPressure') || { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+                : { name: 'SoundPressure', checked: true, operator: 'None', threshold: 0.0, alias: 'SoundPressure' }
+            ]
+
+            for (const name of filteredNames) {
+              if (name === 'SoundPressure') continue
+
+              const existingSig = isConfigValid ? existingCategoryConfig.find(sig => sig && sig.name === name) : undefined
+              if (existingSig) {
+                rebuiltList.push(existingSig)
+              } else {
+                rebuiltList.push({
+                  name,
+                  checked: false,
+                  operator: 'None',
+                  threshold: 0.0,
+                  alias: name
+                })
+              }
+            }
+
+            if (isConfigValid) {
+              for (const sig of existingCategoryConfig) {
+                if (sig && sig.name !== 'SoundPressure' && !filteredNames.includes(sig.name)) {
+                  rebuiltList.push(sig)
+                }
+              }
+            }
+
+            const seen = new Set<string>()
+            const uniqueRebuiltList: SignalConfig[] = []
+            for (const sig of rebuiltList) {
+              if (sig && sig.name && !seen.has(sig.name)) {
+                seen.add(sig.name)
+                uniqueRebuiltList.push(sig)
+              }
+            }
+
+            newConfigs[category] = uniqueRebuiltList
+            newLoadedFiles[category] = representativeFile
+          }
+
+          set({ signalsConfig: newConfigs, loadedFiles: newLoadedFiles })
+          toast.dismiss(toastId)
+          toast.success("Auto-loaded & merged MF4 data for all Misuse categories using representative file.")
+        } else {
+          toast.dismiss(toastId)
+          toast.error("Failed to read channels from representative file.")
+        }
+      } catch (error) {
+        toast.dismiss(toastId)
+        toast.error("Failed to auto-load signals from files.")
+        console.error(error)
+      }
+      return
+    }
+
     try {
       for (const category of targetCategoriesList) {
-        const matchingFile = mdfFiles.find(f => determineCategoryFromFilename(f) === category)
+        const matchingFile = isMisuse
+          ? mdfFiles.find(f => getOmScenarioCategory(f) === category)
+          : mdfFiles.find(f => determineCategoryFromFilename(f) === category)
         if (matchingFile) {
           const response = await fetch('/api/analysis/channels', {
             method: 'POST',
@@ -1254,7 +1341,10 @@ export const useAppStore = create<AppState>((set) => ({
       }
       const mergedCategories = { ...DEFAULT_SIGNAL_LISTS, ...validatedCategories }
 
-      await state.autoLoadChannelsAndMerge(mergedCategories, validatedProtocol, resultsData)
+      const hasMisuseCategories = Object.keys(validatedCategories).some(cat => 
+        cat.includes("OoP") || cat.includes("CSR")
+      )
+      await state.autoLoadChannelsAndMerge(mergedCategories, validatedProtocol, resultsData, hasMisuseCategories)
       toast.success("Configuration imported successfully")
     } catch (err) {
       console.error("Import error:", err)
@@ -1370,7 +1460,10 @@ export const useAppStore = create<AppState>((set) => ({
           }
           const mergedCategories = { ...DEFAULT_SIGNAL_LISTS, ...validatedCategories }
           
-          await state.autoLoadChannelsAndMerge(mergedCategories, parsed.protocol || 'Euro NCAP', data.results)
+          const hasMisuseCategories = Object.keys(validatedCategories).some(cat => 
+            cat.includes("OoP") || cat.includes("CSR")
+          )
+          await state.autoLoadChannelsAndMerge(mergedCategories, parsed.protocol || 'Euro NCAP', data.results, hasMisuseCategories)
         }
 
         set({ isPromptingForPath: false, pendingConfig: null, pendingConfigName: null })

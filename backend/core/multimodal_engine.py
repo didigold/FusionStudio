@@ -384,14 +384,18 @@ class MultimodalTrainer:
             for p in project_paths:
                 mf4s = _glob.glob(os.path.join(p, "**", "*_tracking.mf4"), recursive=True)
                 avis = _glob.glob(os.path.join(p, "**", "*.avi"), recursive=True)
-                marks = os.path.join(p, "marks.json")
-                n_cases = 0
-                if os.path.exists(marks):
-                    try:
-                        with open(marks) as f:
-                            n_cases = len(json.load(f))
-                    except Exception:
-                        pass
+                
+                # Check GA_marks.json, OM_marks.json, and legacy marks.json
+                unique_cases = set()
+                for default_name in ["GA_marks.json", "OM_marks.json", "marks.json"]:
+                    mp = os.path.join(p, default_name)
+                    if os.path.exists(mp):
+                        try:
+                            with open(mp) as f:
+                                unique_cases.update(json.load(f).keys())
+                        except Exception:
+                            pass
+                n_cases = len(unique_cases)
                 self.metadata["project_details"][p] = {
                     "n_tracking_mf4": len(mf4s),
                     "n_avi": len(avis),

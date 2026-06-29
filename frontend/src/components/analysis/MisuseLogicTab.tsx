@@ -765,6 +765,7 @@ export function MisuseLogicTab() {
   const fetchSignalValues = async (filePath: string, signalName: string) => {
     const cacheKey = `${filePath}::${signalName}`;
     if (fetchingValues.has(cacheKey)) return;
+    if (signalValuesCacheRef.current[cacheKey]) return;
     fetchingValues.add(cacheKey);
     try {
       const res = await fetch("/api/analysis/signal_unique_values", {
@@ -783,20 +784,46 @@ export function MisuseLogicTab() {
     }
   };
 
-  // Fetch unique signal values when files are loaded or configuration changes
+  // Fetch unique signal values lazily — only for CHECKED signals (max 5),
+  // sequentially with concurrency limit to avoid overwhelming the backend
+  // with parallel MDF reads on large OM files.
   useEffect(() => {
     const activeFile = loadedFiles[activeCategory];
     if (!activeFile) return;
 
     const categorySignals = signalsConfig[activeCategory] || [];
-    categorySignals.forEach((sig) => {
-      if (sig && sig.name !== "SoundPressure") {
-        const cacheKey = `${activeFile}::${sig.name}`;
-        if (!signalValuesCacheRef.current[cacheKey] && !fetchingValues.has(cacheKey)) {
-          fetchSignalValues(activeFile, sig.name);
-        }
-      }
+    // Only fetch values for checked signals (max 5) — the rest don't need dropdowns
+    const checkedSignals = categorySignals.filter(
+      (sig) => sig && sig.checked && sig.name !== "SoundPressure"
+    );
+    const signalsToFetch = checkedSignals.filter((sig) => {
+      const cacheKey = `${activeFile}::${sig.name}`;
+      return !signalValuesCacheRef.current[cacheKey] && !fetchingValues.has(cacheKey);
     });
+
+    if (signalsToFetch.length === 0) return;
+
+    let cancelled = false;
+    const MAX_CONCURRENT = 2;
+
+    const fetchSequentially = async () => {
+      for (let i = 0; i < signalsToFetch.length; i += MAX_CONCURRENT) {
+        if (cancelled) return;
+        const batch = signalsToFetch.slice(i, i + MAX_CONCURRENT);
+        await Promise.all(
+          batch.map((sig) => {
+            if (cancelled) return Promise.resolve();
+            return fetchSignalValues(activeFile, sig.name);
+          })
+        );
+      }
+    };
+
+    fetchSequentially();
+
+    return () => {
+      cancelled = true;
+    };
   // signalValuesCache intentionally excluded — read via ref to break self-trigger loop
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory, loadedFiles, signalsConfig]);
@@ -877,10 +904,7 @@ export function MisuseLogicTab() {
         setLoadedFiles((prev) => ({ ...prev, [activeCategory]: filePath }));
         toast.dismiss(toastId);
         toast.success(`Loaded channels for ${activeCategory}.`);
-        // Background: fetch unique threshold values for all non-SoundPressure signals
-        rebuiltList
-          .filter((s) => s.name !== "SoundPressure")
-          .forEach((s) => fetchSignalValues(filePath, s.name));
+        // Signal values are fetched lazily by the useEffect for checked signals only
       } else {
         toast.dismiss(toastId);
         toast.error("Failed to read channels from selected file.");
@@ -1258,7 +1282,7 @@ export function MisuseLogicTab() {
                   <DropdownMenuSeparator className="bg-border" />
 
                   <DropdownMenuItem
-                    onClick={() => autoLoadChannelsAndMerge()}
+                    onClick={() => autoLoadChannelsAndMerge(undefined, undefined, undefined, true)}
                     className="text-sm gap-2 cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> Auto-Load data

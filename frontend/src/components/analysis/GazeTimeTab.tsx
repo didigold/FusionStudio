@@ -415,14 +415,14 @@ export function GazeTimeTab() {
         if (idx === -1) return prev;
         const next = [...prev];
         next.splice(idx, 1);
-        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
+        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
         return next;
       });
     } else if (action.type === 'remove') {
       const t = action.data.time;
       setMarks(prev => {
         const next = [...prev, t].sort((a, b) => a - b);
-        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
+        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
         return next;
       });
     } else if (action.type === 'move') {
@@ -433,7 +433,7 @@ export function GazeTimeTab() {
         if (idx >= 0) {
           next[idx] = oldTime;
           next.sort((a, b) => a - b);
-          if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
+          if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
         }
         return next;
       });
@@ -478,7 +478,7 @@ export function GazeTimeTab() {
            }
         }
       });
-      analysisApi.loadMarks(targetFile, analysisSourcePath).then(res => {
+      analysisApi.loadMarks(targetFile, analysisSourcePath, 'GA').then(res => {
         if (res.data.status === 'success' && Array.isArray(res.data.marks)) setMarks(res.data.marks);
         else setMarks([]);
       });
@@ -578,7 +578,7 @@ export function GazeTimeTab() {
     undoStackRef.current.push({type: 'clear', data: {marks: [...marksRef.current]}});
     setUndoCount(undoStackRef.current.length);
     setMarks([]);
-    if (targetFile) analysisApi.saveMarks(targetFile, [], analysisSourcePath).catch(() => {});
+    if (targetFile) analysisApi.saveMarks(targetFile, [], analysisSourcePath, 'GA').catch(() => {});
   }, [targetFile, analysisSourcePath]);
 
   const clearLastMark = useCallback(() => {
@@ -588,7 +588,7 @@ export function GazeTimeTab() {
       addToUndoStack({type: 'remove', data: {time: removed}});
       const newMarks = current.slice(0, -1);
       setMarks(newMarks);
-      if (targetFile) analysisApi.saveMarks(targetFile, newMarks, analysisSourcePath).catch(() => {});
+      if (targetFile) analysisApi.saveMarks(targetFile, newMarks, analysisSourcePath, 'GA').catch(() => {});
     }
   }, [targetFile, addToUndoStack, analysisSourcePath]);
 
@@ -601,7 +601,7 @@ export function GazeTimeTab() {
       const idx = next.indexOf(removed);
       if (idx === -1) return prev;
       next.splice(idx, 1);
-      if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
+      if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
       return next;
     });
   }, [targetFile, addToUndoStack, analysisSourcePath]);
@@ -628,7 +628,7 @@ export function GazeTimeTab() {
     addToUndoStack({type: 'add', data: {time: t}});
     setMarks(prev => {
         const next = [...prev, t].sort((a, b) => a - b);
-        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
+        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
         return next;
     });
   }, [targetFile, addToUndoStack, analysisSourcePath]);
@@ -806,7 +806,7 @@ export function GazeTimeTab() {
                 const next = prev.filter(t => Math.abs(t - startVal) > 0.0001);
                 next.push(newVal);
                 next.sort((a, b) => a - b);
-                if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
+                if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
                 return next;
               });
             }

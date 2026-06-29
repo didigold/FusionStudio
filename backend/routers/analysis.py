@@ -32,6 +32,7 @@ class ScanRequest(BaseModel):
 class SignalPreviewRequest(BaseModel):
     file_path: str
     source_dir: str = ""
+    marks_type: str = "OM"
 
 
 class SignalDataRequest(BaseModel):
@@ -84,6 +85,7 @@ class MarksRequest(BaseModel):
     file_path: str
     source_dir: str = ""
     marks: list[float]
+    marks_type: str = "OM"
 
 
 _active_worker: ChronosWorker | None = None
@@ -96,10 +98,25 @@ def _scan_analysis_dir(source_dir: str, marks_path: str | None = None) -> list:
 
     marks_keys: set[str] = set()
     try:
-        mp = marks_path or os.path.join(source_dir, "marks.json")
-        if os.path.exists(mp):
-            with open(mp, encoding="utf-8") as f:
-                marks_keys = set(json.load(f).keys())
+        if marks_path:
+            if os.path.exists(marks_path):
+                with open(marks_path, encoding="utf-8") as f:
+                    marks_keys = set(json.load(f).keys())
+        else:
+            for default_name in ["GA_marks.json", "OM_marks.json", "marks.json"]:
+                mp = os.path.join(source_dir, default_name)
+                if os.path.exists(mp):
+                    try:
+                        with open(mp, encoding="utf-8") as f:
+                            data = json.load(f)
+                            if default_name == "OM_marks.json":
+                                for k, v in data.items():
+                                    if isinstance(v, list) and len(v) > 0 and v[0] != -1.0:
+                                        marks_keys.add(k)
+                            else:
+                                marks_keys.update(data.keys())
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -715,13 +732,18 @@ def _get_marks_key(file_path: str) -> str:
     return "/".join(parts[-3:])
 
 
-def _load_marks_dict(source_dir: str) -> dict:
-    """Read marks.json from source_dir, return {} on any failure."""
+def _load_marks_dict(source_dir: str, marks_type: str = "OM") -> dict:
+    """Read specific marks dict from source_dir, falls back to legacy marks.json."""
     if not source_dir:
         return {}
-    mp = os.path.join(source_dir, "marks.json")
+    filename = "GA_marks.json" if marks_type == "GA" else "OM_marks.json"
+    mp = os.path.join(source_dir, filename)
     if not os.path.exists(mp):
-        return {}
+        # Fallback to legacy marks.json
+        legacy_mp = os.path.join(source_dir, "marks.json")
+        if not os.path.exists(legacy_mp):
+            return {}
+        mp = legacy_mp
     try:
         with open(mp, encoding="utf-8") as f:
             return json.load(f)
@@ -729,34 +751,36 @@ def _load_marks_dict(source_dir: str) -> dict:
         return {}
 
 
-def _save_marks_dict(source_dir: str, marks: dict):
-    """Write marks.json to source_dir."""
-    mp = os.path.join(source_dir, "marks.json")
+def _save_marks_dict(source_dir: str, marks: dict, marks_type: str = "OM"):
+    """Write marks dict to specific file in source_dir."""
+    filename = "GA_marks.json" if marks_type == "GA" else "OM_marks.json"
+    mp = os.path.join(source_dir, filename)
     with open(mp, "w", encoding="utf-8") as f:
         json.dump(marks, f, indent=2)
 
 
 @router.post("/marks/save")
 async def save_marks(req: MarksRequest):
-    """Save marks to source_dir/marks.json (original app format)."""
+    """Save marks to specific json file based on marks_type."""
     try:
-        marks_dict = _load_marks_dict(req.source_dir)
+        marks_dict = _load_marks_dict(req.source_dir, req.marks_type)
         key = _get_marks_key(req.file_path)
         if req.marks:
             marks_dict[key] = req.marks
         elif key in marks_dict:
             del marks_dict[key]
-        _save_marks_dict(req.source_dir, marks_dict)
-        return {"status": "success", "path": os.path.join(req.source_dir, "marks.json")}
+        _save_marks_dict(req.source_dir, marks_dict, req.marks_type)
+        filename = "GA_marks.json" if req.marks_type == "GA" else "OM_marks.json"
+        return {"status": "success", "path": os.path.join(req.source_dir, filename)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
 @router.post("/marks/load")
 async def load_marks(req: SignalPreviewRequest):
-    """Load marks from source_dir/marks.json for the given file."""
+    """Load marks from specific json file based on marks_type."""
     try:
-        marks_dict = _load_marks_dict(req.source_dir)
+        marks_dict = _load_marks_dict(req.source_dir, req.marks_type)
         key = _get_marks_key(req.file_path)
         # Try both _tracking and non-tracking variants
         entry = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []

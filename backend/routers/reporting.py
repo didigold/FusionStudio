@@ -989,14 +989,16 @@ async def gaze_preview(req: GazePreviewRequest):
         if not source_dir:
             curr = os.path.dirname(req.file_path)
             while curr and curr != os.path.dirname(curr):
-                if os.path.exists(os.path.join(curr, "marks.json")):
+                if (os.path.exists(os.path.join(curr, "GA_marks.json")) or 
+                    os.path.exists(os.path.join(curr, "OM_marks.json")) or 
+                    os.path.exists(os.path.join(curr, "marks.json"))):
                     source_dir = curr
                     break
                 curr = os.path.dirname(curr)
             if not source_dir:
                 source_dir = os.path.dirname(req.file_path)
 
-        marks_dict = _load_marks_dict(source_dir)
+        marks_dict = _load_marks_dict(source_dir, "GA")
         key = _get_marks_key(req.file_path)
         driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
         if not isinstance(driver_marks, list):
@@ -1084,14 +1086,16 @@ async def gaze_generate(req: GazeGenerateRequest):
                         if not source_dir:
                             curr = os.path.dirname(file_path)
                             while curr and curr != os.path.dirname(curr):
-                                if os.path.exists(os.path.join(curr, "marks.json")):
+                                if (os.path.exists(os.path.join(curr, "GA_marks.json")) or 
+                                    os.path.exists(os.path.join(curr, "OM_marks.json")) or 
+                                    os.path.exists(os.path.join(curr, "marks.json"))):
                                     source_dir = curr
                                     break
                                 curr = os.path.dirname(curr)
                             if not source_dir:
                                 source_dir = os.path.dirname(file_path)
 
-                        marks_dict = _load_marks_dict(source_dir)
+                        marks_dict = _load_marks_dict(source_dir, "GA")
                         key = _get_marks_key(file_path)
                         driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
                         if not isinstance(driver_marks, list):

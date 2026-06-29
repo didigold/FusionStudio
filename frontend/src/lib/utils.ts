@@ -28,15 +28,21 @@ export function getOmScenarioName(filePath: string): string {
 
 export function getOmScenarioCategory(filePath: string): string | null {
   if (!filePath) return null;
-  const path = filePath.toLowerCase();
+  const path = filePath.replace(/\\/g, '/').toLowerCase();
   
-  if (path.includes('out of position')) {
-    if (path.includes('initial phase')) return 'OoP — Initial Phase';
-    if (path.includes('change of status')) return 'OoP — Change of Status';
-    if (path.includes('15 minutes warning')) return 'OoP — 15 min Warning';
-  } else if (path.includes('correct seatbelt routing') || path.includes('correct belt routing')) {
-    if (path.includes('initial phase')) return 'CSR — Initial Phase';
-    if (path.includes('change of status')) return 'CSR — Change of Status';
+  if (path.includes('out of position') || path.includes('oop')) {
+    if (path.includes('initial phase') || path.includes('initial_phase')) return 'OoP \u2014 Initial Phase';
+    if (path.includes('change of status') || path.includes('change_of_status')) return 'OoP \u2014 Change of Status';
+    if (path.includes('15 minutes') || path.includes('15 min') || path.includes('15_minutes')) return 'OoP \u2014 15 min Warning';
+  } else if (
+    path.includes('correct belt') ||
+    path.includes('correct_belt') ||
+    path.includes('csr') ||
+    path.includes('seatbelt') ||
+    path.includes('belt routing')
+  ) {
+    if (path.includes('initial phase') || path.includes('initial_phase')) return 'CSR \u2014 Initial Phase';
+    if (path.includes('change of status') || path.includes('change_of_status')) return 'CSR \u2014 Change of Status';
   }
   
   return null;
