@@ -271,6 +271,8 @@ interface AppState {
   setSignalFilter: (f: string) => void
 
   // Analysis state
+  analysisActiveTab: string
+  setAnalysisActiveTab: (tab: string) => void
   analysisResults: any[]
   analysisSourcePath: string
   setAnalysisSourcePath: (p: string) => void
@@ -464,6 +466,9 @@ export const useAppStore = create<AppState>((set) => ({
   setSystemStats: (stats) => set({ systemStats: stats }),
   sourcePath: '',
   setSourcePath: (path) => set({ sourcePath: path }),
+
+  analysisActiveTab: 'audio',
+  setAnalysisActiveTab: (tab) => set({ analysisActiveTab: tab }),
 
   participants: [],
   setParticipants: (p) => set({ participants: p }),

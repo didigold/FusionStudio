@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAppStore } from "../store/useAppStore";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useFuseWebSocket } from "../hooks/useFuseWebSocket";
 import {
   Play,
@@ -70,6 +71,8 @@ export default function FuseTab() {
   const [loadingSignals, setLoadingSignals] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [comboboxOpen, setComboboxOpen] = useState(false);
+  
+  const parentRef = useRef<HTMLDivElement>(null);
 
   const allChecked =
     participants.length > 0 && participants.every((p) => p.checked);
@@ -299,8 +302,15 @@ export default function FuseTab() {
     };
   };
 
+  const rowVirtualizer = useVirtualizer({
+    count: filteredSignals.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 36, // Approximated row height
+    overscan: 10,
+  });
+
   return (
-    <div className="flex h-full overflow-hidden divide-x divide-border bg-background">
+    <div className="flex h-full overflow-hidden divide-x divide-border">
       {/* ───── Left Column: Processing Sandbox ───── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Header */}
@@ -355,7 +365,7 @@ export default function FuseTab() {
           <div className="w-6 shrink-0" /> {/* checkbox space */}
           <div className="w-7 shrink-0" /> {/* chevron space */}
           <div className="flex-1 font-medium pl-1">Participant</div>
-          <div className="w-48 font-medium">Status</div>
+          <div className="w-72 font-medium">Status</div>
         </div>
 
         {/* Participant List */}
@@ -420,7 +430,7 @@ export default function FuseTab() {
                   </div>
 
                   {/* Status badges */}
-                  <div className="w-48">
+                  <div className="w-72">
                     <div className="flex items-center gap-2">
                       <div
                         className="w-2 h-2 rounded-full shrink-0"
@@ -434,7 +444,7 @@ export default function FuseTab() {
                         <div className="flex items-center gap-2.5 text-muted-foreground">
                           {parsed.files && (
                             <div
-                              className="flex items-center gap-1.5 w-14 shrink-0"
+                              className="flex items-center gap-1.5 shrink-0"
                               title="Satellite files fused"
                             >
                               <Box className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80 shrink-0" />
@@ -445,7 +455,7 @@ export default function FuseTab() {
                           )}
                           {parsed.vids && (
                             <div
-                              className="flex items-center gap-1.5 w-14 shrink-0"
+                              className="flex items-center gap-1.5 shrink-0"
                               title="Tracking videos"
                             >
                               <Clapperboard className="w-3.5 h-3.5 text-muted-foreground/70 dark:text-foreground/80 shrink-0" />
@@ -456,7 +466,7 @@ export default function FuseTab() {
                           )}
                           {hasMasters && (
                             <div
-                              className="flex items-center gap-1.5 w-10 shrink-0"
+                              className="flex items-center gap-1.5 shrink-0"
                               title={`${p.masters.length} master file(s)`}
                             >
                               <Crown className="w-3.5 h-3.5 text-amber-900 dark:text-amber-300 shrink-0" />
@@ -549,7 +559,7 @@ export default function FuseTab() {
       <div className="flex flex-col w-96 overflow-hidden divide-y divide-border shrink-0 bg-surface-1/10">
         {/* Signal Selection */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-6 border-b border-border bg-surface-2/30">
+          <div className="pt-4 px-6 pb-3 bg-surface-2/30">
             <div className="flex items-center gap-2 mb-4">
               <span className="font-bold text-foreground">Signals</span>
               {loadingSignals && (
@@ -672,25 +682,40 @@ export default function FuseTab() {
           </div>
 
           {/* Signals list */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-            {filteredSignals.map((sig) => (
-              <div
-                key={sig.name}
-                onClick={() => toggleSignal(sig.name)}
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-surface-3 cursor-pointer group"
-              >
-                <span className="text-xs text-foreground truncate flex-1 pr-2">
-                  {sig.name}
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={sig.checked}
-                    onCheckedChange={() => toggleSignal(sig.name)}
-                    className="w-3.5 h-3.5 border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                  />
-                </div>
-              </div>
-            ))}
+          <div ref={parentRef} className="flex-1 overflow-y-auto custom-scrollbar p-2">
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const sig = filteredSignals[virtualRow.index];
+                return (
+                  <div
+                    key={sig.name}
+                    onClick={() => toggleSignal(sig.name)}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-surface-3 cursor-pointer group absolute top-0 left-0 w-full"
+                    style={{
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <span className="text-xs text-foreground truncate flex-1 pr-2">
+                      {sig.name}
+                    </span>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={sig.checked}
+                        onCheckedChange={() => toggleSignal(sig.name)}
+                        className="w-3.5 h-3.5 border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
             {filteredSignals.length === 0 && (
               <div className="text-xs text-muted-foreground italic p-4 text-center">
                 No signals loaded.

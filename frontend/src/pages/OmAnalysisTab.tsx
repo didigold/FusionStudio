@@ -6,7 +6,7 @@ export default function OmAnalysisTab() {
   const [activeTab, setActiveTab] = useState<'time' | 'logic'>('time')
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-background">
+    <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2 p-2 border-b border-border/50 bg-surface-2/30 shrink-0">
         <button
           onClick={() => setActiveTab('time')}

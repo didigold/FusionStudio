@@ -305,25 +305,76 @@ def _list_directory(path: str, show_files: bool = False, file_extension: str | N
 
     if not path or not os.path.exists(path):
         shortcuts = []
-        home = os.path.expanduser("~")
-        common = [
-            ("Desktop", os.path.join(home, "Desktop")),
-            ("Downloads", os.path.join(home, "Downloads")),
-            ("Documents", os.path.join(home, "Documents")),
-        ]
-        for name, p in common:
-            if os.path.exists(p):
-                shortcuts.append({"name": name, "is_dir": True, "is_shortcut": True, "full_path": p})
-
         if platform.system() == "Windows":
+            try:
+                import win32com.client
+                shell = win32com.client.Dispatch("Shell.Application")
+                qa = shell.Namespace("shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}")
+                if qa:
+                    seen = set()
+                    for item in qa.Items():
+                        if item.IsFolder:
+                            p = item.Path
+                            if p and os.path.exists(p) and os.path.isdir(p) and p.lower() not in seen:
+                                is_pinned = False
+                                try:
+                                    is_pinned = item.ExtendedProperty("System.Home.IsPinned")
+                                except Exception:
+                                    pass
+                                if is_pinned:
+                                    seen.add(p.lower())
+                                    shortcuts.append({"name": item.Name, "is_dir": True, "is_shortcut": True, "full_path": p})
+            except Exception as e:
+                logger.warning(f"Failed to fetch Quick Access folders: {e}")
+            
+            if not shortcuts:
+                # Fallback to standard folders
+                home = os.path.expanduser("~")
+                common = [
+                    ("Desktop", os.path.join(home, "Desktop")),
+                    ("Downloads", os.path.join(home, "Downloads")),
+                    ("Documents", os.path.join(home, "Documents")),
+                ]
+                for name, p in common:
+                    if os.path.exists(p):
+                        shortcuts.append({"name": name, "is_dir": True, "is_shortcut": True, "full_path": p})
+
             import string
+            import ctypes
             drives = []
+            kernel32 = ctypes.windll.kernel32
             for d in string.ascii_uppercase:
                 drive = f"{d}:\\"
                 if os.path.exists(drive):
-                    drives.append({"name": drive, "is_dir": True, "is_drive": True})
+                    drive_name = ""
+                    try:
+                        volume_name_buffer = ctypes.create_unicode_buffer(1024)
+                        result = kernel32.GetVolumeInformationW(
+                            ctypes.c_wchar_p(drive),
+                            volume_name_buffer,
+                            ctypes.sizeof(volume_name_buffer),
+                            None, None, None, None, 0
+                        )
+                        if result and volume_name_buffer.value:
+                            drive_name = f"{volume_name_buffer.value} ({d}:)"
+                        else:
+                            drive_name = drive
+                    except Exception:
+                        drive_name = drive
+
+                    drives.append({"name": drive_name, "is_dir": True, "is_drive": True, "full_path": drive})
             return {"path": "", "entries": shortcuts + drives}
-        return {"path": "/", "entries": shortcuts + [{"name": "/", "is_dir": True, "is_drive": True}]}
+        else:
+            home = os.path.expanduser("~")
+            common = [
+                ("Desktop", os.path.join(home, "Desktop")),
+                ("Downloads", os.path.join(home, "Downloads")),
+                ("Documents", os.path.join(home, "Documents")),
+            ]
+            for name, p in common:
+                if os.path.exists(p):
+                    shortcuts.append({"name": name, "is_dir": True, "is_shortcut": True, "full_path": p})
+            return {"path": "/", "entries": shortcuts + [{"name": "/", "is_dir": True, "is_drive": True}]}
 
     try:
         entries = []

@@ -105,6 +105,20 @@ class PreviewSignalsWorker:
         self.on_error = on_error
 
     def run(self):
+        import os
+        import json
+        
+        cache_path = self.file_path + ".signals.json"
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if self.on_finished:
+                    self.on_finished(data)
+                return data
+            except Exception:
+                pass  # Fallback to parsing MF4 if cache read fails
+
         from asammdf import MDF
         try:
             data = []
@@ -125,6 +139,13 @@ class PreviewSignalsWorker:
                             pass
                         data.append({"name": name, "count": count, "group": source_name, "g_idx": g_idx, "c_idx": c_idx})
             data.sort(key=lambda x: x["name"])
+            
+            try:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+            except Exception:
+                pass
+
             if self.on_finished:
                 self.on_finished(data)
             return data

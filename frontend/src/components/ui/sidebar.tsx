@@ -6,8 +6,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 const SIDEBAR_COOKIE_NAME = "sidebar:state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
-// const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
+const SIDEBAR_WIDTH_ICON = "3.5rem"
 
 type SidebarContext = {
   state: "expanded" | "collapsed"
@@ -70,7 +69,7 @@ SidebarProvider.displayName = "SidebarProvider"
 const Sidebar = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & { collapsible?: "offcanvas" | "icon" | "none" }
->(({ collapsible = "icon", className, children, ...props }, ref) => {
+>(({ collapsible = "icon", className, style, children, ...props }, ref) => {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
   if (collapsible === "none") {
@@ -107,9 +106,13 @@ const Sidebar = React.forwardRef<
     <div
       ref={ref}
       data-state={state}
+      style={{
+        width: state === "expanded" ? "var(--sidebar-width)" : "var(--sidebar-width-icon)",
+        transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+        ...style
+      }}
       className={cn(
-        "flex h-full flex-col bg-surface-2 border-r border-border/50 transition-[width] duration-300",
-        state === "expanded" ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]",
+        "flex h-full flex-col bg-surface-2 border-r border-border/50 overflow-x-hidden",
         className
       )}
       {...props}
@@ -136,7 +139,7 @@ SidebarFooter.displayName = "SidebarFooter"
 
 const SidebarContent = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex-1 overflow-auto px-4 py-2 [overflow-anchor:none]", className)} {...props} />
+    <div ref={ref} className={cn("flex-1 overflow-auto px-2 py-3 [overflow-anchor:none]", className)} {...props} />
   )
 )
 SidebarContent.displayName = "SidebarContent"
@@ -157,7 +160,7 @@ SidebarGroupLabel.displayName = "SidebarGroupLabel"
 
 const SidebarMenu = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex flex-col gap-0.5", className)} {...props} />
+    <div ref={ref} className={cn("flex flex-col gap-1.5", className)} {...props} />
   )
 )
 SidebarMenu.displayName = "SidebarMenu"
@@ -170,16 +173,16 @@ const SidebarMenuItem = React.forwardRef<HTMLDivElement, React.ComponentProps<"d
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  "inline-flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium w-full transition-all duration-200 hover:bg-surface-2/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0 select-none",
+  "inline-flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium w-full transition-all duration-200 hover:bg-[#E6E4E1]/10 dark:hover:bg-[#E6E4E1]/20 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0 select-none",
   {
     variants: {
       variant: {
         default: "text-muted-foreground [&:active]:outline-none [&:active]:ring-0",
-        active: "bg-surface-2 text-foreground shadow-sm [&:active]:outline-none [&:active]:ring-0",
+        active: "bg-[#E6E4E1] text-[#111110] [&:active]:outline-none [&:active]:ring-0",
       },
       size: {
         default: "h-9",
-        sm: "h-8 text-sm",
+        sm: "h-9 text-sm",
         lg: "h-10",
       },
     },
@@ -200,6 +203,7 @@ interface Ripple {
 
 const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
   ({ asChild = false, variant, size, className, onClick, children, ...props }, ref) => {
+    const { open: sidebarOpen } = useSidebar()
     const [ripples, setRipples] = React.useState<Ripple[]>([])
 
     const createRipple = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -237,7 +241,11 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonP
       return (
         <Comp 
           ref={ref} 
-          className={cn(sidebarMenuButtonVariants({ variant, size }), className)} 
+          className={cn(
+            sidebarMenuButtonVariants({ variant, size }), 
+            !sidebarOpen && "flex w-10 h-10 p-0 justify-center mx-auto rounded-lg [&>span]:justify-center [&>span]:gap-0",
+            className
+          )} 
           {...props} 
           onClick={handleClick} 
         />
@@ -247,7 +255,12 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonP
     return (
       <Comp
         ref={ref}
-        className={cn(sidebarMenuButtonVariants({ variant, size }), "relative overflow-hidden", className)}
+        className={cn(
+          sidebarMenuButtonVariants({ variant, size }), 
+          "relative overflow-hidden", 
+          !sidebarOpen && "flex w-10 h-10 p-0 justify-center mx-auto rounded-lg [&>span]:justify-center [&>span]:gap-0",
+          className
+        )}
         onClick={handleClick}
         onPointerDown={(e) => { e.preventDefault(); props.onPointerDown?.(e) }}
         {...props}

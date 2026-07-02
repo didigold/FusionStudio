@@ -330,32 +330,10 @@ export function TopNav() {
           animation: sun-spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
       `}</style>
-      <header className="relative w-full h-[52px] border-b border-border bg-background flex items-center justify-between px-8 z-40 sticky top-0">
-        {/* Left Side: Brand Logo and Text */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <img
-            src="/assets/icon.ico"
-            alt="FusionStudio Logo"
-            className="w-6 h-6 object-contain transition-all duration-300"
-            style={{
-              filter: isDark 
-                ? "brightness(1.1) drop-shadow(0 0 6px rgba(255, 255, 255, 0.2))" 
-                : "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15))"
-            }}
-          />
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-extrabold text-foreground tracking-wide">
-              FusionStudio
-            </span>
-            <span className="text-sm text-muted-foreground font-medium">|</span>
-            <img
-              src="/assets/logos/APPLUS+IDIADA.png"
-              alt="Applus Idiada"
-              className="h-[28px] object-contain opacity-80"
-              style={{ filter: isDark ? "brightness(0) invert(1)" : "brightness(0)" }}
-            />
-          </div>
-        </div>
+      <header className="relative w-full h-[52px] bg-background flex items-center justify-between px-8 z-40 sticky top-0">
+        {/* Left Side: Empty placeholder (previously Applus Idiada Logo) */}
+        <div className="flex items-center gap-2.5 shrink-0 select-none w-10 h-9" />
+
 
         {/* Center: Data Source Input Area (Fixed Position) */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">

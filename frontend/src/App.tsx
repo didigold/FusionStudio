@@ -6,6 +6,8 @@ import AnalysisTab from './pages/AnalysisTab'
 import { TopNav } from './components/layout/TopNav'
 import { useSystemWebSocket } from './components/layout/SystemBadge'
 import { Toaster } from './components/ui/sonner'
+import { SidebarProvider } from './components/ui/sidebar'
+import { AnalysisSidebar } from './components/analysis/AnalysisSidebar'
 
 export default function App() {
   useSystemWebSocket()
@@ -21,21 +23,27 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden font-['Sofia_Sans'] relative">
-        <TopNav />
-        <Toaster />
+      <SidebarProvider defaultOpen={false} className="h-screen min-h-0 font-['Sofia_Sans']">
+        {/* App-level sidebar */}
+        <AnalysisSidebar />
 
-        {/* Main Content Area (padded top to account for the new header) */}
-        <div className="flex flex-1 overflow-hidden pt-6 px-12 pb-12">
-          <main className="flex-1 relative">
-            <Routes>
-              <Route path="/" element={<AnalysisTab />} />
-              <Route path="/analysis" element={<AnalysisTab />} />
-              <Route path="*" element={<AnalysisTab />} />
-            </Routes>
-          </main>
+        {/* Right side: TopNav + Content */}
+        <div className="flex flex-col flex-1 min-w-0 h-screen bg-background text-foreground overflow-hidden relative">
+          <TopNav />
+          <Toaster />
+
+          {/* Main Content Area */}
+          <div className="flex flex-1 overflow-hidden pt-2 px-4 pb-4">
+            <main className="flex-1 relative">
+              <Routes>
+                <Route path="/" element={<AnalysisTab />} />
+                <Route path="/analysis" element={<AnalysisTab />} />
+                <Route path="*" element={<AnalysisTab />} />
+              </Routes>
+            </main>
+          </div>
         </div>
-      </div>
+      </SidebarProvider>
     </BrowserRouter>
   )
-}
+}

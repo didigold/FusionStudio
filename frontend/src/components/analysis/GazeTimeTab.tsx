@@ -929,7 +929,7 @@ export function GazeTimeTab() {
   }, [currentTime, updatePlayheadCursors]);
 
   return (
-    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden bg-white dark:bg-background">
+    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden">
       <style>{`
         .uplot .u-over { cursor: crosshair !important; }
         .uplot .u-select { background: rgba(0, 170, 255, 0.2) !important; }

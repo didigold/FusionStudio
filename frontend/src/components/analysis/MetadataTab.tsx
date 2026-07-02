@@ -111,7 +111,7 @@ export function MetadataTab() {
   const row5 = useMemo(() => allLogoItems.slice(96), [allLogoItems]);
 
   return (
-    <div className="relative flex items-center justify-center h-full min-h-0 overflow-y-auto p-8 bg-background">
+    <div className="relative flex items-center justify-center h-full min-h-0 overflow-y-auto p-8">
       
       {/* Background Logo Mosaic Layer */}
       <div className="absolute inset-0 z-0 flex flex-col justify-around pointer-events-none overflow-hidden opacity-[0.16] dark:opacity-[0.32] select-none py-8">

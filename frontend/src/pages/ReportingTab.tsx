@@ -95,7 +95,7 @@ export default function ReportingTab() {
   const showOptions = reportingTemplate?.toLowerCase().includes("driver_engagement") || reportingTemplate?.toLowerCase().includes("driver engagement");
 
   return (
-    <div className="relative flex flex-col items-center justify-center h-full min-h-0 overflow-y-auto p-8 bg-background">
+    <div className="relative flex flex-col items-center justify-center h-full min-h-0 overflow-y-auto p-8">
       
       {/* Background Dots Layer */}
       <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none overflow-hidden">

@@ -209,7 +209,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
   };
 
   return (
-    <div className="relative flex items-center justify-center h-full min-h-0 overflow-y-auto p-8 bg-background">
+    <div className="relative flex items-center justify-center h-full min-h-0 overflow-y-auto p-8">
       
       {/* Background Grid & Animation Layer */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">

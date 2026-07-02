@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Folder, HardDrive, Home, Monitor, Download, FileText, ChevronRight } from "lucide-react"
+import { Folder, HardDrive, Home, Monitor, Download, FileText, ChevronRight, Image, Music, Video } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,8 +28,17 @@ interface FolderBrowserProps {
 
 const shortcutIcons: Record<string, typeof Folder> = {
   Desktop: Monitor,
+  Escritorio: Monitor,
   Downloads: Download,
+  Descargas: Download,
   Documents: FileText,
+  Documentos: FileText,
+  Pictures: Image,
+  Imágenes: Image,
+  Music: Music,
+  Música: Music,
+  Videos: Video,
+  Vídeos: Video,
 }
 
 function entryIcon(entry: DirEntry) {
@@ -151,7 +160,7 @@ export function FolderBrowser({ open, onOpenChange, onSelect }: FolderBrowserPro
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Browse folders</DialogTitle>
         </DialogHeader>
@@ -225,7 +234,7 @@ export function FolderBrowser({ open, onOpenChange, onSelect }: FolderBrowserPro
           </Breadcrumb>
         </div>
 
-        <ScrollArea className="h-64 rounded-lg border border-white/5 bg-surface-3/30">
+        <ScrollArea className="h-[450px] rounded-lg border border-white/5 bg-surface-3/30">
           {error ? (
             <div className="flex items-center justify-center h-full text-sm text-red-400">{error}</div>
           ) : loading && currentPath ? (

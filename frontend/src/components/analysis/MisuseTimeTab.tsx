@@ -829,7 +829,7 @@ export function MisuseTimeTab() {
   }, [currentTime]);
 
   return (
-    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden bg-white dark:bg-background">
+    <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden">
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 bg-black overflow-hidden relative group flex flex-col h-full min-h-0">
             <div 
