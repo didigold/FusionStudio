@@ -249,6 +249,9 @@ interface AppState {
   masterFile: string
   setMasterFile: (f: string) => void
 
+  fuseSignalsCache: Record<string, SignalEntry[]>
+  setFuseSignalsCache: (cache: Record<string, SignalEntry[]>) => void
+
   fusionState: FusionState
   setFusionState: (s: FusionState) => void
   globalProgress: number
@@ -512,6 +515,9 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   masterFile: '',
   setMasterFile: (f) => set({ masterFile: f }),
+
+  fuseSignalsCache: {},
+  setFuseSignalsCache: (cache) => set({ fuseSignalsCache: cache }),
 
   fusionState: 'idle',
   setFusionState: (s) => set({ fusionState: s }),

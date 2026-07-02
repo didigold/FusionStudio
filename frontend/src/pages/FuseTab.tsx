@@ -60,6 +60,8 @@ export default function FuseTab() {
     setOverwriteMode,
     signalFilter,
     setSignalFilter,
+    fuseSignalsCache,
+    setFuseSignalsCache,
   } = useAppStore();
 
   // Removed useFuseWebSocket() - now managed at parent level in AnalysisTab.tsx to prevent tab-switch disconnects.
@@ -135,6 +137,14 @@ export default function FuseTab() {
 
   const handleLoadSignals = async (filePath: string) => {
     if (!filePath) return;
+    
+    // Use cached signals if available
+    if (fuseSignalsCache[filePath]) {
+      setSignals(fuseSignalsCache[filePath]);
+      addLog(`Loaded signals from cache for: ${filePath}`);
+      return;
+    }
+
     setLoadingSignals(true);
     addLog(`Loading signals from master: ${filePath}`);
     try {
@@ -144,9 +154,12 @@ export default function FuseTab() {
         body: JSON.stringify({ file_path: filePath }),
       });
       const data = await res.json();
-      setSignals(
-        (data.channels || []).map((ch: any) => ({ ...ch, checked: true })),
-      );
+      const newSignals = (data.channels || []).map((ch: any) => ({ ...ch, checked: true }));
+      
+      // Save to global state and cache
+      setSignals(newSignals);
+      setFuseSignalsCache({ ...fuseSignalsCache, [filePath]: newSignals });
+      
       addLog(`Loaded ${data.channels?.length || 0} signals.`);
     } catch (err) {
       addLog(`Error loading signals: ${err}`);
@@ -271,8 +284,9 @@ export default function FuseTab() {
     }
   }, [masterFile]);
 
+  const searchFilter = (signalFilter || "").trim().toLowerCase();
   const filteredSignals = signals.filter((s) =>
-    s.name.toLowerCase().includes(signalFilter.toLowerCase()),
+    (s.name || "").toLowerCase().includes(searchFilter),
   );
 
   const parseStatus = (statusText: string) => {
