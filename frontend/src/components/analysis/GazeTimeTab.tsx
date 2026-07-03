@@ -158,7 +158,9 @@ export function GazeTimeTab() {
   const videoFileName = useMemo(() => {
     if (!targetFile) return 'video.avi';
     const base = targetFile.replace('_tracking.mf4', '').replace('.mf4', '').split(/[\\/]/).pop();
-    return `${base}_cam${analysisSelectedCamera}.avi`;
+    const camId = analysisSelectedCamera;
+    const camSuffix = typeof camId === 'number' ? `cam${camId}` : String(camId);
+    return `${base}_${camSuffix}.avi`;
   }, [targetFile, analysisSelectedCamera]);
 
   const isPlayingRef = useRef(false);
@@ -492,7 +494,9 @@ export function GazeTimeTab() {
         else setMarks([]);
       });
       const baseName = targetFile.replace('_tracking.mf4', '').replace('.mf4', '');
-      const url = `/api/analysis/media?path=${encodeURIComponent(`${baseName}_cam${analysisSelectedCamera}.avi`)}`;
+      const camId = analysisSelectedCamera;
+      const camSuffix = typeof camId === 'number' ? `cam${camId}` : String(camId);
+      const url = `/api/analysis/media?path=${encodeURIComponent(`${baseName}_${camSuffix}.avi`)}`;
       
       setVideoUrl(null);
       setVideoLoading(true);

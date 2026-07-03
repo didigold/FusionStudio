@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import AnimatedList, { AnimatedItem } from "@/components/ui/AnimatedList"
 import { cn, getOmScenarioName } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
@@ -569,19 +570,20 @@ export default function AnalysisTab() {
                     </RadioGroup>
                   </div>
 
-                  <ScrollArea className="flex-1 bg-background/30 scroll-fade-mask relative">
+                  <AnimatedList className="flex-1 bg-background/30 relative">
                     <div className={cn("flex flex-col gap-0.5 p-2", analysisResults.length === 0 && "h-full min-h-[350px] justify-center items-center")}>
                       {analysisResults.map((res, i) => (
-                        <RecordingNode 
-                          key={i} 
-                          node={res} 
-                          selectedPath={analysisSelectedFile} 
-                          onSelect={selectFile} 
-                          checkedFilesSet={checkedFilesSet}
-                          onToggleCheck={toggleAnalysisFile}
-                          onToggleFolder={toggleFolder}
-                          expandedAll={analysisExpandedAll}
-                        />
+                        <AnimatedItem key={i} index={i} delay={0.05}>
+                          <RecordingNode 
+                            node={res} 
+                            selectedPath={analysisSelectedFile} 
+                            onSelect={selectFile} 
+                            checkedFilesSet={checkedFilesSet}
+                            onToggleCheck={toggleAnalysisFile}
+                            onToggleFolder={toggleFolder}
+                            expandedAll={analysisExpandedAll}
+                          />
+                        </AnimatedItem>
                       ))}
                       {analysisResults.length === 0 && (
                         <div className="flex flex-col items-center justify-center gap-4 select-none w-full relative">
@@ -602,7 +604,7 @@ export default function AnalysisTab() {
                         </div>
                       )}
                     </div>
-                  </ScrollArea>
+                  </AnimatedList>
 
                   <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between">
                      <div className="flex items-center gap-2">
