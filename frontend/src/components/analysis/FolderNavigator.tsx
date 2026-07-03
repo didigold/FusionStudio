@@ -229,7 +229,7 @@ export function FolderNavigator({
   };
 
   return (
-    <div className="bg-card/50 border border-border/50 rounded-3xl flex-1 overflow-hidden flex flex-col shadow-sm">
+    <div className="flex-1 overflow-hidden flex flex-col">
       <div className="p-4 border-b border-white/5 bg-surface-2/30 flex flex-col gap-4">
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-2">

@@ -53,6 +53,15 @@ import CountUp from '@/components/ui/CountUp';
 import ElasticSlider from '@/components/ui/ElasticSlider';
 import { motion } from 'framer-motion';
 
+const playSound = (src: string) => {
+  try {
+    const audio = new Audio(src);
+    audio.play().catch(e => console.error("Audio play error", e));
+  } catch (e) {
+    console.error("Audio creation error", e);
+  }
+};
+
 export function MisuseTimeTab() {
   const {
     analysisCheckedFiles,
@@ -144,6 +153,13 @@ export function MisuseTimeTab() {
   }, [targetFile]);
 
   const [activeMarkerType, setActiveMarkerType] = useState<'misuse' | 'warning'>('misuse');
+
+  const [isErrorShaking, setIsErrorShaking] = useState(false);
+  const triggerErrorFeedback = useCallback(() => {
+    playSound('/sounds/disabled.wav');
+    setIsErrorShaking(true);
+    setTimeout(() => setIsErrorShaking(false), 400);
+  }, []);
 
   useEffect(() => {
     setActiveMarkerType('misuse');
@@ -783,11 +799,29 @@ export function MisuseTimeTab() {
   }, [targetFile, analysisSourcePath]);
 
   const addMarkAtTime = useCallback((t: number) => {
+    let canAdd = false;
+    if (isInitialPhase) {
+      if (activeMarkerType === 'misuse') {
+        canAdd = marksRef.current[0] === undefined || marksRef.current[0] === -1.0;
+      } else {
+        canAdd = marksRef.current[1] === undefined || marksRef.current[1] === null;
+      }
+    } else {
+      canAdd = marksRef.current.length === 0 || marksRef.current[0] === -1.0;
+    }
+
+    if (!canAdd) {
+      triggerErrorFeedback();
+      return;
+    }
+
+    playSound('/sounds/tap_01.wav');
     setMarks(prev => {
       let next = [...prev];
       if (isInitialPhase) {
         if (activeMarkerType === 'misuse') {
           next[0] = t;
+          setTimeout(() => setActiveMarkerType('warning'), 0);
         } else {
           next[1] = t;
           if (next[0] === undefined || next[0] === null) {
@@ -800,7 +834,39 @@ export function MisuseTimeTab() {
       if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath).catch(() => {});
       return next;
     });
-  }, [targetFile, analysisSourcePath, isInitialPhase, activeMarkerType]);
+  }, [targetFile, analysisSourcePath, isInitialPhase, activeMarkerType, triggerErrorFeedback]);
+
+  const handleMarkDragStart = useCallback((e: React.PointerEvent, index: number) => {
+    e.stopPropagation();
+    const sliderEl = e.currentTarget.parentElement;
+    if (!sliderEl) return;
+    const rect = sliderEl.getBoundingClientRect();
+    
+    const handleMove = (moveEv: PointerEvent) => {
+        let x = moveEv.clientX - rect.left;
+        let percent = Math.max(0, Math.min(1, x / rect.width));
+        let newVal = percent * duration;
+        
+        setMarks(prev => {
+            const next = [...prev];
+            next[index] = newVal;
+            return next;
+        });
+        seekTo(newVal);
+    };
+    
+    const handleUp = () => {
+        window.removeEventListener('pointermove', handleMove);
+        window.removeEventListener('pointerup', handleUp);
+        setMarks(prev => {
+            if (targetFile) analysisApi.saveMarks(targetFile, prev, analysisSourcePath).catch(() => {});
+            return prev;
+        });
+    };
+    
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+  }, [duration, seekTo, targetFile, analysisSourcePath]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1041,36 +1107,7 @@ export function MisuseTimeTab() {
                                      <span className="text-[10px] font-bold uppercase tracking-widest text-white">Preparing Left Media ({Math.round(bufferedLeft)}%)...</span>
                                  </div>
                              )}
-                             {/* Visual Misuse Mark indicator on the video */}
-                              {marks.length > 0 && targetFile && marks[0] !== -1.0 && (
-                                <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-red-500/20 border border-red-500/50 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-lg">
-                                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                  <span className="text-xs font-bold text-white uppercase tracking-wider">Misuse Triggered At: <span className="text-red-400 font-mono ml-1">{marks[0].toFixed(2)}s</span></span>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-5 w-5 ml-2 hover:bg-red-500/20 rounded-full" 
-                                    onClick={(e) => { e.stopPropagation(); removeMark(0); }}
-                                  >
-                                    <Trash2 className="w-3 h-3 text-red-400" />
-                                  </Button>
-                                </div>
-                              )}
-                              {isInitialPhase && marks.length > 1 && targetFile && marks[1] !== undefined && marks[1] !== null && (
-                                <div className="absolute top-[52px] left-4 z-20 flex items-center gap-2 bg-amber-500/20 border border-amber-500/50 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-lg">
-                                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                  <span className="text-xs font-bold text-white uppercase tracking-wider">Warning Triggered At: <span className="text-amber-400 font-mono ml-1">{marks[1].toFixed(2)}s</span></span>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-5 w-5 ml-2 hover:bg-amber-500/20 rounded-full" 
-                                    onClick={(e) => { e.stopPropagation(); removeMark(1); }}
-                                  >
-                                    <Trash2 className="w-3 h-3 text-amber-400" />
-                                  </Button>
-                                </div>
-                              )}
-                         </>
+                          </>
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 animate-pulse-sync select-none">
                             {/* Ambient glow circle */}
@@ -1153,7 +1190,7 @@ export function MisuseTimeTab() {
                         <motion.button
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => setIsSwapped(!isSwapped)}
+                            onClick={() => { setIsSwapped(!isSwapped); playSound('/sounds/swipe_01.wav'); }}
                             className="w-12 h-12 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
                         >
                             <ArrowLeftRight className="w-5 h-5" />
@@ -1263,19 +1300,7 @@ export function MisuseTimeTab() {
                                      <span className="text-[10px] font-bold uppercase tracking-widest text-white">Preparing Right Media ({Math.round(bufferedRight)}%)...</span>
                                  </div>
                              )}
-                             {/* Visual Misuse Mark indicator on the video */}
-                             {marks.length > 0 && targetFile && marks[0] !== -1.0 && (
-                               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-red-500/20 border border-red-500/50 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-lg">
-                                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                 <span className="text-xs font-bold text-white uppercase tracking-wider">Misuse Triggered At: <span className="text-red-400 font-mono ml-1">{marks[0].toFixed(2)}s</span></span>
-                               </div>
-                             )}
-                             {isInitialPhase && marks.length > 1 && targetFile && marks[1] !== undefined && marks[1] !== null && (
-                               <div className="absolute top-[52px] left-4 z-20 flex items-center gap-2 bg-amber-500/20 border border-amber-500/50 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-lg">
-                                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                 <span className="text-xs font-bold text-white uppercase tracking-wider">Warning Triggered At: <span className="text-amber-400 font-mono ml-1">{marks[1].toFixed(2)}s</span></span>
-                               </div>
-                             )}
+                             {/* Visual Misuse Mark indicator on the video (Removed to center banner below) */}
                          </>
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 animate-pulse-sync select-none">
@@ -1343,9 +1368,72 @@ export function MisuseTimeTab() {
                         </div>
                     </div>
                 </motion.div>
+
+                {/* Centralized Bottom Banners */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-col md:flex-row gap-3 pointer-events-none">
+                    {marks.length > 0 && targetFile && marks[0] !== -1.0 && (
+                      <motion.div 
+                        initial="default"
+                        whileHover="hover"
+                        onMouseEnter={() => setIsHoveringVideo(false)}
+                        onMouseLeave={() => setIsHoveringVideo(true)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 bg-red-500/20 border border-red-500/50 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-lg pointer-events-auto cursor-default"
+                      >
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">
+                          Misuse Triggered At: <span className="text-red-400 font-mono ml-1">{marks[0].toFixed(2)}s</span>
+                        </span>
+                        <motion.div
+                          variants={{ hover: { width: "auto", opacity: 1, marginLeft: 8 }, default: { width: 0, opacity: 0, marginLeft: 0 } }}
+                          className="overflow-hidden flex items-center justify-center"
+                        >
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 hover:bg-red-500/20 rounded-full shrink-0" 
+                            onClick={(e) => { e.stopPropagation(); removeMark(0); }}
+                          >
+                            <Trash2 className="w-3 h-3 text-red-400" />
+                          </Button>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                    {isInitialPhase && marks.length > 1 && targetFile && marks[1] !== undefined && marks[1] !== null && (
+                      <motion.div 
+                        initial="default"
+                        whileHover="hover"
+                        onMouseEnter={() => setIsHoveringVideo(false)}
+                        onMouseLeave={() => setIsHoveringVideo(true)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 bg-amber-500/20 border border-amber-500/50 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-lg pointer-events-auto cursor-default"
+                      >
+                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider whitespace-nowrap">
+                          Warning Triggered At: <span className="text-amber-400 font-mono ml-1">{marks[1].toFixed(2)}s</span>
+                        </span>
+                        <motion.div
+                          variants={{ hover: { width: "auto", opacity: 1, marginLeft: 8 }, default: { width: 0, opacity: 0, marginLeft: 0 } }}
+                          className="overflow-hidden flex items-center justify-center"
+                        >
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 hover:bg-amber-500/20 rounded-full shrink-0" 
+                            onClick={(e) => { e.stopPropagation(); removeMark(1); }}
+                          >
+                            <Trash2 className="w-3 h-3 text-amber-400" />
+                          </Button>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                </div>
+
             </div>
             
-            <div className="h-24 border-t border-border pt-4 pb-2 px-3 shrink-0 flex flex-col justify-between bg-white dark:bg-surface-ink relative z-30 shadow-2xl">
+            <div className="h-24 border-t border-border pt-4 pb-2 px-3 shrink-0 flex flex-col justify-between bg-white dark:bg-surface-ink relative z-30 shadow-2xl rounded-br-3xl">
                 <div className="flex items-center gap-3 w-full px-[5%]">
                     <div className="flex-1 min-w-0 relative flex items-center group">
                         <ElasticSlider 
@@ -1383,17 +1471,23 @@ export function MisuseTimeTab() {
                                     {/* Render Marks on the timeline */}
                                     {marks.length > 0 && targetFile && duration > 0 && marks[0] !== -1.0 && (
                                       <div 
-                                        className="absolute top-1/2 -translate-y-1/2 w-[3px] h-3 bg-red-500 z-10 pointer-events-none rounded-full"
+                                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-[60] cursor-ew-resize py-2 px-1.5 group/mark touch-none pointer-events-auto"
                                         style={{ left: `${marks[0] / duration * 100}%` }}
-                                        title="Misuse Mark"
-                                      />
+                                        onPointerDown={(e) => handleMarkDragStart(e, 0)}
+                                        title="Misuse Mark (Drag to adjust)"
+                                      >
+                                        <div className="w-[3px] h-3 bg-red-500 rounded-full group-hover/mark:scale-[2.3] transition-transform shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                                      </div>
                                     )}
                                     {isInitialPhase && marks.length > 1 && targetFile && duration > 0 && marks[1] !== undefined && marks[1] !== null && (
                                       <div 
-                                        className="absolute top-1/2 -translate-y-1/2 w-[3px] h-3 bg-amber-500 z-10 pointer-events-none rounded-full"
+                                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-[60] cursor-ew-resize py-2 px-1.5 group/mark touch-none pointer-events-auto"
                                         style={{ left: `${marks[1] / duration * 100}%` }}
-                                        title="Visual Warning Mark"
-                                      />
+                                        onPointerDown={(e) => handleMarkDragStart(e, 1)}
+                                        title="Visual Warning Mark (Drag to adjust)"
+                                      >
+                                        <div className="w-[3px] h-3 bg-amber-500 rounded-full group-hover/mark:scale-[2.3] transition-transform shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+                                      </div>
                                     )}
                                     {/* Hover vertical line */}
                                     {duration > 0 && targetFile && (
@@ -1506,9 +1600,9 @@ export function MisuseTimeTab() {
                         </motion.button>
                     </div>
                     
-                    <div className="flex-1 flex justify-end">
-                        <div className="bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider truncate max-w-[300px]" title={targetFile ? `${videoFileNameLeft} | ${videoFileNameRight}` : "No project loaded"}>
-                            {targetFile ? `${cameraLeft || 'None'} + ${cameraRight || 'None'}` : "NO PROJECT LOADED"}
+                    <div className="flex-1 flex justify-end min-w-0">
+                        <div className="bg-primary/10 border border-primary/20 text-primary font-mono text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider truncate" title={targetFile ? getOmScenarioName(targetFile) : "No project loaded"}>
+                            {targetFile ? getOmScenarioName(targetFile) : "NO PROJECT LOADED"}
                         </div>
                     </div>
                 </div>
@@ -1518,31 +1612,36 @@ export function MisuseTimeTab() {
       {targetFile && (
         <div 
           className={cn(
-            "fixed z-50 pointer-events-none flex flex-col rounded-2xl overflow-hidden shadow-2xl transition duration-300 ease-out border text-white transform -translate-x-1/2 -translate-y-[115%] w-[168px]",
-            (isInitialPhase && activeMarkerType === 'warning')
-              ? "border-amber-500/20"
-              : "border-red-500/20",
+            "fixed z-50 pointer-events-none transition duration-300 ease-out transform -translate-x-1/2 -translate-y-[115%] w-[168px]",
             isHoveringVideo ? "opacity-100 scale-100" : "opacity-0 scale-95"
           )}
           style={{ left: badgePos.x, top: badgePos.y }}
         >
-          {/* Top colored area */}
-          <div className={cn(
-            "py-2 flex items-center justify-center font-extrabold text-2xl tracking-wider",
-            (isInitialPhase && activeMarkerType === 'warning')
-              ? "bg-amber-500 text-white"
-              : "bg-red-500 text-white"
-          )}>
-            <MousePointerClick className="w-5 h-5 text-white mr-1.5" />
-            <span className="tabular-nums">{currentTime.toFixed(2)}</span>s
-          </div>
-          
-          {/* Bottom black area */}
-          <div className="bg-black py-1.5 px-3 flex items-center justify-center border-t border-white/5 w-full">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white truncate text-center">
-              {isInitialPhase && activeMarkerType === 'warning' ? 'VISUAL WARNING' : 'MISUSE'}
-            </span>
-          </div>
+          <motion.div
+            animate={isErrorShaking ? { x: [-8, 8, -6, 6, -3, 3, 0] } : {}}
+            transition={{ duration: 0.4 }}
+            className={cn("flex flex-col rounded-2xl overflow-hidden shadow-2xl border text-white w-full",
+              (isInitialPhase && activeMarkerType === 'warning') ? "border-amber-500/20" : "border-red-500/20"
+            )}
+          >
+            {/* Top colored area */}
+            <div className={cn(
+              "py-2 flex items-center justify-center font-extrabold text-2xl tracking-wider",
+              (isInitialPhase && activeMarkerType === 'warning')
+                ? "bg-amber-500 text-white"
+                : "bg-red-500 text-white"
+            )}>
+              <MousePointerClick className="w-5 h-5 text-white mr-1.5" />
+              <span className="tabular-nums">{currentTime.toFixed(2)}</span>s
+            </div>
+            
+            {/* Bottom black area */}
+            <div className="bg-black py-1.5 px-3 flex items-center justify-center border-t border-white/5 w-full">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white truncate text-center">
+                {isInitialPhase && activeMarkerType === 'warning' ? 'VISUAL WARNING' : 'MISUSE'}
+              </span>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>

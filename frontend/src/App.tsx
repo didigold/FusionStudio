@@ -21,6 +21,44 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
+  // Global typing sound listener
+  useEffect(() => {
+    const playTypeSound = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        const isPrintable = e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter';
+        if (isPrintable && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          new Audio('/sounds/type_01.wav').play().catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('keydown', playTypeSound, true);
+    return () => window.removeEventListener('keydown', playTypeSound, true);
+  }, []);
+
+  // Global notification sound listener
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      let toastAdded = false;
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof HTMLElement) {
+            if (node.hasAttribute('data-sonner-toast') || node.classList.contains('toast') || node.querySelector('[data-sonner-toast]')) {
+              toastAdded = true;
+              break;
+            }
+          }
+        }
+        if (toastAdded) break;
+      }
+      if (toastAdded) {
+        new Audio('/sounds/notification.wav').play().catch(() => {});
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <BrowserRouter>
       <SidebarProvider defaultOpen={false} className="h-screen min-h-0 font-['Sofia_Sans']">

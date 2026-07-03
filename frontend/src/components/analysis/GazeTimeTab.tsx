@@ -57,6 +57,15 @@ import uPlot from 'uplot';
 import Waves from './Waves';
 import { useTheme } from '@/hooks/useTheme';
 
+const playSound = (src: string) => {
+  try {
+    const audio = new Audio(src);
+    audio.play().catch(e => console.error("Audio play error", e));
+  } catch (e) {
+    console.error("Audio creation error", e);
+  }
+};
+
 
 // --- CHART SKELETON COMPONENT ---
 const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: string }) => {
@@ -626,6 +635,7 @@ export function GazeTimeTab() {
   const addMarkAtTime = useCallback((t: number) => {
     if (marksRef.current.includes(t)) return;
     addToUndoStack({type: 'add', data: {time: t}});
+    playSound('/sounds/tap_01.wav');
     setMarks(prev => {
         const next = [...prev, t].sort((a, b) => a - b);
         if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});

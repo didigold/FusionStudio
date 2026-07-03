@@ -320,6 +320,7 @@ const RecordingNode = memo(function RecordingNode({
 export default function AnalysisTab() {
   const {
     analysisResults,
+    analysisSourcePath,
     analysisSelectedFile, setAnalysisSelectedFile,
     analysisCheckedFiles, toggleAnalysisFile, setAllAnalysisFiles,
     analysisExpandedAll, setAnalysisExpandedAll,
@@ -382,34 +383,42 @@ export default function AnalysisTab() {
   // Check if we have OM structure to show FolderNavigator instead of Tree View
   const isOMProject = useMemo(() => {
     if (!analysisResults || analysisResults.length === 0) return false;
+
+    const checkOMKeyword = (fullPath: string) => {
+      if (!fullPath) return false;
+      
+      const normalizedPath = fullPath.replace(/\\/g, '/');
+      const normalizedSource = analysisSourcePath ? analysisSourcePath.replace(/\\/g, '/') : '';
+      
+      let relativePath = normalizedPath;
+      if (normalizedSource && normalizedPath.toLowerCase().startsWith(normalizedSource.toLowerCase())) {
+        relativePath = normalizedPath.substring(normalizedSource.length);
+      }
+
+      return (
+        relativePath.includes('OM') || 
+        relativePath.includes('Out of Position') || 
+        relativePath.includes('Correct Seatbelt Routing') || 
+        relativePath.includes('Correct Belt Routing') || 
+        relativePath.includes('Stature Detection')
+      );
+    };
     
-    // Check if any root node or immediate child matches OM keywords
+    // Check if any root node or immediate child matches OM keywords relative to the source path
     for (const node of analysisResults) {
-      if (node.path && (
-          node.path.includes('OM') || 
-          node.path.includes('Out of Position') || 
-          node.path.includes('Correct Seatbelt Routing') || 
-          node.path.includes('Correct Belt Routing') || 
-          node.path.includes('Stature Detection')
-        )) {
+      if (checkOMKeyword(node.path)) {
         return true;
       }
       if (node.children) {
         for (const child of node.children) {
-          if (child.path && (
-              child.path.includes('OM') || 
-              child.path.includes('Out of Position') || 
-              child.path.includes('Correct Seatbelt Routing') || 
-              child.path.includes('Correct Belt Routing') || 
-              child.path.includes('Stature Detection')
-            )) {
+          if (checkOMKeyword(child.path)) {
             return true;
           }
         }
       }
     }
     return false;
-  }, [analysisResults]);
+  }, [analysisResults, analysisSourcePath]);
 
   const isGazeTab = ['tracking', 'time-selector', 'logic'].includes(activeTab);
   const isOMTab = ['occupant-time', 'misuse-logic'].includes(activeTab);
