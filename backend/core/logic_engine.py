@@ -60,12 +60,43 @@ def calculate_ncap_metrics(file_path, signal_map, marks=None, thresholds=None):
                 "overall_pass": False
             }
 
+            def get_mdf_signal(ch_name):
+                if not ch_name:
+                    return None
+                lookup_names = [ch_name]
+                if ch_name == 'SoundPressure':
+                    lookup_names = ['SoundPressure', 'MySound PressureTask.Sound Pressure']
+                elif ch_name == 'MySound PressureTask.Sound Pressure':
+                    lookup_names = ['MySound PressureTask.Sound Pressure', 'SoundPressure']
+                
+                for name in lookup_names:
+                    actual_name = None
+                    if name in mdf.channels_db:
+                        actual_name = name
+                    else:
+                        for k in mdf.channels_db.keys():
+                            if k.lower() == name.lower():
+                                actual_name = k
+                                break
+                    if actual_name is not None:
+                        try:
+                            gp, idx = mdf.channels_db[actual_name][0]
+                            return mdf.get(actual_name, group=gp, index=idx)
+                        except Exception:
+                            pass
+                # Try fuzzy matching/iteration
+                for name in lookup_names:
+                    for ch in mdf.iter_channels():
+                        if ch.name == name or ch.name.lower() == name.lower():
+                            return ch
+                return None
+
             # 3. Calculate T_gaze
             gaze_ch = signal_map.get('gaze')
-            if gaze_ch and gaze_ch in mdf:
-                sig = mdf.get(gaze_ch)
-                samples = np.asarray(sig.samples, dtype=float)
-                times = np.asarray(sig.timestamps, dtype=float)
+            sig_gaze = get_mdf_signal(gaze_ch)
+            if sig_gaze is not None:
+                samples = np.asarray(sig_gaze.samples, dtype=float)
+                times = np.asarray(sig_gaze.timestamps, dtype=float)
                 
                 # Find first index where gaze is active (usually > 0.5) after T0
                 mask = (times >= t0) & (samples > 0.5)
@@ -76,8 +107,9 @@ def calculate_ncap_metrics(file_path, signal_map, marks=None, thresholds=None):
 
             # 4. Calculate T_event
             event_ch = signal_map.get('event')
-            if event_ch and event_ch in mdf:
-                sig = mdf.get(event_ch)
+            sig_event = get_mdf_signal(event_ch)
+            if sig_event is not None:
+                sig = sig_event
                 samples = np.asarray(sig.samples, dtype=float)
                 times = np.asarray(sig.timestamps, dtype=float)
                 

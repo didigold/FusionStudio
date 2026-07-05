@@ -71,7 +71,7 @@ export function MisuseTimelineEditor({
       categoryPhases[index] = {
         ...categoryPhases[index],
         alertType: newAlertType,
-        signal: isNowAudio ? (categoryPhases[index].signal || 'SoundPressure') : (isNowSignal ? (categoryPhases[index].signal || 'FaceOnFacia') : ''),
+        signal: isNowAudio ? 'SoundPressure' : (isNowSignal ? (categoryPhases[index].signal || 'FaceOnFacia') : ''),
         min_freq: isNowAudio ? (categoryPhases[index].min_freq ?? 800) : undefined,
         max_freq: isNowAudio ? (categoryPhases[index].max_freq ?? 2000) : undefined,
         threshold: isNowAudio ? (categoryPhases[index].threshold ?? 0.5) : undefined,
@@ -135,8 +135,8 @@ export function MisuseTimelineEditor({
 
 
   return (
-    <div className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 p-5 flex flex-col gap-4">
-      <div className="w-full flex justify-center py-4 px-4">
+    <div className="p-5 flex flex-col gap-4 flex-1 w-full min-h-0 justify-center items-center">
+      <div className="w-full flex justify-center py-4 px-4 flex-1 items-center min-h-0">
         <div className="flex flex-row items-stretch border border-border/50 bg-surface-2/40 backdrop-blur-md rounded-xl shadow-md overflow-hidden w-full max-w-[1200px]">
           {/* Starting Trigger Node */}
           <div className="flex flex-col items-center justify-center w-[220px] shrink-0 bg-red-500/10 dark:bg-red-950/20 p-6 text-center relative border-r border-border/20">
@@ -282,8 +282,8 @@ export function MisuseTimelineEditor({
                       </Select>
                     </div>
 
-                    {/* Signal selector (for audio phases OR signal phases) */}
-                    {(hasAudio || phase.alertType === 'signal') && (
+                    {/* Signal selector (only show for signal alert type) */}
+                    {phase.alertType === 'signal' && (
                       <div className="flex flex-col gap-1">
                         <label className="text-xs text-muted-foreground uppercase font-bold tracking-wider text-left">Signal</label>
                         <Select

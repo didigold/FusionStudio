@@ -43,16 +43,22 @@ class OMReportBuilder(MatplotlibReportBuilder):
         cam_width = 0.33
         cam_height = cam_width * (self.A4_WIDTH / self.A4_HEIGHT)
 
-        video_primary = self.config.get('om_video_path')
-        video_secondary = self.config.get('om_video_path_secondary')
+        # For misuse (OoP/CSR), always use dual frames
+        video_left = self.config.get('om_video_left')
+        video_right = self.config.get('om_video_right')
+        
+        # Get frame times
+        tgaze = self.config.get('tgaze', 0.0)
+        signal_times = self.config.get('signal_times', {})
+        detection_time = signal_times.get('phase_0')  # First phase is detection
+        
         use_dual_om_frames = (
-            isinstance(video_primary, str)
-            and isinstance(video_secondary, str)
-            and video_primary
-            and video_secondary
-            and video_primary != video_secondary
-            and os.path.exists(video_primary)
-            and os.path.exists(video_secondary)
+            isinstance(video_left, str)
+            and isinstance(video_right, str)
+            and video_left
+            and video_right
+            and os.path.exists(video_left)
+            and os.path.exists(video_right)
         )
 
         if use_dual_om_frames:
@@ -63,15 +69,17 @@ class OMReportBuilder(MatplotlibReportBuilder):
             left_cam_x = (1.0 - total_dual_width) / 2.0
             right_margin_x = left_cam_x + cam_width_dual + gap
 
+            # Left frame: "Misuse" at tgaze time
             camera_ax_left = self.fig.add_axes(
                 [left_cam_x, band_top - cam_height_dual, cam_width_dual, cam_height_dual]
             )
-            self._draw_camera_frame(camera_ax_left, video_path_override=video_secondary)
+            self._draw_camera_frame(camera_ax_left, video_path_override=video_left, frame_time_override=tgaze, title="Misuse")
 
+            # Right frame: "Detection" at detection time
             camera_ax_right = self.fig.add_axes(
                 [right_margin_x, band_top - cam_height_dual, cam_width_dual, cam_height_dual]
             )
-            self._draw_camera_frame(camera_ax_right, video_path_override=video_primary)
+            self._draw_camera_frame(camera_ax_right, video_path_override=video_right, frame_time_override=detection_time, title="Detection")
 
             cam_height = cam_height_dual
         else:
@@ -87,37 +95,38 @@ class OMReportBuilder(MatplotlibReportBuilder):
     # Camera frame: always extract from video for OM
     # ------------------------------------------------------------------
 
-    def _draw_camera_frame(self, ax, video_path_override=None, frame_time_override=None):
+    def _draw_camera_frame(self, ax, video_path_override=None, frame_time_override=None, title="Gaze Location/Behaviour"):
         from PIL import Image
 
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.axis('off')
-        self._draw_frame_with_header(ax, "Gaze Location/Behaviour", header_height_ratio=0.12)
+        self._draw_frame_with_header(ax, title, header_height_ratio=0.12)
 
         video_path = (
             video_path_override
             if isinstance(video_path_override, str)
-            else self.config.get('om_video_path')
+            else self.config.get('om_video_left') or self.config.get('om_video_path')
         )
-        frame_time = (
-            frame_time_override
-            if isinstance(frame_time_override, (int, float))
-            else self.config.get('om_video_time_s', 0.0)
-        )
-
-        # Prefer audio span start as frame timestamp
-        span = self.config.get('om_audio_event_span')
-        if isinstance(span, (list, tuple)) and len(span) == 2:
-            try:
-                frame_time = float(span[0])
-            except Exception:
-                pass
+        
+        # Use frame_time_override if provided, otherwise fall back to config values
+        if isinstance(frame_time_override, (int, float)):
+            frame_time = float(frame_time_override)
         else:
-            metrics = self.config.get('om_audio_metrics', {}) or {}
-            warn_start = metrics.get('warning_start')
-            if isinstance(warn_start, (int, float)):
-                frame_time = float(warn_start)
+            frame_time = self.config.get('om_video_time_s', 0.0)
+            
+            # Prefer audio span start as frame timestamp
+            span = self.config.get('om_audio_event_span')
+            if isinstance(span, (list, tuple)) and len(span) == 2:
+                try:
+                    frame_time = float(span[0])
+                except Exception:
+                    pass
+            else:
+                metrics = self.config.get('om_audio_metrics', {}) or {}
+                warn_start = metrics.get('warning_start')
+                if isinstance(warn_start, (int, float)):
+                    frame_time = float(warn_start)
 
         try:
             frame_time = float(frame_time)
@@ -299,121 +308,7 @@ class OMReportBuilder(MatplotlibReportBuilder):
     # ------------------------------------------------------------------
 
     def _add_summary_table(self):
-        try:
-            margin_x = float(self.MARGIN_X)
-            table_bottom = 0.08
-            table_height = 0.12
-
-            frame_ax = self.fig.add_axes(
-                [margin_x, table_bottom, float(self.CONTENT_WIDTH), table_height]
-            )
-            frame_ax.axis('off')
-            self._draw_frame_with_header(frame_ax, "SUMMARY DATA TABLE", header_height_ratio=0.25)
-
-            header_h_ratio = 0.25
-            table_geo = [
-                margin_x,
-                table_bottom,
-                float(self.CONTENT_WIDTH),
-                float(table_height * (1.0 - header_h_ratio)),
-            ]
-            table_ax = self.fig.add_axes(table_geo)
-            table_ax.axis('off')
-
-            metrics = self.config.get('om_audio_metrics', {}) or {}
-            variant = str(self.config.get('om_report_variant', '') or '').strip().lower()
-            target_category = str(self.config.get('target_category', '') or '').strip().lower()
-            is_out_of_position = (
-                variant == 'out_of_position'
-            ) or ('out of position' in target_category)
-
-            def _fmt(v):
-                return f"{float(v):.2f} s" if isinstance(v, (int, float)) else "--"
-
-            movement_start = metrics.get(
-                'movement_start',
-                self.config.get('movement_start', self.config.get('tgaze')),
-            )
-            warning_start = metrics.get('warning_start')
-            if warning_start is None:
-                pass_sig = self.config.get('pass_signal_name')
-                if pass_sig:
-                    warning_start = (self.signal_times or {}).get(pass_sig)
-
-            detection_delay = metrics.get('detection_delay')
-            audio_duration = metrics.get('audio_duration')
-            max_audio_gap = metrics.get('max_audio_gap')
-
-            rows = [
-                ["Movement Start", _fmt(movement_start), "", ""],
-                ["Warning Start", _fmt(warning_start), "", ""],
-                [
-                    "Detection Delay",
-                    _fmt(detection_delay),
-                    "<= 30 s",
-                    "PASS"
-                    if isinstance(detection_delay, (int, float)) and detection_delay <= 30.0
-                    else "FAIL",
-                ],
-            ]
-
-            if is_out_of_position:
-                rows.append(["Audio Duration", _fmt(audio_duration), "", ""])
-            else:
-                rows.append(
-                    [
-                        "Audio Duration",
-                        _fmt(audio_duration),
-                        ">= 90 s",
-                        "PASS"
-                        if isinstance(audio_duration, (int, float)) and audio_duration >= 90.0
-                        else "FAIL",
-                    ]
-                )
-                rows.append(
-                    [
-                        "Max Audio Gap",
-                        _fmt(max_audio_gap),
-                        "<= 3 s",
-                        "PASS"
-                        if isinstance(max_audio_gap, (int, float)) and max_audio_gap <= 3.0
-                        else "FAIL",
-                    ]
-                )
-
-            headers = ["Metric", "Value", "Limit", "Result"]
-            col_widths = [0.34, 0.23, 0.22, 0.21]
-
-            table = table_ax.table(
-                cellText=rows,
-                colLabels=headers,
-                loc='center',
-                cellLoc='center',
-                colWidths=col_widths,
-                bbox=[0.0, 0.0, 1.0, 1.0],
-            )
-            table.auto_set_font_size(False)
-            table.set_fontsize(7)
-
-            for (row, col), cell in table.get_celld().items():
-                cell.set_edgecolor(self.COLORS['grid'])
-                if row == 0:
-                    cell.set_facecolor(self.COLORS['primary'])
-                    cell.set_text_props(
-                        fontweight='bold', color=self.COLORS['text_white']
-                    )
-                    continue
-
-                cell.set_facecolor('white')
-                if col == 3 and row >= 3:
-                    txt = (cell.get_text().get_text() or '').upper()
-                    if txt == 'PASS':
-                        cell.set_facecolor('#C6E0B4')
-                    elif txt == 'FAIL':
-                        cell.set_facecolor('#F8CBAD')
-
-        except Exception:
-            raise
+        self._add_unresponsive_timeline()
 
     # ------------------------------------------------------------------
     # Bottom legend specific to OM warning reports

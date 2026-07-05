@@ -51,8 +51,9 @@ const getAllFilesUnderNode = (node: any): string[] => {
 }
 
 const findPathToNode = (nodes: any[], targetPath: string, currentPath: string[] = []): string[] | null => {
+  const normTarget = normalizePath(targetPath);
   for (const node of nodes) {
-    if (node.type === 'file' && node.path === targetPath) {
+    if (node.type === 'file' && normalizePath(node.path) === normTarget) {
       return currentPath;
     }
     if (node.children) {
@@ -61,6 +62,10 @@ const findPathToNode = (nodes: any[], targetPath: string, currentPath: string[] 
     }
   }
   return null;
+}
+
+const normalizePath = (p: string): string => {
+  return p.replace(/\\/g, '/').toLowerCase().replace(/_tracking\.mf4$/i, '.mf4');
 }
 
 export function FolderNavigator({
@@ -72,19 +77,22 @@ export function FolderNavigator({
   onToggleFolder,
   selectionType,
   onSelectionChange,
-  totalMF4Count
+  totalMF4Count,
 }: FolderNavigatorProps) {
   // We track the path of folder names to navigate down the tree
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const lastNavigatedPath = useRef<string | null>(null);
 
   useEffect(() => {
-    if (selectedPath && results.length > 0 && selectedPath !== lastNavigatedPath.current) {
-      const foundPath = findPathToNode(results, selectedPath);
-      if (foundPath && foundPath.length > 0) {
-        // Navigate to the parent folder so the case folder is visible as an item
-        setCurrentPath(foundPath.slice(0, -1));
-        lastNavigatedPath.current = selectedPath;
+    if (selectedPath && results.length > 0) {
+      const normSelected = normalizePath(selectedPath);
+      if (normSelected !== (lastNavigatedPath.current ? normalizePath(lastNavigatedPath.current) : null)) {
+        const foundPath = findPathToNode(results, selectedPath);
+        if (foundPath && foundPath.length > 0) {
+          // Navigate to the parent folder so the case folder is visible as an item
+          setCurrentPath(foundPath.slice(0, -1));
+          lastNavigatedPath.current = selectedPath;
+        }
       }
     }
   }, [selectedPath, results]);
@@ -295,7 +303,7 @@ export function FolderNavigator({
               {currentNodeContent.map((node: any, idx: number) => {
                 if (node.type === 'file') {
                   const isChecked = checkedFilesSet.has(node.path);
-                  const isSelected = selectedPath === node.path;
+                  const isSelected = selectedPath && normalizePath(selectedPath) === normalizePath(node.path);
                   return (
                     <motion.div
                       layout
@@ -348,7 +356,10 @@ export function FolderNavigator({
                   // Folder Node
                   const folderCheckState = getFolderCheckboxState(node);
                   const totalFiles = getAllFilesUnderNode(node).length;
-                  const containsSelected = selectedPath && getAllFilesUnderNode(node).includes(selectedPath);
+                  const normalizedSelected = selectedPath ? normalizePath(selectedPath) : null;
+                  const containsSelected = normalizedSelected && getAllFilesUnderNode(node)
+                    .map(f => normalizePath(f))
+                    .includes(normalizedSelected);
                   return (
                     <motion.div
                       layout

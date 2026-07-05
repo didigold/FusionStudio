@@ -101,7 +101,7 @@ def _scan_analysis_dir(source_dir: str, marks_path: str | None = None) -> list:
         if marks_path:
             if os.path.exists(marks_path):
                 with open(marks_path, encoding="utf-8") as f:
-                    marks_keys = set(json.load(f).keys())
+                    marks_keys = {k.lower() for k in json.load(f).keys()}
         else:
             for default_name in ["GA_marks.json", "OM_marks.json", "marks.json"]:
                 mp = os.path.join(source_dir, default_name)
@@ -112,9 +112,10 @@ def _scan_analysis_dir(source_dir: str, marks_path: str | None = None) -> list:
                             if default_name == "OM_marks.json":
                                 for k, v in data.items():
                                     if isinstance(v, list) and len(v) > 0 and v[0] != -1.0:
-                                        marks_keys.add(k)
+                                        marks_keys.add(k.lower())
                             else:
-                                marks_keys.update(data.keys())
+                                for k in data.keys():
+                                    marks_keys.add(k.lower())
                     except Exception:
                         pass
     except Exception:
@@ -255,10 +256,10 @@ def _scan_recursive(path: str, marks_keys: set[str], out: dict):
                     p_n = os.path.normpath(p_path)
                     p_unix = p_n.replace("\\", "/")
                     parts_l = p_unix.split("/")
-                    if len(parts_l) >= 3 and "/".join(parts_l[-3:]) in marks_keys:
+                    if len(parts_l) >= 3 and "/".join(parts_l[-3:]).lower() in marks_keys:
                         child["has_marks"] = True
                         break
-                    if os.path.basename(p_n) in marks_keys:
+                    if os.path.basename(p_n).lower() in marks_keys:
                         child["has_marks"] = True
                         break
                 if child["has_marks"]:
@@ -405,6 +406,17 @@ async def get_channels(req: SignalPreviewRequest):
     loop = asyncio.get_event_loop()
 
     def _load():
+        import os
+        import json
+        cache_path = req.file_path + ".analysis_channels.json"
+        
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass  # Fallback to parsing MF4 if cache read fails
+
         try:
             from asammdf import MDF
             with MDF(req.file_path) as mdf:
@@ -421,6 +433,13 @@ async def get_channels(req: SignalPreviewRequest):
                         "unit": str(ch.unit) if hasattr(ch, "unit") and ch.unit else "",
                         "samples": samples_count,
                     })
+                
+                try:
+                    with open(cache_path, "w", encoding="utf-8") as f:
+                        json.dump(channels, f)
+                except Exception:
+                    pass
+                    
                 return channels
         except Exception as e:
             return {"error": str(e)}
@@ -441,15 +460,32 @@ async def get_signal_unique_values(req: SignalUniqueValuesRequest):
             import numpy as np
             with MDF(req.file_path) as mdf:
                 sig = None
-                for ch in mdf.iter_channels():
-                    if ch.name == req.channel_name:
-                        sig = ch
-                        break
+                # Check channels_db first (exact or case-insensitive)
+                actual_name = None
+                if req.channel_name in mdf.channels_db:
+                    actual_name = req.channel_name
+                else:
+                    for k in mdf.channels_db.keys():
+                        if k.lower() == req.channel_name.lower():
+                            actual_name = k
+                            break
+
+                if actual_name is not None:
+                    try:
+                        gp, idx = mdf.channels_db[actual_name][0]
+                        sig = mdf.get(actual_name, group=gp, index=idx)
+                    except Exception:
+                        pass
+
                 if sig is None:
-                    if req.channel_name in mdf:
-                        sig = mdf.get(req.channel_name)
-                    else:
-                        return {"values": [], "error": f"Channel '{req.channel_name}' not found"}
+                    # Fallback to iter_channels fuzzy/casing match
+                    for ch in mdf.iter_channels():
+                        if ch.name.lower() == req.channel_name.lower():
+                            sig = ch
+                            break
+
+                if sig is None:
+                    return {"values": [], "error": f"Channel '{req.channel_name}' not found"}
                 samples = sig.samples
                 if samples is None:
                     return {"values": [], "continuous": False}
@@ -514,15 +550,32 @@ async def get_signal_data(req: SignalDataRequest):
             import numpy as np
             with MDF(req.file_path) as mdf:
                 sig = None
-                for ch in mdf.iter_channels():
-                    if ch.name == req.channel_name:
-                        sig = ch
-                        break
+                # Check channels_db first (exact or case-insensitive)
+                actual_name = None
+                if req.channel_name in mdf.channels_db:
+                    actual_name = req.channel_name
+                else:
+                    for k in mdf.channels_db.keys():
+                        if k.lower() == req.channel_name.lower():
+                            actual_name = k
+                            break
+
+                if actual_name is not None:
+                    try:
+                        gp, idx = mdf.channels_db[actual_name][0]
+                        sig = mdf.get(actual_name, group=gp, index=idx)
+                    except Exception:
+                        pass
+
                 if sig is None:
-                    if req.channel_name in mdf:
-                        sig = mdf.get(req.channel_name)
-                    else:
-                        return {"error": f"Channel '{req.channel_name}' not found"}
+                    # Fallback to iter_channels fuzzy/casing match
+                    for ch in mdf.iter_channels():
+                        if ch.name.lower() == req.channel_name.lower():
+                            sig = ch
+                            break
+
+                if sig is None:
+                    return {"error": f"Channel '{req.channel_name}' not found"}
 
                 timestamps = np.asarray(sig.timestamps, dtype=float)
                 samples = np.asarray(sig.samples, dtype=float)
@@ -577,23 +630,34 @@ async def detect_events(req: SignalDataRequest):
             from asammdf import MDF
             import numpy as np
             with MDF(req.file_path) as mdf:
+                lookup_names = [req.channel_name]
+                if req.channel_name == 'SoundPressure':
+                    lookup_names = ['SoundPressure', 'MySound PressureTask.Sound Pressure']
+                elif req.channel_name == 'MySound PressureTask.Sound Pressure':
+                    lookup_names = ['MySound PressureTask.Sound Pressure', 'SoundPressure']
+
                 sig = None
-                for ch in mdf.iter_channels():
-                    if ch.name == req.channel_name:
-                        sig = ch
+                for name in lookup_names:
+                    for ch in mdf.iter_channels():
+                        if ch.name == name:
+                            sig = ch
+                            break
+                    if sig:
                         break
                 if sig is None:
-                    if req.channel_name in mdf:
-                        sig = mdf.get(req.channel_name)
-                    else:
-                        return {"error": f"Channel '{req.channel_name}' not found"}
+                    for name in lookup_names:
+                        if name in mdf:
+                            sig = mdf.get(name)
+                            break
+                if sig is None:
+                    return {"error": f"Channel '{req.channel_name}' not found"}
 
                 samples = np.asarray(sig.samples, dtype=float)
                 timestamps = np.asarray(sig.timestamps, dtype=float)
 
                 rms = float(np.sqrt(np.mean(np.square(samples[samples > 0])))) if np.any(samples > 0) else 0
                 threshold_val = float(np.mean(samples)) + 2 * float(np.std(samples))
-                first_event = find_first_valid_event(samples, timestamps, threshold_val, operator=">")
+                first_event = find_first_valid_event(samples, timestamps, threshold_val, operator=">")[0]
 
                 return {
                     "rms": rms,
@@ -775,8 +839,10 @@ async def get_gamification_asset(filename: str):
 
 
 def _get_marks_key(file_path: str) -> str:
-    """Compute marks key: last 3 path segments, stripping _tracking."""
-    p = os.path.normpath(file_path).replace("_tracking.mf4", ".mf4")
+    """Compute marks key: last 3 path segments, stripping _tracking, normalizing extension."""
+    p = os.path.normpath(file_path).replace("_tracking.mf4", ".mf4").replace("_tracking.MF4", ".mf4")
+    if p.lower().endswith(".mf4"):
+        p = p[:-4] + ".mf4"
     parts = p.split(os.sep)
     if len(parts) < 3:
         return os.path.basename(p)

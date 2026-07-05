@@ -206,6 +206,7 @@ class GazePreviewRequest(BaseModel):
     gauge_rules: dict = {}
     micro: dict = {}
     source_dir: str = ""
+    report_camera_settings: dict | None = None
 
 
 class GazeGenerateRequest(BaseModel):
@@ -216,6 +217,35 @@ class GazeGenerateRequest(BaseModel):
     gauge_rules: dict = {}
     micro: dict = {}
     source_dir: str = ""
+    report_camera_settings: dict | None = None
+
+
+def _resolve_om_video_paths(file_path: str, camera_left: str, camera_right: str) -> tuple[str | None, str | None]:
+    if not file_path or not os.path.exists(file_path):
+        return None, None
+    base_dir = os.path.dirname(file_path)
+    left_path = None
+    right_path = None
+    try:
+        files = os.listdir(base_dir)
+        for f in files:
+            if f.lower().endswith(".avi"):
+                import re
+                if camera_left and (
+                    re.search(rf'_cam{camera_left}\.avi$', f, re.I) or 
+                    re.search(rf'_{camera_left}\.avi$', f, re.I) or
+                    re.search(rf'_CAM_{camera_left}\.avi$', f, re.I)
+                ):
+                    left_path = os.path.join(base_dir, f)
+                if camera_right and (
+                    re.search(rf'_cam{camera_right}\.avi$', f, re.I) or 
+                    re.search(rf'_{camera_right}\.avi$', f, re.I) or
+                    re.search(rf'_CAM_{camera_right}\.avi$', f, re.I)
+                ):
+                    right_path = os.path.join(base_dir, f)
+    except Exception as e:
+        logger.error(f"Error resolving OM video paths: {e}")
+    return left_path, right_path
 
 
 def _resolve_gsr_image_path(filename: str) -> str | None:
@@ -342,27 +372,56 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             if not sig_info.get('checked', True):
                 continue
             mdf_sig = None
-            if sig_name in mdf:
-                mdf_sig = mdf.get(sig_name)
-            else:
+            lookup_names = [sig_name]
+            if sig_name == "SoundPressure":
+                lookup_names = ["SoundPressure", "MySound PressureTask.Sound Pressure"]
+            elif sig_name == "MySound PressureTask.Sound Pressure":
+                lookup_names = ["MySound PressureTask.Sound Pressure", "SoundPressure"]
+
+            for name_to_try in lookup_names:
+                actual_name = None
+                if name_to_try in mdf.channels_db:
+                    actual_name = name_to_try
+                else:
+                    for k in mdf.channels_db.keys():
+                        if k.lower() == name_to_try.lower():
+                            actual_name = k
+                            break
+
+                if actual_name is not None:
+                    try:
+                        gp, idx = mdf.channels_db[actual_name][0]
+                        mdf_sig = mdf.get(actual_name, group=gp, index=idx)
+                        break
+                    except Exception as ex:
+                        logger.warning(f"Failed to get channel '{actual_name}' via group/index: {ex}")
+
+                # Fallback to fuzzy matching on iter_channels
                 for ch in mdf.iter_channels():
-                    if ch.name.lower() == sig_name.lower():
+                    if ch.name.lower() == name_to_try.lower():
                         mdf_sig = ch
                         break
-                if mdf_sig is None:
-                    norm_sig = re.sub(r'_[cde]3v_', '_', sig_name.lower())
-                    for ch in mdf.iter_channels():
-                        norm_ch = re.sub(r'_[cde]3v_', '_', ch.name.lower())
-                        if norm_ch == norm_sig:
-                            mdf_sig = ch
-                            logger.info(f"Fuzzy matched config signal '{sig_name}' to MDF channel '{ch.name}'")
-                            break
-                if mdf_sig is None:
-                    for ch in mdf.iter_channels():
-                        if sig_name.lower() in ch.name.lower() or ch.name.lower() in sig_name.lower():
-                            mdf_sig = ch
-                            logger.info(f"Substring fuzzy matched config signal '{sig_name}' to MDF channel '{ch.name}'")
-                            break
+                if mdf_sig is not None:
+                    break
+                    
+                norm_sig = re.sub(r'_[cde]3v_', '_', name_to_try.lower())
+                for ch in mdf.iter_channels():
+                    norm_ch = re.sub(r'_[cde]3v_', '_', ch.name.lower())
+                    if norm_ch == norm_sig:
+                        mdf_sig = ch
+                        logger.info(f"Fuzzy matched config signal '{name_to_try}' to MDF channel '{ch.name}'")
+                        break
+                if mdf_sig is not None:
+                    break
+                    
+                for ch in mdf.iter_channels():
+                    if name_to_try.lower() in ch.name.lower() or ch.name.lower() in name_to_try.lower():
+                        mdf_sig = ch
+                        logger.info(f"Substring fuzzy matched config signal '{name_to_try}' to MDF channel '{ch.name}'")
+                        break
+                if mdf_sig is not None:
+                    break
+                        
             if mdf_sig is None:
                 continue
 
@@ -402,7 +461,9 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                 'alias': sig_info.get('alias') or sig_name
             }
 
-    tgaze = mask_start
+    # For OM scenarios (OoP/CSR), default tgaze is 0.0 (not mask_start from gaze)
+    is_om_category = "OoP" in target_category or "CSR" in target_category
+    tgaze = 0.0 if is_om_category else mask_start
     if driver_marks and len(driver_marks) > 0:
         try:
             tgaze = float(driver_marks[0])
@@ -449,7 +510,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                         logger.error(f"Error filtering SoundPressure: {fe}")
                     
                     op = operator if operator and operator != 'None' else '>='
-                    first_match_time = find_first_valid_event(
+                    first_match_time, cluster_duration = find_first_valid_event(
                         np.array(samples_numeric),
                         np.array(timestamps),
                         float(audio_thresh) if audio_thresh is not None else 0.0,
@@ -496,6 +557,18 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
     if "Unresponsive" in target_category or "OoP" in target_category or "CSR" in target_category:
         for idx, phase in enumerate(unresponsive_phases):
             sig_name = phase.get('signal')
+            
+            # Detect audio phase by presence of frequency fields (not just signal name)
+            has_audio_fields = phase.get('min_freq') is not None or phase.get('max_freq') is not None
+            is_audio_by_name = sig_name and (sig_name.lower().find("sound") >= 0 or sig_name.lower().find("audio") >= 0 or sig_name.lower().find("buzzer") >= 0)
+            is_audio = has_audio_fields or is_audio_by_name
+            
+            logger.info(f"Phase {idx} ({phase.get('phaseName')}): sig_name={sig_name}, has_audio_fields={has_audio_fields}, is_audio_by_name={is_audio_by_name}, is_audio={is_audio}")
+            
+            # For audio phases, use SoundPressure if available
+            if is_audio and "SoundPressure" in signals:
+                sig_name = "SoundPressure"
+            
             if not sig_name or sig_name not in signals:
                 signal_times[f"phase_{idx}"] = None
                 continue
@@ -504,7 +577,11 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             timestamps = sig_info['timestamps']
             samples = sig_info['samples']
             
-            is_audio = sig_name.lower().find("sound") >= 0 or sig_name.lower().find("audio") >= 0 or sig_name.lower().find("buzzer") >= 0
+            # Detect audio phase by presence of frequency fields (not just signal name)
+            has_audio_fields = phase.get('min_freq') is not None or phase.get('max_freq') is not None
+            is_audio_by_name = sig_name.lower().find("sound") >= 0 or sig_name.lower().find("audio") >= 0 or sig_name.lower().find("buzzer") >= 0
+            is_audio = has_audio_fields or is_audio_by_name
+            
             if is_audio:
                 operator = ">="
                 threshold = phase.get('threshold') if phase.get('threshold') is not None else 0.5
@@ -513,6 +590,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                 threshold = phase.get('value', 0)
                 
             first_match_time = None
+            cluster_duration = None
             
             # Determine evaluation start time (eval_start)
             mask_val = phase.get('mask')
@@ -554,7 +632,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                 signal_times[f"phase_{idx}"] = None
                 continue
             
-            if sig_name == "SoundPressure":
+            if is_audio:
                 try:
                     audio_thresh = threshold
                     if len(samples) > 0 and len(timestamps) > 0:
@@ -579,36 +657,56 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                             b, a = butter(4, [low, high], btype='band')
                             samples_numeric = list(filtfilt(b, a, samples_np))
                         except Exception as fe:
-                            logger.error(f"Error filtering SoundPressure for phase {idx}: {fe}")
+                            logger.error(f"Error filtering audio for phase {idx}: {fe}")
                         
                         op = operator if operator and operator != 'None' else '>='
-                        first_match_time = find_first_valid_event(
+                        first_match_time, cluster_duration = find_first_valid_event(
                             np.array(samples_numeric),
                             np.array(timestamps),
                             float(audio_thresh) if audio_thresh is not None else 0.0,
                             op,
                             mask_start=eval_start
                         )
+                        
+                        # Calculate total event duration using envelope of filtered audio
+                        if first_match_time is not None:
+                            samples_arr = np.array(samples_numeric)
+                            timestamps_arr = np.array(timestamps)
+                            
+                            # Use envelope (absolute value smoothed) for duration calculation
+                            envelope = np.abs(samples_arr)
+                            # Smooth with moving average (100ms window)
+                            window_size = max(1, int(0.1 * len(samples_arr) / (timestamps_arr[-1] - timestamps_arr[0])))
+                            if window_size > 1:
+                                kernel = np.ones(window_size) / window_size
+                                envelope = np.convolve(envelope, kernel, mode='same')
+                            
+                            above_mask = envelope >= float(audio_thresh)
+                            above_mask = above_mask & (timestamps_arr >= eval_start)
+                            above_indices = np.flatnonzero(above_mask)
+                            
+                            if len(above_indices) > 0:
+                                first_idx = above_indices[0]
+                                last_idx = above_indices[-1]
+                                event_start = timestamps_arr[first_idx]
+                                event_end = timestamps_arr[last_idx]
+                                total_duration = event_end - event_start
+                                signal_times[f"phase_{idx}_duration"] = total_duration
                 except Exception as e:
-                    logger.error(f"Error calculating SoundPressure for phase {idx}: {e}")
+                    logger.error(f"Error calculating audio for phase {idx}: {e}")
             elif threshold is not None and operator and operator != 'None':
                 try:
                     threshold_num = float(threshold)
-                    for t, val in zip(timestamps, samples):
-                        if t < eval_start:
-                            continue
-                        val_num = float(val)
-                        match = False
-                        if operator == '>': match = val_num > threshold_num
-                        elif operator == '<': match = val_num < threshold_num
-                        elif operator == '>=': match = val_num >= threshold_num
-                        elif operator == '<=': match = val_num <= threshold_num
-                        elif operator == '==': match = abs(val_num - threshold_num) < 1e-6
-                        elif operator == '!=': match = abs(val_num - threshold_num) >= 1e-6
-                        if match:
-                            first_match_time = t
-                            break
-                except (ValueError, TypeError):
+                    samples_np = np.array(samples, dtype=float)
+                    first_match_time, cluster_duration = find_first_valid_event(
+                        samples_np,
+                        np.array(timestamps),
+                        threshold_num,
+                        operator,
+                        min_cluster_duration=0.05,
+                        mask_start=eval_start
+                    )
+                except (ValueError, TypeError, Exception):
                     threshold_str = str(threshold)
                     for t, val in zip(timestamps, samples):
                         if t < eval_start:
@@ -625,7 +723,13 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                             first_match_time = t
                             break
                             
-            signal_times[f"phase_{idx}"] = first_match_time
+            if first_match_time is not None:
+                signal_times[f"phase_{idx}"] = first_match_time
+                # Only use cluster_duration if total duration wasn't already calculated (for audio)
+                if cluster_duration is not None and f"phase_{idx}_duration" not in signal_times:
+                    signal_times[f"phase_{idx}_duration"] = cluster_duration
+            else:
+                is_unresponsive_pass = False
 
     t_event = "No warn"
     t_event_color = "red"
@@ -776,6 +880,18 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
                             t_curr = prev_t
                     
                     delta = t_next - t_curr
+                    stored_duration = signal_times.get(f"phase_{i}_duration")
+                    
+                    # For duration-based constraints (≥), use event duration if available
+                    tc = phase.get('timeConstraint')
+                    tcu = phase.get('timeConstraintUnit', 's')
+                    
+                    if stored_duration is not None and tc and ('≥' in tc or '>=' in tc or '>' in tc):
+                        # Use event duration for minimum duration constraints
+                        delta = stored_duration
+                    elif stored_duration is not None:
+                        delta = stored_duration
+                        
                     tc = phase.get('timeConstraint')
                     tcu = phase.get('timeConstraintUnit', 's')
                     if tc:
@@ -981,6 +1097,7 @@ async def gaze_preview(req: GazePreviewRequest):
     import traceback
     from backend.routers.analysis import _load_marks_dict, _get_marks_key
     from backend.core.report_builder import MatplotlibReportBuilder
+    from backend.core.om_report_builder import OMReportBuilder
     try:
         if not os.path.exists(req.file_path):
             return {"status": "error", "message": f"File not found: {req.file_path}"}
@@ -998,9 +1115,22 @@ async def gaze_preview(req: GazePreviewRequest):
             if not source_dir:
                 source_dir = os.path.dirname(req.file_path)
 
-        marks_dict = _load_marks_dict(source_dir, "GA")
+        # Detect if this is an OM (Misuse) scenario or Gaze scenario
+        file_path_lower = req.file_path.lower()
+        is_om_scenario = any(kw in file_path_lower for kw in ["oop", "out of position", "csr", "correct belt", "seatbelt", "belt routing"])
+        marks_type = "OM" if is_om_scenario else "GA"
+        
+        marks_dict = _load_marks_dict(source_dir, marks_type)
         key = _get_marks_key(req.file_path)
+        # Try exact match first, then fallback to filename-based match
         driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
+        if not driver_marks:
+            # Fallback: find key ending with the filename
+            filename = os.path.basename(req.file_path).lower()
+            for mk, mv in marks_dict.items():
+                if mk.lower().endswith(filename) or mk.lower().endswith(filename.replace(".mf4", "_tracking.mf4")):
+                    driver_marks = mv
+                    break
         if not isinstance(driver_marks, list):
             driver_marks = []
             
@@ -1015,11 +1145,23 @@ async def gaze_preview(req: GazePreviewRequest):
             show_thresholds=True
         )
         
+        rc_settings = req.report_camera_settings or {}
+        cam_l = rc_settings.get("left", "")
+        cam_r = rc_settings.get("right", "")
+        if cam_l or cam_r:
+            vl, vr = _resolve_om_video_paths(req.file_path, cam_l, cam_r)
+            config["om_video_left"] = vl
+            config["om_video_right"] = vr
+            config["report_camera_settings"] = rc_settings
+        
         import tempfile
         temp_dir = tempfile.gettempdir()
         preview_output_path = os.path.join(temp_dir, "gaze_preview.png")
         
-        builder = MatplotlibReportBuilder(config)
+        if config.get("target_category", "").startswith("OoP") or config.get("target_category", "").startswith("CSR"):
+            builder = OMReportBuilder(config)
+        else:
+            builder = MatplotlibReportBuilder(config)
         builder.generate(preview_output_path, dpi=300)
         
         return {
@@ -1057,6 +1199,7 @@ async def gaze_generate(req: GazeGenerateRequest):
             global _active_worker
             from backend.routers.analysis import _load_marks_dict, _get_marks_key
             from backend.core.report_builder import MatplotlibReportBuilder
+            from backend.core.om_report_builder import OMReportBuilder
             
             try:
                 total_files = len(req.files)
@@ -1095,9 +1238,22 @@ async def gaze_generate(req: GazeGenerateRequest):
                             if not source_dir:
                                 source_dir = os.path.dirname(file_path)
 
-                        marks_dict = _load_marks_dict(source_dir, "GA")
+                        # Detect if this is an OM (Misuse) scenario or Gaze scenario
+                        file_path_lower = file_path.lower()
+                        is_om_scenario = any(kw in file_path_lower for kw in ["oop", "out of position", "csr", "correct belt", "seatbelt", "belt routing"])
+                        marks_type = "OM" if is_om_scenario else "GA"
+                        
+                        marks_dict = _load_marks_dict(source_dir, marks_type)
                         key = _get_marks_key(file_path)
+                        # Try exact match first, then fallback to filename-based match
                         driver_marks = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
+                        if not driver_marks:
+                            # Fallback: find key ending with the filename
+                            filename = os.path.basename(file_path).lower()
+                            for mk, mv in marks_dict.items():
+                                if mk.lower().endswith(filename) or mk.lower().endswith(filename.replace(".mf4", "_tracking.mf4")):
+                                    driver_marks = mv
+                                    break
                         if not isinstance(driver_marks, list):
                             driver_marks = []
                             
@@ -1112,12 +1268,24 @@ async def gaze_generate(req: GazeGenerateRequest):
                             show_thresholds=False
                         )
                         
+                        rc_settings = req.report_camera_settings or {}
+                        cam_l = rc_settings.get("left", "")
+                        cam_r = rc_settings.get("right", "")
+                        if cam_l or cam_r:
+                            vl, vr = _resolve_om_video_paths(file_path, cam_l, cam_r)
+                            config["om_video_left"] = vl
+                            config["om_video_right"] = vr
+                            config["report_camera_settings"] = rc_settings
+                        
                         base_dir = os.path.dirname(file_path)
                         reports_dir = os.path.join(base_dir, "Reports")
                         os.makedirs(reports_dir, exist_ok=True)
                         output_png = os.path.join(reports_dir, f"{base_name}.png")
                         
-                        builder = MatplotlibReportBuilder(config)
+                        if config.get("target_category", "").startswith("OoP") or config.get("target_category", "").startswith("CSR"):
+                            builder = OMReportBuilder(config)
+                        else:
+                            builder = MatplotlibReportBuilder(config)
                         builder.generate(output_png, dpi=300)
                         
                         update_excel_results(config=config, file_path=file_path)

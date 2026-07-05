@@ -841,19 +841,8 @@ class MatplotlibReportBuilder:
                     if marks[i+1] > marks[i]: ax.axvspan(marks[i], marks[i+1], color=self.COLORS['primary'], alpha=0.08)
             for mt in marks: ax.axvline(x=mt, color=self.COLORS['text_light'], linestyle='--', linewidth=0.6, alpha=0.65)
         if self.config.get('om_plot_show_shading'):
-            mstart = self.config.get('movement_start', self.config.get('tgaze'))
-            try: mstart = float(mstart) if mstart is not None else None
-            except Exception: mstart = None
-            if mstart is not None: ax.axvline(x=mstart, color='black', linestyle='--', linewidth=0.8, alpha=0.7)
-            psig, pt = self.config.get('pass_signal_name'), self.signal_times.get(self.config.get('pass_signal_name'))
-            if psig == name and mstart is not None and isinstance(pt, (int, float)) and pt > mstart: ax.axvspan(mstart, pt, color='#FFB74D', alpha=0.18)
-            if name == "SoundPressure":
-                spn = self.config.get('om_audio_event_span')
-                if isinstance(spn, (list, tuple)) and len(spn) == 2:
-                    try:
-                        s0, s1 = float(spn[0]), float(spn[1])
-                        if s1 > s0: ax.axvspan(s0, s1, color=self.COLORS['primary'], alpha=0.12)
-                    except Exception: pass
+            # Removed Movement Start line and shading for misuse categories
+            pass
         fmt = self.signal_times.get(name)
         _category = self.config.get('target_category', '')
         _is_unresponsive = 'Unresponsive' in _category
@@ -881,6 +870,19 @@ class MatplotlibReportBuilder:
                 if _t is not None:
                     _clr = _phase_colors[_pi % len(_phase_colors)]
                     ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
+        
+        # For Misuse (OoP/CSR): shade the warning duration area
+        _is_misuse = 'OoP' in _category or 'CSR' in _category
+        if _is_misuse:
+            _sig_times = self.config.get('signal_times', {})
+            _phases = self.config.get('unresponsive_phases', [])
+            for _pi, _ph in enumerate(_phases):
+                if not _ph.get('enabled', True):
+                    continue
+                _t = _sig_times.get(f'phase_{_pi}')
+                _dur = _sig_times.get(f'phase_{_pi}_duration')
+                if _t is not None and _dur is not None and _dur > 0:
+                    ax.axvspan(_t, _t + _dur, color=self.COLORS.get('secondary', '#d93d04'), alpha=0.15)
         ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
         ax.set_ylabel(unt, fontsize=6, color=self.COLORS['text_light'])
         if not is_ns and vmap:
@@ -917,27 +919,8 @@ class MatplotlibReportBuilder:
     def _get_extra_axvlines(self, name: str) -> list: return []
     def _add_om_bottom_legend(self): return
     def _add_om_bottom_legend_impl(self):
-        import matplotlib.pyplot as plt
-        from matplotlib.lines import Line2D
-        ms = self.config.get('movement_start', self.config.get('tgaze'))
-        try: ms = float(ms) if ms is not None else None
-        except Exception: ms = None
-        ws = None
-        spn = self.config.get('om_audio_event_span')
-        if isinstance(spn, (list, tuple)) and len(spn) >= 1:
-            try: ws = float(spn[0])
-            except Exception: pass
-        if ws is None:
-            m = self.config.get('om_audio_metrics') or {}
-            if isinstance(m, dict):
-                w = m.get('warning_start')
-                if isinstance(w, (int, float)): ws = float(w)
-        items = []
-        if ms is not None: items.append((Line2D([0], [0], color='black', linestyle='--', linewidth=0.9), 'Movement Start'))
-        if ws is not None: items.append((Line2D([0], [0], color=self.COLORS['fail'], linestyle='-', linewidth=0.9), 'Audible Warning Activation'))
-        if not items: return
-        lax = self.fig.add_axes([self.MARGIN_X, 0.062, self.CONTENT_WIDTH, 0.015]); lax.axis('off')
-        lax.legend(handles=[h for h, _ in items], labels=[l for _, l in items], loc='center', ncol=max(1, len(items)), frameon=False, fontsize=6, handlelength=2.8, columnspacing=1.2)
+        # Removed: Movement Start legend and Audible Warning legend
+        pass
         
     def _get_signal_color(self, name: str) -> str:
         if name == "SoundPressure": return self.COLORS.get('secondary', '#d93d04')
@@ -1102,12 +1085,18 @@ class MatplotlibReportBuilder:
             import matplotlib.pyplot as plt
             import matplotlib.patches as patches
             
-            mx, tb, th = float(self.MARGIN_X), 0.055, 0.15
+            mx, tb, th = float(self.MARGIN_X), 0.04, 0.15
             fax = self.fig.add_axes([mx, tb, float(self.CONTENT_WIDTH), th])
             fax.axis('off')
             
             category = self.config.get('target_category', '')
-            self._draw_frame_with_header(fax, "UNRESPONSIVE DRIVER TIMELINE EVALUATION", header_height_ratio=0.18)
+            
+            is_dtr = "DTR" in category
+            is_misuse = "OoP" in category or "CSR" in category
+            
+            header_title = "OCCUPANT MONITORING PHASE EVALUATION" if is_misuse else "UNRESPONSIVE DRIVER TIMELINE EVALUATION"
+            
+            self._draw_frame_with_header(fax, header_title, header_height_ratio=0.18)
             
             tax = self.fig.add_axes([mx, tb, float(self.CONTENT_WIDTH), th])
             tax.axis('off')
@@ -1118,17 +1107,18 @@ class MatplotlibReportBuilder:
             signal_times = self.config.get('signal_times', {})
             tgaze = self.config.get('tgaze', 0.0)
             
-            is_dtr = "DTR" in category
-            m0_label = "Eyes off road" if is_dtr else "Eyes closed"
+            if is_misuse:
+                m0_label = "Initial Trigger"
+            else:
+                m0_label = "Eyes off road" if is_dtr else "Eyes closed"
             
-            milestones = [{"label": m0_label, "time": tgaze, "signal": "Gaze Event", "value": "Initial Trigger", "triggered": True, "enabled": True}]
+            milestones = [{"label": m0_label, "time": tgaze, "signal": "Gaze Event" if not is_misuse else "Misuse Trigger", "value": "", "triggered": True, "enabled": True}]
             
             sigs_conf = self.config.get('signals', {})
             
             for idx, phase in enumerate(phases):
                 pname = phase.get('phaseName')
                 if pname == "Escalation Warning" or pname == "Escalated Distraction Warning" or pname == "Sleep Warning":
-                    # Normalize legacy phase names
                     if pname != "Sleep Warning":
                         pname = "Distinct Warning"
                 sig = phase.get('signal')
@@ -1136,19 +1126,23 @@ class MatplotlibReportBuilder:
                 if t_trig is None:
                     t_trig = signal_times.get(sig)
                 
-                # Always show full alias as signal label
                 alias = sigs_conf.get(sig, {}).get('alias') or sig
-                
                 enabled = phase.get('enabled', True)
                 
-                is_audio = sig.lower().find("sound") >= 0 or sig.lower().find("audio") >= 0 or sig.lower().find("buzzer") >= 0
+                # Detect audio phase by presence of frequency fields (not just signal name)
+                has_audio_fields = phase.get('min_freq') is not None or phase.get('max_freq') is not None
+                is_audio_by_name = sig.lower().find("sound") >= 0 or sig.lower().find("audio") >= 0 or sig.lower().find("buzzer") >= 0
+                is_audio = has_audio_fields or is_audio_by_name
+                
                 if is_audio:
-                    sig_desc = f"{alias} ({phase.get('frequency', phase.get('min_freq', 1000))}-{phase.get('max_freq', phase.get('frequency', 2000))}Hz, \u2265{phase.get('threshold', 0.5)}dB)"
+                    min_f = phase.get('min_freq', phase.get('frequency', 1000))
+                    max_f = phase.get('max_freq', phase.get('frequency', 2000))
+                    thresh = phase.get('threshold', 0.5)
+                    sig_desc = f"Audio ({min_f}-{max_f}Hz, ≥{thresh}dB)"
                 else:
                     raw_val = phase.get('value', 0)
                     val_str = str(raw_val) if raw_val is not None else ''
                     
-                    # Strip common prefix calculated from all unique values of the signal samples
                     sig_data = sigs_conf.get(sig, {})
                     smp = sig_data.get('samples', [])
                     try:
@@ -1167,13 +1161,21 @@ class MatplotlibReportBuilder:
                     
                     sig_desc = f"{alias} {phase.get('operator', '==')} {val_str}"
                     
+                # Get cluster duration if available
+                phase_duration = signal_times.get(f"phase_{idx}_duration")
+                if phase_duration is not None:
+                    sig_desc = f"{sig_desc} | {phase_duration:.1f}s"
+                
                 milestones.append({
                     "label": pname,
                     "time": t_trig if enabled else None,
                     "signal": sig,
                     "value": sig_desc,
                     "triggered": (t_trig is not None) if enabled else False,
-                    "enabled": enabled
+                    "enabled": enabled,
+                    "constraint": phase.get("timeConstraint"),
+                    "constraint_unit": phase.get("timeConstraintUnit", "s"),
+                    "duration": phase_duration
                 })
                 
             num_m = len(milestones)
@@ -1182,30 +1184,40 @@ class MatplotlibReportBuilder:
             dx = (end_x - start_x) / (num_m - 1) if num_m > 1 else 0
             x_coords = [start_x + i * dx for i in range(num_m)]
             
-            # 1. Main timeline axis line with arrow
             tax.annotate("", xy=(end_x + 0.05, 0.58), xytext=(start_x - 0.05, 0.58),
                          arrowprops=dict(arrowstyle="-|>", color=self.COLORS['text_light'], lw=1.2, mutation_scale=8, facecolor=self.COLORS['text_light']))
             
-            # 2. Draw milestones
+            def _check_time_constraint(delta, constraint_str, unit="s"):
+                if delta is None or not constraint_str: return False, ""
+                try:
+                    c = constraint_str.replace(" ", "").lower()
+                    if c.startswith("≤") or c.startswith("<="): 
+                        val_str = c[1:] if c.startswith("≤") else c[2:]
+                        val, op, lbl = float(val_str), lambda d, v: d <= v, f"≤ {val_str}{unit}"
+                    elif c.startswith("≥") or c.startswith(">="): 
+                        val_str = c[1:] if c.startswith("≥") else c[2:]
+                        val, op, lbl = float(val_str), lambda d, v: d >= v, f"≥ {val_str}{unit}"
+                    elif c.startswith("<"): val, op, lbl = float(c[1:]), lambda d, v: d < v, f"< {c[1:]}{unit}"
+                    elif c.startswith(">"): val, op, lbl = float(c[1:]), lambda d, v: d > v, f"> {c[1:]}{unit}"
+                    elif c.startswith("=="): val, op, lbl = float(c[2:]), lambda d, v: abs(d - v) < 0.001, f"== {c[2:]}{unit}"
+                    else: val, op, lbl = float(c), lambda d, v: abs(d - v) < 0.001, f"== {c}{unit}"
+                    return op(delta, val), lbl
+                except: return False, ""
+            
             for i in range(num_m):
                 x = x_coords[i]
                 t = milestones[i]['time']
                 enabled = milestones[i].get('enabled', True)
                 t_lbl = f"{t:.2f}s" if t is not None else ("No trig" if enabled else "Disabled")
                 
-                # Colors
                 tick_color = self.COLORS['text_light'] if enabled else '#D3D3D3'
                 lbl_color = self.COLORS['text'] if enabled else '#A9A9A9'
                 t_color = (self.COLORS['primary'] if t is not None else self.COLORS['fail']) if enabled else '#C0C0C0'
                 
-                # Vertical tick line
                 tax.plot([x, x], [0.48, 0.68], color=tick_color, lw=1.0)
-                
-                # Label at top
                 tax.text(x, 0.74, milestones[i]['label'], fontsize=6.5, color=lbl_color, ha='center', va='bottom', fontweight='bold')
                 tax.text(x, 0.69, t_lbl, fontsize=6, color=t_color, ha='center', va='bottom', fontweight='semibold')
                 
-                # Signal info below
                 if i > 0:
                     y_offset = 0.38 - (0.08 * ((i - 1) % 2))
                     sig_lbl_color = self.COLORS['primary'] if enabled else '#A9A9A9'
@@ -1215,10 +1227,26 @@ class MatplotlibReportBuilder:
                                  arrowprops=dict(arrowstyle="->", color=tick_color, lw=0.6, alpha=0.7),
                                  fontsize=5, color=sig_lbl_color, ha='center', va='top', fontweight='bold',
                                  bbox=dict(facecolor=sig_bg_color, edgecolor='none', boxstyle='round,pad=0.2', alpha=1.0))
+                    
+                    # For misuse: show duration constraint evaluation under the badge
+                    if is_misuse:
+                        duration_constraint = milestones[i].get('constraint')
+                        duration_unit = milestones[i].get('constraint_unit', 's')
+                        event_dur = milestones[i].get('duration')
+                        
+                        if duration_constraint and event_dur is not None:
+                            c_lower = duration_constraint.replace(" ", "").lower()
+                            is_dur_constraint = c_lower.startswith("≥") or c_lower.startswith(">=") or c_lower.startswith(">")
+                            
+                            if is_dur_constraint:
+                                dur_ok, dur_lbl = _check_time_constraint(event_dur, duration_constraint, duration_unit)
+                                dur_stamp = "OK" if dur_ok else "FAIL"
+                                dur_color = self.COLORS['pass'] if dur_ok else self.COLORS['fail']
+                                tax.text(x, 0.32, dur_stamp, fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                         bbox=dict(facecolor=dur_color, edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
                 else:
                     tax.text(x, 0.38, milestones[i]['value'], fontsize=5, color=lbl_color, ha='center', va='top')
-                    
-            # 3. Evaluate steps and draw brackets
+
             for i in range(num_m - 1):
                 x_curr, x_next = x_coords[i], x_coords[i+1]
                 mid_x = (x_curr + x_next) / 2
@@ -1231,7 +1259,16 @@ class MatplotlibReportBuilder:
                 if t_curr is not None and t_next is not None:
                     delta = t_next - t_curr
                 
-                if is_dtr:
+                if is_misuse:
+                    # For misuse categories: use hardcoded limits per protocol
+                    # Time between triggers: ≤30s
+                    # Audio duration: ≥90s (evaluated separately as badge under milestone)
+                    limit_lbl = "≤ 30s"
+                    ok = delta is not None and delta <= 30.0
+                    
+                    # Display delta (time difference) below the line
+                    display_delta = delta
+                elif is_dtr:
                     if i == 0:
                         limit_lbl = "3 - 4s"
                         ok = delta is not None and 3.0 <= delta <= 4.0
@@ -1240,28 +1277,27 @@ class MatplotlibReportBuilder:
                         ok = delta is not None and delta <= 4.0
                     elif i == 2:
                         if num_m == 4:
-                            limit_lbl = "\u2264 5s"
+                            limit_lbl = "≤ 5s"
                             ok = delta is not None and delta <= 5.0
                         else:
                             limit_lbl = "< 1s"
                             ok = delta is not None and delta < 1.0
                     elif i == 3:
-                        limit_lbl = "\u2264 5s"
+                        limit_lbl = "≤ 5s"
                         ok = delta is not None and delta <= 5.0
                 else:
                     if i == 0:
-                        limit_lbl = "\u2264 7s"
+                        limit_lbl = "≤ 7s"
                         ok = delta is not None and delta <= 7.0
                     elif i == 1:
-                        limit_lbl = "\u2264 5s"
+                        limit_lbl = "≤ 5s"
                         ok = delta is not None and delta <= 5.0
                 
-                delta_lbl = f"{delta:.2f}s" if delta is not None else "--"
+                delta_lbl = f"{display_delta:.2f}s" if display_delta is not None else "--"
                 
                 arrow_color = self.COLORS['text_light'] if step_enabled else '#D3D3D3'
                 text_color = self.COLORS['text_light'] if step_enabled else '#A9A9A9'
                 
-                # Horizontal double-headed arrow
                 tax.annotate("", xy=(x_next, 0.46), xytext=(x_curr, 0.46),
                              arrowprops=dict(arrowstyle="<->", color=arrow_color, lw=0.7))
                 tax.text(mid_x, 0.48, limit_lbl, fontsize=5.5, color=text_color, ha='center', va='bottom', fontweight='semibold')
@@ -1269,89 +1305,79 @@ class MatplotlibReportBuilder:
                 if step_enabled:
                     tax.text(mid_x, 0.42, delta_lbl, fontsize=6.5, color=self.COLORS['primary'] if ok else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
                     
-                    # Validation Stamp gate
                     stamp_text = "OK" if ok else "FAIL"
                     stamp_color = self.COLORS['pass'] if ok else self.COLORS['fail']
                     tax.text(mid_x, 0.58, stamp_text, fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
                              bbox=dict(facecolor=stamp_color, edgecolor='none', boxstyle='round,pad=0.22', alpha=1.0), zorder=10)
 
-            # 4. Draw long compound brackets
-            if is_dtr:
-                # M0 -> M2 (7 - 8s)
-                if milestones[2].get('enabled', True):
-                    t0, t2 = milestones[0]['time'], milestones[2]['time']
-                    ok_m02 = False
-                    if t0 is not None and t2 is not None:
-                        ok_m02 = 6.0 <= (t2 - t0) <= 8.0
-                    lbl_m02 = f"{(t2 - t0):.2f}s" if (t0 is not None and t2 is not None) else "--"
-                    
-                    tax.annotate("", xy=(x_coords[2], 0.22), xytext=(x_coords[0], 0.22),
-                                 arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                    tax.text((x_coords[0] + x_coords[2])/2, 0.25, "6 - 8s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                    tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                    tax.text((x_coords[0] + x_coords[2])/2, 0.22, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
-                             bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+            if not is_misuse:
+                if is_dtr:
+                    if len(milestones) > 2 and milestones[2].get('enabled', True):
+                        t0, t2 = milestones[0]['time'], milestones[2]['time']
+                        ok_m02 = False
+                        if t0 is not None and t2 is not None:
+                            ok_m02 = 6.0 <= (t2 - t0) <= 8.0
+                        lbl_m02 = f"{(t2 - t0):.2f}s" if (t0 is not None and t2 is not None) else "--"
+                        
+                        tax.annotate("", xy=(x_coords[2], 0.22), xytext=(x_coords[0], 0.22),
+                                     arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.25, "6 - 8s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.22, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
 
-                # M0 -> M3/M4 End Bracket
-                target_idx = 3 if num_m == 4 else 4
-                if milestones[target_idx].get('enabled', True):
-                    target_limit_lbl = "\u2264 13s" if num_m == 4 else "13 - 14s"
-                    t0 = milestones[0]['time']
-                    t_end = milestones[target_idx]['time'] if num_m > target_idx else None
-                    ok_end = False
-                    if t0 is not None and t_end is not None:
-                        if num_m == 4:
-                            ok_end = (t_end - t0) <= 13.0
-                        else:
-                            ok_end = 13.0 <= (t_end - t0) <= 14.0
-                    lbl_end = f"{(t_end - t0):.2f}s" if (t0 is not None and t_end is not None) else "--"
-                    
-                    tax.annotate("", xy=(x_coords[target_idx], 0.10), xytext=(x_coords[0], 0.10),
-                                 arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.13, target_limit_lbl, fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.05, lbl_end, fontsize=6.5, color=self.COLORS['primary'] if ok_end else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.10, "OK" if ok_end else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
-                             bbox=dict(facecolor=self.COLORS['pass'] if ok_end else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
-            else:
-                # SLE: M0 -> M2 compound bracket (≤ 12s)
-                target_idx = 2 if num_m > 2 else num_m - 1
-                if num_m > target_idx and milestones[target_idx].get('enabled', True):
-                    t0 = milestones[0]['time']
-                    t_end = milestones[target_idx]['time'] if num_m > target_idx else None
-                    
-                    ok_m02 = False
-                    if t0 is not None and t_end is not None:
-                        ok_m02 = (t_end - t0) <= 12.0
-                    lbl_m02 = f"{(t_end - t0):.2f}s" if (t0 is not None and t_end is not None) else "--"
-                    
-                    tax.annotate("", xy=(x_coords[target_idx], 0.16), xytext=(x_coords[0], 0.16),
-                                 arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.19, "\u2264 12s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                    tax.text((x_coords[0] + x_coords[target_idx])/2, 0.16, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
-                             bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+                    target_idx = 3 if num_m == 4 else 4
+                    if num_m > target_idx and milestones[target_idx].get('enabled', True):
+                        target_limit_lbl = "≤ 13s" if num_m == 4 else "13 - 14s"
+                        t0 = milestones[0]['time']
+                        t_end = milestones[target_idx]['time'] if num_m > target_idx else None
+                        ok_end = False
+                        if t0 is not None and t_end is not None:
+                            if num_m == 4:
+                                ok_end = (t_end - t0) <= 13.0
+                            else:
+                                ok_end = 13.0 <= (t_end - t0) <= 14.0
+                        lbl_end = f"{(t_end - t0):.2f}s" if (t0 is not None and t_end is not None) else "--"
+                        
+                        tax.annotate("", xy=(x_coords[target_idx], 0.10), xytext=(x_coords[0], 0.10),
+                                     arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.13, target_limit_lbl, fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.05, lbl_end, fontsize=6.5, color=self.COLORS['primary'] if ok_end else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.10, "OK" if ok_end else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=self.COLORS['pass'] if ok_end else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+                else:
+                    target_idx = 2 if num_m > 2 else num_m - 1
+                    if num_m > target_idx and milestones[target_idx].get('enabled', True):
+                        t0 = milestones[0]['time']
+                        t_end = milestones[target_idx]['time'] if num_m > target_idx else None
+                        
+                        ok_m02 = False
+                        if t0 is not None and t_end is not None:
+                            ok_m02 = (t_end - t0) <= 12.0
+                        lbl_m02 = f"{(t_end - t0):.2f}s" if (t0 is not None and t_end is not None) else "--"
+                        
+                        tax.annotate("", xy=(x_coords[target_idx], 0.16), xytext=(x_coords[0], 0.16),
+                                     arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.19, "≤ 12s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.16, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
         except Exception as e:
             import traceback
             traceback.print_exc()
             raise e
 
     def _add_footer(self):
-        fax = self.fig.add_axes([self.MARGIN_X, 0.02, self.CONTENT_WIDTH, 0.04]); fax.axis('off')
+        fax = self.fig.add_axes([self.MARGIN_X, 0.015, self.CONTENT_WIDTH, 0.04]); fax.axis('off')
         category = self.config.get('target_category', '')
-        if not (category and "Unresponsive" in category):
-            fax.axhline(y=0.9, xmin=0, xmax=1, color=self.COLORS['border_light'], linewidth=1)
         test_date = self.config.get('test_date', datetime.now())
         if test_date.tzinfo is not None:
-            tz_str = test_date.strftime('%Z')
             offset = test_date.strftime('%z')
             if offset:
                 offset_str = f"UTC{offset[:3]}:{offset[3:]}"
-                if tz_str and tz_str != offset:
-                    tz_suffix = f" {tz_str} ({offset_str})"
-                else:
-                    tz_suffix = f" ({offset_str})"
+                tz_suffix = f" ({offset_str})"
             else:
-                tz_suffix = f" {tz_str}" if tz_str else ""
+                tz_suffix = ""
             lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}{tz_suffix}"
         else:
             lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}"

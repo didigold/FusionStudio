@@ -34,14 +34,14 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
         mask_start: ignore samples before this time (default 6.0s)
     
     Returns:
-        float or None: start time of the first valid cluster, or None if no valid events
+        tuple (start_time, duration) or (None, None) if no valid events
     """
     import numpy as np
     samples = np.asarray(samples, dtype=float)
     timestamps = np.asarray(timestamps, dtype=float)
     
     if len(samples) == 0 or len(timestamps) == 0:
-        return None
+        return None, None
     
     # Build boolean mask based on operator
     if operator == '>':
@@ -57,13 +57,13 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
     elif operator == '!=':
         mask = np.abs(samples - threshold) >= 1e-6
     else:
-        return None
+        return None, None
     
     # Ignore initial noise
     mask = mask & (timestamps >= mask_start)
     
     if not np.any(mask):
-        return None
+        return None, None
     
     # Find edges (rising/falling) of the mask
     padded = np.concatenate(([False], mask, [False]))
@@ -72,7 +72,7 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
     ends = np.flatnonzero(diff == -1)     # indices where True ends (exclusive)
     
     if len(starts) == 0:
-        return None
+        return None, None
     
     # Support bridging gaps between spikes (useful for sound waves)
     max_gap_duration = 0.05  # 50ms gap allowed
@@ -100,10 +100,10 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
         duration = cluster_end - cluster_start
         
         if duration >= min_cluster_duration:
-            return cluster_start
-    
+            return cluster_start, duration
+            
     # No cluster met the minimum duration — all were noise spikes
-    return None
+    return None, None
 
 def obtain_peak_frequency(file_path, start_time=9, end_time=10.5, min_freq=230, max_freq=2000, signal_name='SoundPressure'):
     """
@@ -117,18 +117,31 @@ def obtain_peak_frequency(file_path, start_time=9, end_time=10.5, min_freq=230, 
         from asammdf import MDF
         with MDF(file_path) as mdf:
             # Try to get the signal
-            if signal_name not in mdf:
+            lookup_names = [signal_name]
+            if signal_name == 'SoundPressure':
+                lookup_names = ['SoundPressure', 'MySound PressureTask.Sound Pressure']
+            elif signal_name == 'MySound PressureTask.Sound Pressure':
+                lookup_names = ['MySound PressureTask.Sound Pressure', 'SoundPressure']
+                
+            pressure_signal = None
+            for name in lookup_names:
+                if name in mdf:
+                    pressure_signal = mdf.get(name)
+                    break
+            
+            if pressure_signal is None:
                 # Try searching case insensitive or partial
                 found = False
-                for ch in mdf.iter_channels():
-                    if signal_name.lower() in ch.name.lower():
-                        pressure_signal = ch
-                        found = True
+                for name in lookup_names:
+                    for ch in mdf.iter_channels():
+                        if name.lower() in ch.name.lower():
+                            pressure_signal = ch
+                            found = True
+                            break
+                    if found:
                         break
                 if not found:
                     return None, f"Signal '{signal_name}' not found in {file_path}"
-            else:
-                pressure_signal = mdf.get(signal_name)
 
             timestamps = pressure_signal.timestamps
             samples = pressure_signal.samples

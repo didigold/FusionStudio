@@ -39,7 +39,7 @@ export const analysisApi = {
       // Derive the base MF4 path (node.path in the tree is always the non-tracking file)
       const basePath = file_path.replace(/_tracking\.mf4$/i, '.mf4')
       const hasMarks = marks_type === 'OM' 
-        ? (marks.length === 2 && marks[0] !== -1 && marks[1] !== -1)
+        ? (marks.length > 0 && marks[0] !== -1)
         : (marks.length > 0);
       useAppStore.getState().updateFileStatus(basePath, { has_marks: hasMarks })
     }).catch(() => { /* silent */ })

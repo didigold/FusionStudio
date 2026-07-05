@@ -141,20 +141,18 @@ const DEFAULT_MISUSE_CRITERIA: Record<string, MisusePhase[]> = {
     { phaseName: "Detection", alertType: "visual", signal: "", enabled: true, verificationMethod: "video" },
     { phaseName: "Audio Warning", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, speedCondition: "40", speedMode: "manual", verificationMethod: "signal" }
   ],
-  "OoP \u2014 Change of Status": [
+  "OoP — Change of Status": [
     { phaseName: "Detection", alertType: "signal", signal: "FaceOnFacia", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous" }
   ],
-  "OoP \u2014 15 min Warning": [
+  "OoP — 15 min Warning": [
     { phaseName: "Detection", alertType: "signal", signal: "FaceOnFacia", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous" }
   ],
-  "CSR \u2014 Initial Phase": [
+  "CSR — Initial Phase": [
     { phaseName: "Detection", alertType: "visual", signal: "", enabled: true, verificationMethod: "video" },
-    { phaseName: "Audio Warning", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, speedCondition: "40", speedMode: "manual", verificationMethod: "signal" },
-    { phaseName: "Audio Duration", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, timeConstraint: "≥90", timeConstraintUnit: "s", verificationMethod: "signal", mask: "previous" }
+    { phaseName: "Audio Warning", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, timeConstraint: "≥90", timeConstraintUnit: "s", verificationMethod: "signal" }
   ],
-  "CSR \u2014 Change of Status": [
-    { phaseName: "Detection", alertType: "signal", signal: "LapBeltOnly", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous" },
-    { phaseName: "Audio Duration", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, timeConstraint: "\u226590", timeConstraintUnit: "s", verificationMethod: "signal", mask: "previous" }
+  "CSR — Change of Status": [
+    { phaseName: "Detection", alertType: "signal", signal: "LapBeltOnly", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous", timeConstraint: "≥90", timeConstraintUnit: "s" }
   ]
 }
 
@@ -452,7 +450,7 @@ interface AppState {
   setPendingConfigName: (n: string | null) => void
 
   // Config actions
-  autoLoadChannelsAndMerge: (importedCategories?: Record<string, SignalConfig[]>, targetProtocol?: 'Euro NCAP' | 'GSR ADDW', targetResults?: any[], isMisuse?: boolean) => Promise<void>
+  autoLoadChannelsAndMerge: (importedCategories?: Record<string, SignalConfig[]>, targetProtocol?: 'Euro NCAP' | 'GSR ADDW', targetResults?: any[], isMisuse?: boolean, onlyForCategory?: string) => Promise<void>
   importConfigJSON: (fileContent: string, fileName: string) => Promise<void>
   confirmPromptedPath: (path: string) => Promise<boolean>
   exportConfig: () => Promise<void>
@@ -810,33 +808,35 @@ export const useAppStore = create<AppState>((set) => ({
   setPendingConfigName: (n) => set({ pendingConfigName: n }),
 
   // Config actions implementation
-  autoLoadChannelsAndMerge: async (importedCategories, targetProtocol, targetResults, isMisuse) => {
+  autoLoadChannelsAndMerge: async (importedCategories, targetProtocol, targetResults, isMisuse, onlyForCategory) => {
     const state = useAppStore.getState()
     const activeProtocol = targetProtocol || state.protocol
-    const targetCategoriesList = isMisuse
-      ? [
-          "OoP \u2014 Initial Phase",
-          "OoP \u2014 Change of Status",
-          "OoP \u2014 15 min Warning",
-          "CSR \u2014 Initial Phase",
-          "CSR \u2014 Change of Status"
-        ]
-      : (activeProtocol === 'Euro NCAP' 
+    const targetCategoriesList = onlyForCategory
+      ? [onlyForCategory]
+      : (isMisuse
           ? [
-              "Long Distraction (NDT)",
-              "Long Distraction (DT)",
-              "Short Distraction (NDT)",
-              "Short Distraction (DT)",
-              "Microsleep",
-              "Sleep",
-              "Drowsiness",
-              "Unresponsive driver (SLE)",
-              "Unresponsive driver (DTR)"
+              "OoP \u2014 Initial Phase",
+              "OoP \u2014 Change of Status",
+              "OoP \u2014 15 min Warning",
+              "CSR \u2014 Initial Phase",
+              "CSR \u2014 Change of Status"
             ]
-          : [
-              "High Speed",
-              "Low Speed"
-            ])
+          : (activeProtocol === 'Euro NCAP' 
+              ? [
+                  "Long Distraction (NDT)",
+                  "Long Distraction (DT)",
+                  "Short Distraction (NDT)",
+                  "Short Distraction (DT)",
+                  "Microsleep",
+                  "Sleep",
+                  "Drowsiness",
+                  "Unresponsive driver (SLE)",
+                  "Unresponsive driver (DTR)"
+                ]
+              : [
+                  "High Speed",
+                  "Low Speed"
+                ]))
 
     const activeResults = targetResults || state.analysisResults
 
@@ -919,7 +919,9 @@ export const useAppStore = create<AppState>((set) => ({
     const toastId = toast.loading("Auto-loading MF4 data...")
 
     if (isMisuse) {
-      const representativeFile = mdfFiles.find(f => getOmScenarioCategory(f) !== null) || mdfFiles[0]
+      const representativeFile = onlyForCategory
+        ? (mdfFiles.find(f => getOmScenarioCategory(f) === onlyForCategory) || mdfFiles.find(f => getOmScenarioCategory(f) !== null) || mdfFiles[0])
+        : (mdfFiles.find(f => getOmScenarioCategory(f) !== null) || mdfFiles[0])
       try {
         const response = await fetch('/api/analysis/channels', {
           method: 'POST',

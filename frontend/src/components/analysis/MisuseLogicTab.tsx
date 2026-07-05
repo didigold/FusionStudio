@@ -1,5 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, useScroll, AnimatePresence } from "framer-motion";
+import { DataGrid } from "@mui/x-data-grid";
+import type { GridColDef } from "@mui/x-data-grid";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,8 +62,11 @@ import {
   FolderOpen,
   Lock,
   Cog,
+  SlidersHorizontal,
   Box,
   Square,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
@@ -82,6 +88,11 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { getOmScenarioCategory } from "@/lib/utils";
 import { MisuseTimelineEditor } from "./MisuseTimelineEditor";
 
@@ -129,6 +140,7 @@ export function MisuseLogicTab() {
     analysisEngineer,
     analysisAnalyst,
     analysisSourcePath,
+    analysisAvailableCameras,
 
     // Store states
     protocol,
@@ -182,15 +194,47 @@ export function MisuseLogicTab() {
     }
   }, [analysisSelectedFile]);
 
+  // Auto-load channels when selected file or category changes and list is empty
+  useEffect(() => {
+    if (analysisSelectedFile && activeCategory) {
+      const currentList = signalsConfig[activeCategory] || [];
+      const onlySoundPressure = currentList.length === 0 || (currentList.length === 1 && currentList[0].name === "SoundPressure");
+      if (onlySoundPressure) {
+        autoLoadChannelsAndMerge(undefined, undefined, undefined, true, activeCategory);
+      }
+    }
+  }, [analysisSelectedFile, activeCategory, autoLoadChannelsAndMerge, signalsConfig]);
+
   // Filter signals state
   const [filterQuery, setFilterQuery] = useState("");
 
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
+  // Report Settings Camera state
+  const [reportCameraLeft, setReportCameraLeft] = useState<string>('');
+  const [reportCameraRight, setReportCameraRight] = useState<string>('');
+
+  useEffect(() => {
+    if (analysisAvailableCameras.length > 0) {
+      if (!reportCameraLeft || !analysisAvailableCameras.includes(reportCameraLeft)) {
+        setReportCameraLeft(analysisAvailableCameras[0] as string);
+      }
+      if (!reportCameraRight || !analysisAvailableCameras.includes(reportCameraRight)) {
+        if (analysisAvailableCameras.length > 1) {
+          setReportCameraRight(analysisAvailableCameras[1] as string);
+        } else {
+          setReportCameraRight('');
+        }
+      }
+    } else {
+      setReportCameraLeft('');
+      setReportCameraRight('');
+    }
+  }, [analysisAvailableCameras]);
+
   // Batch generation progress states
   const wsRef = useRef<WebSocket | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ container: tableContainerRef });
 
   // Modals / Dropdowns
   const [gaugeRulesModalOpen, setGaugeRulesModalOpen] = useState(false);
@@ -1008,6 +1052,10 @@ export function MisuseLogicTab() {
           threshold: audioThreshold,
         },
         source_dir: analysisSourcePath,
+        report_camera_settings: {
+          left: reportCameraLeft,
+          right: reportCameraRight
+        }
       });
 
       if (res.data?.status === "success" && res.data?.preview_path) {
@@ -1102,6 +1150,10 @@ export function MisuseLogicTab() {
           threshold: audioThreshold,
         },
         source_dir: analysisSourcePath,
+        report_camera_settings: {
+          left: reportCameraLeft,
+          right: reportCameraRight
+        }
       });
     } catch (err) {
       console.error(err);
@@ -1137,14 +1189,234 @@ export function MisuseLogicTab() {
   const isBatchEnabled = analysisCheckedFiles.length > 0;
 
   // Filter signals list by query string
-  const filteredSignals = currentSignalsList.filter((sig) => {
-    if (!sig || typeof sig.name !== "string") return false;
-    const nameLower = sig.name.toLowerCase();
-    const aliasLower =
-      typeof sig.alias === "string" ? sig.alias.toLowerCase() : nameLower;
+  const filteredSignals = useMemo(() => {
     const queryLower = filterQuery.toLowerCase();
-    return nameLower.includes(queryLower) || aliasLower.includes(queryLower);
-  });
+    return currentSignalsList.filter((sig) => {
+      if (!sig || typeof sig.name !== "string") return false;
+      const nameLower = sig.name.toLowerCase();
+      const aliasLower =
+        typeof sig.alias === "string" ? sig.alias.toLowerCase() : nameLower;
+      return nameLower.includes(queryLower) || aliasLower.includes(queryLower);
+    });
+  }, [currentSignalsList, filterQuery]);
+
+  const sortedFilteredSignals = useMemo(() => {
+    const checked = filteredSignals.filter((sig) => sig.checked);
+    const unchecked = filteredSignals.filter((sig) => !sig.checked);
+    return [...checked, ...unchecked];
+  }, [filteredSignals]);
+
+  const [isCollapsibleOpen, setIsCollapsibleOpen] = useState(true);
+
+  const columns: GridColDef[] = useMemo(() => [
+    {
+      field: "checked",
+      headerName: `${checkedCount}/5`,
+      width: 64,
+      sortable: false,
+      disableColumnMenu: true,
+      renderCell: (params) => (
+        <div className="flex justify-center items-center h-full w-full">
+          <Checkbox
+            checked={params.value}
+            onCheckedChange={(checked) =>
+              updateSignalField(activeCategory, params.row.name, "checked", !!checked)
+            }
+            disabled={!params.value && checkedCount >= 5}
+            className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+          />
+        </div>
+      ),
+    },
+    {
+      field: "name",
+      headerName: "Signal",
+      flex: 1.5,
+      renderCell: (params) => (
+        <div className="text-base font-semibold text-foreground/90 truncate w-full flex items-center h-full" title={params.value}>
+          {params.value}
+        </div>
+      ),
+    },
+    {
+      field: "operator",
+      headerName: "Operator",
+      width: 120,
+      renderCell: (params) => {
+        if (params.row.name === "SoundPressure") {
+          return (
+            <div className="flex items-center h-full w-full pr-2 text-sm text-muted-foreground/60 font-medium">
+              Bandpass
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center h-full w-full pr-2">
+            <Select
+              disabled={activeCategory.toLowerCase().includes("unresponsive")}
+              value={
+                activeCategory.toLowerCase().includes("unresponsive")
+                  ? "None"
+                  : ["None", ">", "<", ">=", "<=", "==", "!="].includes(params.value)
+                  ? params.value
+                  : "None"
+              }
+              onValueChange={(val) =>
+                updateSignalField(activeCategory, params.row.name, "operator", val)
+              }
+            >
+              <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70 w-full">
+                <SelectValue placeholder="Op" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                {["None", ">", "<", ">=", "<=", "==", "!="].map(op => (
+                  <SelectItem key={op} value={op} className="text-sm">
+                    {op}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      },
+    },
+    {
+      field: "threshold",
+      headerName: "Threshold",
+      width: 200,
+      renderCell: (params) => {
+        if (params.row.name === "SoundPressure" || activeCategory.toLowerCase().includes("unresponsive")) {
+          return <span className="text-sm text-muted-foreground/60 text-center w-full block">—</span>;
+        }
+
+        const cacheKey = `${loadedFiles[activeCategory] ?? ""}::${params.row.name}`;
+        const cachedVals = signalValuesCache[cacheKey] || [];
+        if (cachedVals && cachedVals.length > 0) {
+          const cleanCached = cachedVals.filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
+          const currentVal = params.value !== null && params.value !== undefined && String(params.value).trim() !== "" ? params.value : 0.0;
+          const uniqueMap = new Map<string, number | string>();
+          uniqueMap.set(String(currentVal), currentVal);
+          cleanCached.forEach((v) => uniqueMap.set(String(v), v));
+          const allVals = Array.from(uniqueMap.values());
+          allVals.sort((a, b) => {
+            const numA = Number(a);
+            const numB = Number(b);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+          });
+          return (
+            <div className="flex items-center h-full w-full pr-2">
+              <Select
+                value={String(currentVal)}
+                onValueChange={(val) => {
+                  const parsed = parseFloat(val);
+                  const finalVal = isNaN(parsed) ? val : parsed;
+                  updateSignalField(activeCategory, params.row.name, "threshold", finalVal);
+                }}
+              >
+                <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70 w-full">
+                  <SelectValue placeholder="Value" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm max-h-48 overflow-y-auto">
+                  {allVals.map((v) => (
+                    <SelectItem key={String(v)} value={String(v)} className="text-sm font-mono">
+                      {String(v)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center h-full w-full pr-2">
+            <Input
+              type={typeof params.value === "number" ? "number" : "text"}
+              value={params.value !== null && params.value !== undefined ? String(params.value) : ""}
+              onChange={(e) => {
+                const rawVal = e.target.value;
+                if (typeof params.value === "number") {
+                  updateSignalField(activeCategory, params.row.name, "threshold", parseFloat(rawVal) || 0.0);
+                } else {
+                  updateSignalField(activeCategory, params.row.name, "threshold", rawVal);
+                }
+              }}
+              className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground w-full"
+              step="0.1"
+            />
+          </div>
+        );
+      },
+    },
+    {
+      field: "alias",
+      headerName: "Alias",
+      flex: 1,
+      renderCell: (params) => (
+        <div className="flex items-center h-full w-full pr-2">
+          <Input
+            value={params.value || ""}
+            onChange={(e) => updateSignalField(activeCategory, params.row.name, "alias", e.target.value)}
+            className="h-8 bg-surface-2/50 border border-border text-sm rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground w-full"
+          />
+        </div>
+      ),
+    },
+  ], [checkedCount, activeCategory, loadedFiles, signalValuesCache, updateSignalField]);
+
+  const rows = useMemo(() => {
+    return sortedFilteredSignals.map(sig => ({
+      id: sig.name,
+      name: sig.name,
+      checked: sig.checked,
+      operator: sig.operator,
+      threshold: sig.threshold,
+      alias: sig.alias,
+    }));
+  }, [sortedFilteredSignals]);
+
+  const [isMounting, setIsMounting] = useState(true);
+
+  useEffect(() => {
+    if (!isCollapsibleOpen) {
+      setIsMounting(true);
+      const timer = setTimeout(() => setIsMounting(false), 50);
+      return () => clearTimeout(timer);
+    } else {
+      setIsMounting(false);
+    }
+  }, [isCollapsibleOpen]);
+
+  const availableSignalsList = useMemo(() => currentSignalsList.map(s => s.name), [currentSignalsList]);
+
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    if (!tableContainerRef.current) return;
+    const scroller = tableContainerRef.current.querySelector('.MuiDataGrid-virtualScroller');
+    if (!scroller) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scroller;
+      if (scrollHeight > clientHeight) {
+        setScrollProgress(scrollTop / (scrollHeight - clientHeight));
+      } else {
+        setScrollProgress(0);
+      }
+    };
+
+    scroller.addEventListener('scroll', handleScroll);
+    handleScroll();
+    
+    const observer = new ResizeObserver(() => handleScroll());
+    observer.observe(scroller);
+
+    return () => {
+      scroller.removeEventListener('scroll', handleScroll);
+      observer.disconnect();
+    };
+  }, [rows, isMounting]);
 
   return (
     <div className="flex flex-col animate-in fade-in duration-500 max-w-full w-full h-full min-h-0 overflow-hidden bg-surface-2/40">
@@ -1442,6 +1714,68 @@ export function MisuseLogicTab() {
 
             {/* Preview and Run Batch Button Group */}
             <div className="flex flex-row h-9 bg-surface-2/50 border border-border rounded-lg shadow-xl backdrop-blur-md overflow-hidden">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 p-0 rounded-none text-muted-foreground hover:text-foreground hover:bg-surface-2/70 border-none bg-transparent"
+                    title="Report Settings"
+                  >
+                    <SlidersHorizontal className="w-5 h-5 text-primary" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 bg-popover border border-border shadow-2xl rounded-xl p-4 mr-4 mt-2">
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-foreground">Report Settings</h4>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Camera Frame: Initial Trigger</p>
+                      <Select
+                        value={reportCameraLeft}
+                        onValueChange={setReportCameraLeft}
+                      >
+                        <SelectTrigger className="bg-background border border-border text-foreground">
+                          <SelectValue placeholder="Select camera" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border border-border">
+                          {analysisAvailableCameras.map((cam, idx) => (
+                            <SelectItem
+                              key={idx}
+                              value={cam.toString()}
+                              className="text-foreground hover:bg-secondary focus:bg-secondary"
+                            >
+                              Camera: {cam}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Camera Frame: Detection</p>
+                      <Select
+                        value={reportCameraRight}
+                        onValueChange={setReportCameraRight}
+                      >
+                        <SelectTrigger className="bg-background border border-border text-foreground">
+                          <SelectValue placeholder="Select camera" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border border-border">
+                          {analysisAvailableCameras.map((cam, idx) => (
+                            <SelectItem
+                              key={idx}
+                              value={cam.toString()}
+                              className="text-foreground hover:bg-secondary focus:bg-secondary"
+                            >
+                              Camera: {cam}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <div className="h-full w-[1px] bg-border" />
               <div
                 title={
                   !analysisSelectedFile
@@ -1530,283 +1864,175 @@ export function MisuseLogicTab() {
 
         <div className="p-0 flex-1 flex flex-col overflow-hidden">
           {/* Scrollable table with height adjusted to utilize bottom space */}
-          <div
-            className="flex-1 min-h-0 overflow-y-auto gaze-table-container relative"
-            ref={tableContainerRef}
-          >
-            {/* Scroll Indicator Wrapper (Sticky at top-0, zero height to prevent pushing layout) */}
-            <div className="sticky top-0 left-0 right-0 h-0 z-30 w-full overflow-visible">
-              <motion.div
-                id="scroll-indicator"
-                style={{
-                  scaleX: scrollYProgress,
-                  transformOrigin: "left",
-                }}
-                className="absolute top-10 left-0 right-0 h-[3px] bg-primary w-full"
-              />
+          {!isCollapsibleOpen && (
+            <div
+              className="flex-1 min-h-0 relative w-full overflow-hidden max-w-full gaze-table-container"
+              ref={tableContainerRef}
+            >
+              {isMounting ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1 z-50">
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <div className="text-sm text-muted-foreground font-medium animate-pulse">
+                    {loadedFiles[activeCategory]
+                      ? `Loading signals from ${loadedFiles[activeCategory].split(/[/\\]/).pop()}`
+                      : "Loading table..."}
+                  </div>
+                </div>
+              ) : null}
+              {/* Custom Horizontal Scroll Indicator */}
+              {!isMounting && (
+                <div className="absolute top-[40px] left-0 right-0 h-0 z-30 w-full overflow-visible pointer-events-none">
+                  <div
+                    style={{
+                      transform: `scaleX(${scrollProgress})`,
+                      transformOrigin: "left",
+                    }}
+                    className="absolute top-0 left-0 right-0 h-[2px] bg-primary w-full transition-transform duration-75 ease-out"
+                  />
+                </div>
+              )}
+              {!isCollapsibleOpen && !isMounting && (
+                <DataGrid
+                  rows={rows}
+                  columns={columns}
+                  rowHeight={52}
+                  disableRowSelectionOnClick
+                  pagination
+                  initialState={{
+                    pagination: {
+                      paginationModel: { pageSize: 100, page: 0 },
+                    },
+                  }}
+                  pageSizeOptions={[25, 50, 100, 200, 500]}
+                  disableColumnMenu
+                  slots={{
+                    noRowsOverlay: () => (
+                      <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                        {currentSignalsList.length === 0
+                          ? "No signals configured for this category."
+                          : "No signals matched the filter query."}
+                      </div>
+                    )
+                  }}
+                  sx={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    '& .MuiDataGrid-cell': {
+                      borderBottom: '1px solid var(--border) !important',
+                      display: 'flex',
+                      alignItems: 'center',
+                    },
+                    '& .MuiDataGrid-columnHeaders': {
+                      borderBottom: '1px solid var(--border) !important',
+                      backgroundColor: 'var(--surface-2) !important',
+                      minHeight: '40px !important',
+                      maxHeight: '40px !important',
+                      lineHeight: '40px !important',
+                      textTransform: 'uppercase',
+                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      letterSpacing: '0.05em',
+                      color: 'inherit',
+                    },
+                    '& .MuiDataGrid-columnHeader': {
+                      backgroundColor: 'var(--surface-2) !important',
+                    },
+                    '& .MuiDataGrid-columnSeparator': {
+                      color: 'var(--border) !important',
+                    },
+                    '& .MuiDataGrid-columnHeaderTitle': {
+                      fontWeight: 'bold',
+                    },
+                    '& .MuiDataGrid-row:hover': {
+                      backgroundColor: 'rgba(255,255,255,0.02)',
+                    },
+                    '& .MuiDataGrid-virtualScroller::-webkit-scrollbar': {
+                      display: 'none',
+                    },
+                    '& .MuiDataGrid-virtualScroller': {
+                      overflowY: 'auto',
+                      msOverflowStyle: 'none',
+                      scrollbarWidth: 'none',
+                    },
+                    '& .MuiDataGrid-footerContainer': {
+                      borderTop: '1px solid var(--border) !important',
+                      backgroundColor: 'var(--surface-2) !important',
+                      color: 'inherit',
+                    },
+                    '& .MuiDataGrid-withBorderColor': {
+                      borderColor: 'var(--border) !important',
+                    },
+                    '& .MuiTablePagination-root': {
+                      color: 'inherit',
+                      fontFamily: 'inherit !important',
+                    },
+                    '& .MuiTablePagination-actions button': {
+                      color: 'inherit',
+                    },
+                    '& .MuiTablePagination-select': {
+                      color: 'inherit',
+                      fontFamily: 'inherit !important',
+                    },
+                    '& .MuiTablePagination-displayedRows': {
+                      fontFamily: 'inherit !important',
+                    },
+                    '& .MuiTablePagination-selectLabel': {
+                      fontFamily: 'inherit !important',
+                    },
+                    color: 'inherit',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              )}
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-16 text-sm uppercase font-bold text-center h-10 sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    {checkedCount}/5
-                  </TableHead>
-                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Signal
-                  </TableHead>
-                  <TableHead className="w-32 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Operator
-                  </TableHead>
-                  <TableHead className="w-56 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Threshold
-                  </TableHead>
-                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Alias
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSignals.map((sig) => (
-                  <TableRow
-                    key={sig.name}
-                    className={cn(
-                      "border-white/5 hover:bg-white/[0.02] transition-all duration-200",
-                      sig.checked ? "opacity-100" : "opacity-50"
-                    )}
-                  >
-                    <TableCell className="py-2.5 text-center">
-                      <Checkbox
-                        checked={sig.checked}
-                        onCheckedChange={(checked) =>
-                          updateSignalField(
-                            activeCategory,
-                            sig.name,
-                            "checked",
-                            !!checked,
-                          )
-                        }
-                        disabled={!sig.checked && checkedCount >= 5}
-                        className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                      />
-                    </TableCell>
-                    <TableCell className="py-2.5 text-base font-semibold text-foreground/90">
-                      {sig.name}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      {sig.name === "SoundPressure" ? (
-                        <span className="text-sm text-muted-foreground/60 px-2 font-medium">
-                          Bandpass
-                        </span>
-                      ) : (
-                        <Select
-                          disabled={activeCategory.toLowerCase().includes("unresponsive")}
-                          value={
-                            activeCategory.toLowerCase().includes("unresponsive")
-                              ? "None"
-                              : ["None", ">", "<", ">=", "<=", "==", "!="].includes(
-                                  sig.operator,
-                                )
-                              ? sig.operator
-                              : "None"
-                          }
-                          onValueChange={(val) =>
-                            updateSignalField(
-                              activeCategory,
-                              sig.name,
-                              "operator",
-                              val,
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70">
-                            <SelectValue placeholder="Op" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                            <SelectItem value="None" className="text-sm">
-                              None
-                            </SelectItem>
-                            <SelectItem value=">" className="text-sm">
-                              &gt;
-                            </SelectItem>
-                            <SelectItem value="<" className="text-sm">
-                              &lt;
-                            </SelectItem>
-                            <SelectItem value=">=" className="text-sm">
-                              &gt;=
-                            </SelectItem>
-                            <SelectItem value="<=" className="text-sm">
-                              &lt;=
-                            </SelectItem>
-                            <SelectItem value="==" className="text-sm">
-                              ==
-                            </SelectItem>
-                            <SelectItem value="!=" className="text-sm">
-                              !=
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      {sig.name === "SoundPressure" || activeCategory.toLowerCase().includes("unresponsive") ? (
-                        <span className="text-sm text-muted-foreground/60 text-center block">
-                          —
-                        </span>
-                      ) : (
-                        (() => {
-                          const cacheKey = `${loadedFiles[activeCategory] ?? ""}::${sig.name}`;
-                          const cachedVals = signalValuesCache[cacheKey] || [];
-                          if (cachedVals && cachedVals.length > 0) {
-                            const cleanCached = cachedVals.filter(
-                              (v) =>
-                                v !== null &&
-                                v !== undefined &&
-                                String(v).trim() !== "",
-                            );
-                            const currentVal =
-                              sig.threshold !== null &&
-                              sig.threshold !== undefined &&
-                              String(sig.threshold).trim() !== ""
-                                ? sig.threshold
-                                : 0.0;
-
-                            // Deduplicate values based on their string representation to prevent duplicate select keys/values
-                            const uniqueMap = new Map<
-                              string,
-                              number | string
-                            >();
-                            uniqueMap.set(String(currentVal), currentVal);
-                            cleanCached.forEach((v) => {
-                              uniqueMap.set(String(v), v);
-                            });
-
-                            const allVals = Array.from(uniqueMap.values());
-                            allVals.sort((a, b) => {
-                              const numA = Number(a);
-                              const numB = Number(b);
-                              if (!isNaN(numA) && !isNaN(numB)) {
-                                  return numA - numB;
-                              }
-                              return String(a).localeCompare(String(b));
-                            });
-                            return (
-                              <Select
-                                value={String(currentVal)}
-                                onValueChange={(val) => {
-                                  const parsed = parseFloat(val);
-                                  const finalVal = isNaN(parsed) ? val : parsed;
-                                  updateSignalField(
-                                    activeCategory,
-                                    sig.name,
-                                    "threshold",
-                                    finalVal,
-                                  );
-                                }}
-                              >
-                                <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70">
-                                  <SelectValue placeholder="Value" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm max-h-48 overflow-y-auto">
-                                  {allVals.map((v) => (
-                                    <SelectItem
-                                      key={String(v)}
-                                      value={String(v)}
-                                      className="text-sm font-mono"
-                                    >
-                                      {String(v)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            );
-                          }
-                          return (
-                            <Input
-                              type={
-                                typeof sig.threshold === "number"
-                                  ? "number"
-                                  : "text"
-                              }
-                              value={
-                                sig.threshold !== null &&
-                                sig.threshold !== undefined
-                                  ? String(sig.threshold)
-                                  : ""
-                              }
-                              onChange={(e) => {
-                                const rawVal = e.target.value;
-                                if (typeof sig.threshold === "number") {
-                                  updateSignalField(
-                                    activeCategory,
-                                    sig.name,
-                                    "threshold",
-                                    parseFloat(rawVal) || 0.0,
-                                  );
-                                } else {
-                                  updateSignalField(
-                                    activeCategory,
-                                    sig.name,
-                                    "threshold",
-                                    rawVal,
-                                  );
-                                }
-                              }}
-                              className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                              step="0.1"
-                            />
-                          );
-                        })()
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      <Input
-                        value={sig.alias}
-                        onChange={(e) =>
-                          updateSignalField(
-                            activeCategory,
-                            sig.name,
-                            "alias",
-                            e.target.value,
-                          )
-                        }
-                        className="h-8 bg-surface-2/50 border border-border text-sm rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredSignals.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="text-center py-8 text-sm text-muted-foreground uppercase tracking-wider font-semibold"
-                    >
-                      {currentSignalsList.length === 0
-                        ? "No signals configured for this category."
-                        : "No signals matched the filter query."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          )}
 
           {/* BOTTOM SECTION: MISUSE TIMELINE */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeCategory}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.25, ease: "easeInOut" }}
-            >
-              <MisuseTimelineEditor
-                activeCategory={activeCategory}
-                misuseCriteria={misuseCriteria}
-                setMisuseCriteria={setMisuseCriteria}
-                availableSignals={currentSignalsList.map(s => s.name)}
-              />
-            </motion.div>
-          </AnimatePresence>
+          <motion.div
+            initial={false}
+            animate={{ height: isCollapsibleOpen ? '100%' : '0px' }}
+            transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+            className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 flex flex-col relative shrink-0"
+          >
+            <div className={`absolute left-1/2 -translate-x-1/2 z-10 ${
+              isCollapsibleOpen ? 'top-0' : '-top-7'
+            }`}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCollapsibleOpen(!isCollapsibleOpen)}
+                className={`h-7 w-12 bg-surface-2/80 hover:bg-surface-2 p-0 flex items-center justify-center text-muted-foreground hover:text-foreground shadow-[0_-4px_10px_-2px_rgba(0,0,0,0.1)] ${
+                  isCollapsibleOpen 
+                    ? 'rounded-b-lg rounded-t-none border-t-0' 
+                    : 'rounded-t-lg rounded-b-none border-b-0'
+                }`}
+              >
+                {isCollapsibleOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {isCollapsibleOpen && (
+              <div className="flex-1 flex flex-col min-h-0 w-full p-0 overflow-hidden animate-in fade-in duration-300">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeCategory}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -15 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="flex-1 flex flex-col min-h-0 justify-center"
+                  >
+                    <MisuseTimelineEditor
+                      activeCategory={activeCategory}
+                      misuseCriteria={misuseCriteria}
+                      setMisuseCriteria={setMisuseCriteria}
+                      availableSignals={availableSignalsList}
+                    />
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            )}
+          </motion.div>
         </div>
       </div>
 

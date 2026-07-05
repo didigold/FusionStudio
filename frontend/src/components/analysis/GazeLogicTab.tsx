@@ -1,5 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, useScroll, AnimatePresence } from "framer-motion";
+import { DataGrid } from "@mui/x-data-grid";
+import type { GridColDef } from "@mui/x-data-grid";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,10 +63,10 @@ import {
   Trash2,
   FolderOpen,
   Lock,
-  Cog,
-  Box,
   Square,
   Drama,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
@@ -213,6 +216,17 @@ export function GazeLogicTab() {
     );
   }, [protocol]);
 
+  // Auto-load channels when selected file or category changes and list is empty
+  useEffect(() => {
+    if (analysisSelectedFile && activeCategory) {
+      const currentList = signalsConfig[activeCategory] || [];
+      const onlySoundPressure = currentList.length === 0 || (currentList.length === 1 && currentList[0].name === "SoundPressure");
+      if (onlySoundPressure) {
+        autoLoadChannelsAndMerge(undefined, undefined, undefined, false, activeCategory);
+      }
+    }
+  }, [analysisSelectedFile, activeCategory, autoLoadChannelsAndMerge, signalsConfig]);
+
   // Filter signals state
   const [filterQuery, setFilterQuery] = useState("");
 
@@ -221,7 +235,6 @@ export function GazeLogicTab() {
   // Batch generation progress states
   const wsRef = useRef<WebSocket | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ container: tableContainerRef });
 
   // Modals / Dropdowns
   const [gaugeRulesModalOpen, setGaugeRulesModalOpen] = useState(false);
@@ -1173,14 +1186,194 @@ export function GazeLogicTab() {
   const isBatchEnabled = analysisCheckedFiles.length > 0;
 
   // Filter signals list by query string
-  const filteredSignals = currentSignalsList.filter((sig) => {
-    if (!sig || typeof sig.name !== "string") return false;
-    const nameLower = sig.name.toLowerCase();
-    const aliasLower =
-      typeof sig.alias === "string" ? sig.alias.toLowerCase() : nameLower;
+  const filteredSignals = useMemo(() => {
     const queryLower = filterQuery.toLowerCase();
-    return nameLower.includes(queryLower) || aliasLower.includes(queryLower);
-  });
+    return currentSignalsList.filter((sig) => {
+      if (!sig || typeof sig.name !== "string") return false;
+      const nameLower = sig.name.toLowerCase();
+      const aliasLower =
+        typeof sig.alias === "string" ? sig.alias.toLowerCase() : nameLower;
+      return nameLower.includes(queryLower) || aliasLower.includes(queryLower);
+    });
+  }, [currentSignalsList, filterQuery]);
+
+  const sortedFilteredSignals = useMemo(() => {
+    const checked = filteredSignals.filter((sig) => sig.checked);
+    const unchecked = filteredSignals.filter((sig) => !sig.checked);
+    return [...checked, ...unchecked];
+  }, [filteredSignals]);
+
+  const [isCollapsibleOpen, setIsCollapsibleOpen] = useState(true);
+
+  const columns: GridColDef[] = useMemo(() => [
+    {
+      field: "checked",
+      headerName: `${checkedCount}/5`,
+      width: 64,
+      sortable: false,
+      disableColumnMenu: true,
+      renderCell: (params) => (
+        <div className="flex justify-center items-center h-full w-full">
+          <Checkbox
+            checked={params.value}
+            onCheckedChange={(checked) =>
+              updateSignalField(activeCategory, params.row.name, "checked", !!checked)
+            }
+            disabled={!params.value && checkedCount >= 5}
+            className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+          />
+        </div>
+      ),
+    },
+    {
+      field: "name",
+      headerName: "Signal",
+      flex: 1.5,
+      renderCell: (params) => (
+        <div className="text-base font-semibold text-foreground/90 truncate w-full flex items-center h-full" title={params.value}>
+          {params.value}
+        </div>
+      ),
+    },
+    {
+      field: "operator",
+      headerName: "Operator",
+      width: 120,
+      renderCell: (params) => {
+        if (params.row.name === "SoundPressure") {
+          return <span className="text-sm text-muted-foreground/60 px-2 font-medium">Bandpass</span>;
+        }
+        return (
+          <div className="flex items-center h-full w-full pr-2">
+            <Select
+              disabled={activeCategory.toLowerCase().includes("unresponsive")}
+              value={
+                activeCategory.toLowerCase().includes("unresponsive")
+                  ? "None"
+                  : ["None", ">", "<", ">=", "<=", "==", "!="].includes(params.value)
+                  ? params.value
+                  : "None"
+              }
+              onValueChange={(val) =>
+                updateSignalField(activeCategory, params.row.name, "operator", val)
+              }
+            >
+              <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70 w-full">
+                <SelectValue placeholder="Op" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                {["None", ">", "<", ">=", "<=", "==", "!="].map(op => (
+                  <SelectItem key={op} value={op} className="text-sm">
+                    {op}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      },
+    },
+    {
+      field: "threshold",
+      headerName: "Threshold",
+      width: 200,
+      renderCell: (params) => {
+        if (params.row.name === "SoundPressure" || activeCategory.toLowerCase().includes("unresponsive")) {
+          return <span className="text-sm text-muted-foreground/60 text-center w-full block">—</span>;
+        }
+
+        const cacheKey = `${loadedFiles[activeCategory] ?? ""}::${params.row.name}`;
+        const cachedVals = signalValuesCache[cacheKey] || [];
+        if (cachedVals && cachedVals.length > 0) {
+          const cleanCached = cachedVals.filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
+          const currentVal = params.value !== null && params.value !== undefined && String(params.value).trim() !== "" ? params.value : 0.0;
+          const uniqueMap = new Map<string, number | string>();
+          uniqueMap.set(String(currentVal), currentVal);
+          cleanCached.forEach((v) => uniqueMap.set(String(v), v));
+          const allVals = Array.from(uniqueMap.values());
+          allVals.sort((a, b) => {
+            const numA = Number(a);
+            const numB = Number(b);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+          });
+          return (
+            <div className="flex items-center h-full w-full pr-2">
+              <Select
+                value={String(currentVal)}
+                onValueChange={(val) => {
+                  const parsed = parseFloat(val);
+                  const finalVal = isNaN(parsed) ? val : parsed;
+                  updateSignalField(activeCategory, params.row.name, "threshold", finalVal);
+                }}
+              >
+                <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70 w-full">
+                  <SelectValue placeholder="Value" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm max-h-48 overflow-y-auto">
+                  {allVals.map((v) => (
+                    <SelectItem key={String(v)} value={String(v)} className="text-sm font-mono">
+                      {String(v)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center h-full w-full pr-2">
+            <Input
+              type={typeof params.value === "number" ? "number" : "text"}
+              value={params.value !== null && params.value !== undefined ? String(params.value) : ""}
+              onChange={(e) => {
+                const rawVal = e.target.value;
+                if (typeof params.value === "number") {
+                  updateSignalField(activeCategory, params.row.name, "threshold", parseFloat(rawVal) || 0.0);
+                } else {
+                  updateSignalField(activeCategory, params.row.name, "threshold", rawVal);
+                }
+              }}
+              className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground w-full"
+              step="0.1"
+            />
+          </div>
+        );
+      },
+    },
+    {
+      field: "alias",
+      headerName: "Alias",
+      flex: 1,
+      renderCell: (params) => (
+        <div className="flex items-center h-full w-full pr-2">
+          <Input
+            value={params.value || ""}
+            onChange={(e) => updateSignalField(activeCategory, params.row.name, "alias", e.target.value)}
+            className="h-8 bg-surface-2/50 border border-border text-sm rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground w-full"
+          />
+        </div>
+      ),
+    },
+  ], [checkedCount, activeCategory, loadedFiles, signalValuesCache, updateSignalField]);
+
+  const rows = useMemo(() => {
+    return sortedFilteredSignals.map(sig => ({
+      id: sig.name,
+      name: sig.name,
+      checked: sig.checked,
+      operator: sig.operator,
+      threshold: sig.threshold,
+      alias: sig.alias,
+    }));
+  }, [sortedFilteredSignals]);
+
+  const [isMounting, setIsMounting] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setIsMounting(false), 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className="flex flex-col animate-in fade-in duration-500 max-w-full w-full h-full min-h-0 overflow-hidden bg-surface-2/40">
@@ -1646,517 +1839,392 @@ export function GazeLogicTab() {
         <div className="p-0 flex-1 flex flex-col overflow-hidden">
           {/* Scrollable table with height adjusted to utilize bottom space */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto gaze-table-container relative"
+            className="flex-1 min-h-0 relative w-full overflow-hidden max-w-full"
             ref={tableContainerRef}
           >
-            {/* Scroll Indicator Wrapper (Sticky at top-0, zero height to prevent pushing layout) */}
-            <div className="sticky top-0 left-0 right-0 h-0 z-30 w-full overflow-visible">
-              <motion.div
-                id="scroll-indicator"
-                style={{
-                  scaleX: scrollYProgress,
-                  transformOrigin: "left",
-                }}
-                className="absolute top-10 left-0 right-0 h-[3px] bg-primary w-full"
-              />
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow className="border-white/5 hover:bg-transparent">
-                  <TableHead className="w-16 text-sm uppercase font-bold text-center h-10 sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    {checkedCount}/5
-                  </TableHead>
-                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Signal
-                  </TableHead>
-                  <TableHead className="w-32 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Operator
-                  </TableHead>
-                  <TableHead className="w-56 text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Threshold
-                  </TableHead>
-                  <TableHead className="text-sm uppercase font-bold h-10 tracking-wider sticky top-0 z-20 bg-surface-2 border-b border-border/50">
-                    Alias
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSignals.map((sig) => (
-                  <TableRow
-                    key={sig.name}
-                    className={cn(
-                      "border-white/5 hover:bg-white/[0.02] transition-all duration-200",
-                      sig.checked ? "opacity-100" : "opacity-50"
-                    )}
-                  >
-                    <TableCell className="py-2.5 text-center">
-                      <Checkbox
-                        checked={sig.checked}
-                        onCheckedChange={(checked) =>
-                          updateSignalField(
-                            activeCategory,
-                            sig.name,
-                            "checked",
-                            !!checked,
-                          )
-                        }
-                        disabled={!sig.checked && checkedCount >= 5}
-                        className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                      />
-                    </TableCell>
-                    <TableCell className="py-2.5 text-base font-semibold text-foreground/90">
-                      {sig.name}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      {sig.name === "SoundPressure" ? (
-                        <span className="text-sm text-muted-foreground/60 px-2 font-medium">
-                          Bandpass
-                        </span>
-                      ) : (
-                        <Select
-                          disabled={activeCategory.toLowerCase().includes("unresponsive")}
-                          value={
-                            activeCategory.toLowerCase().includes("unresponsive")
-                              ? "None"
-                              : ["None", ">", "<", ">=", "<=", "==", "!="].includes(
-                                  sig.operator,
-                                )
-                              ? sig.operator
-                              : "None"
-                          }
-                          onValueChange={(val) =>
-                            updateSignalField(
-                              activeCategory,
-                              sig.name,
-                              "operator",
-                              val,
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70">
-                            <SelectValue placeholder="Op" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                            <SelectItem value="None" className="text-sm">
-                              None
-                            </SelectItem>
-                            <SelectItem value=">" className="text-sm">
-                              &gt;
-                            </SelectItem>
-                            <SelectItem value="<" className="text-sm">
-                              &lt;
-                            </SelectItem>
-                            <SelectItem value=">=" className="text-sm">
-                              &gt;=
-                            </SelectItem>
-                            <SelectItem value="<=" className="text-sm">
-                              &lt;=
-                            </SelectItem>
-                            <SelectItem value="==" className="text-sm">
-                              ==
-                            </SelectItem>
-                            <SelectItem value="!=" className="text-sm">
-                              !=
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      {sig.name === "SoundPressure" || activeCategory.toLowerCase().includes("unresponsive") ? (
-                        <span className="text-sm text-muted-foreground/60 text-center block">
-                          —
-                        </span>
-                      ) : (
-                        (() => {
-                          const cacheKey = `${loadedFiles[activeCategory] ?? ""}::${sig.name}`;
-                          const cachedVals = signalValuesCache[cacheKey] || [];
-                          if (cachedVals && cachedVals.length > 0) {
-                            const cleanCached = cachedVals.filter(
-                              (v) =>
-                                v !== null &&
-                                v !== undefined &&
-                                String(v).trim() !== "",
-                            );
-                            const currentVal =
-                              sig.threshold !== null &&
-                              sig.threshold !== undefined &&
-                              String(sig.threshold).trim() !== ""
-                                ? sig.threshold
-                                : 0.0;
-
-                            // Deduplicate values based on their string representation to prevent duplicate select keys/values
-                            const uniqueMap = new Map<
-                              string,
-                              number | string
-                            >();
-                            uniqueMap.set(String(currentVal), currentVal);
-                            cleanCached.forEach((v) => {
-                              uniqueMap.set(String(v), v);
-                            });
-
-                            const allVals = Array.from(uniqueMap.values());
-                            allVals.sort((a, b) => {
-                              const numA = Number(a);
-                              const numB = Number(b);
-                              if (!isNaN(numA) && !isNaN(numB)) {
-                                  return numA - numB;
-                              }
-                              return String(a).localeCompare(String(b));
-                            });
-                            return (
-                              <Select
-                                value={String(currentVal)}
-                                onValueChange={(val) => {
-                                  const parsed = parseFloat(val);
-                                  const finalVal = isNaN(parsed) ? val : parsed;
-                                  updateSignalField(
-                                    activeCategory,
-                                    sig.name,
-                                    "threshold",
-                                    finalVal,
-                                  );
-                                }}
-                              >
-                                <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2.5 hover:bg-surface-2/70">
-                                  <SelectValue placeholder="Value" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm max-h-48 overflow-y-auto">
-                                  {allVals.map((v) => (
-                                    <SelectItem
-                                      key={String(v)}
-                                      value={String(v)}
-                                      className="text-sm font-mono"
-                                    >
-                                      {String(v)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            );
-                          }
-                          return (
-                            <Input
-                              type={
-                                typeof sig.threshold === "number"
-                                  ? "number"
-                                  : "text"
-                              }
-                              value={
-                                sig.threshold !== null &&
-                                sig.threshold !== undefined
-                                  ? String(sig.threshold)
-                                  : ""
-                              }
-                              onChange={(e) => {
-                                const rawVal = e.target.value;
-                                if (typeof sig.threshold === "number") {
-                                  updateSignalField(
-                                    activeCategory,
-                                    sig.name,
-                                    "threshold",
-                                    parseFloat(rawVal) || 0.0,
-                                  );
-                                } else {
-                                  updateSignalField(
-                                    activeCategory,
-                                    sig.name,
-                                    "threshold",
-                                    rawVal,
-                                  );
-                                }
-                              }}
-                              className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                              step="0.1"
-                            />
-                          );
-                        })()
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      <Input
-                        value={sig.alias}
-                        onChange={(e) =>
-                          updateSignalField(
-                            activeCategory,
-                            sig.name,
-                            "alias",
-                            e.target.value,
-                          )
-                        }
-                        className="h-8 bg-surface-2/50 border border-border text-sm rounded-lg px-2.5 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredSignals.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="text-center py-8 text-sm text-muted-foreground uppercase tracking-wider font-semibold"
-                    >
-                      {currentSignalsList.length === 0
-                        ? "No signals configured for this category."
-                        : "No signals matched the filter query."}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+            {isMounting ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1 z-50">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+                <div className="text-sm text-muted-foreground font-medium animate-pulse">
+                  {loadedFiles[activeCategory]
+                    ? `Loading signals from ${loadedFiles[activeCategory].split(/[/\\]/).pop()}`
+                    : "Loading table..."}
+                </div>
+              </div>
+            ) : null}
+            {/* Custom Horizontal Scroll Indicator */}
+            {!isMounting && (
+              <div className="absolute top-[40px] left-0 right-0 h-0 z-30 w-full overflow-visible pointer-events-none">
+                <div
+                  style={{
+                    transform: `scaleX(${scrollProgress})`,
+                    transformOrigin: "left",
+                  }}
+                  className="absolute top-0 left-0 right-0 h-[2px] bg-primary w-full transition-transform duration-75 ease-out"
+                />
+              </div>
+            )}
+            <DataGrid
+              rows={rows}
+              columns={columns}
+              rowHeight={52}
+              disableRowSelectionOnClick
+              pagination
+              initialState={{
+                pagination: {
+                  paginationModel: { pageSize: 100, page: 0 },
+                },
+              }}
+              pageSizeOptions={[25, 50, 100, 200, 500]}
+              disableColumnMenu
+              slots={{
+                noRowsOverlay: () => (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground uppercase tracking-wider font-semibold">
+                    {currentSignalsList.length === 0
+                      ? "No signals configured for this category."
+                      : "No signals matched the filter query."}
+                  </div>
+                )
+              }}
+              sx={{
+                border: 'none',
+                backgroundColor: 'transparent',
+                '& .MuiDataGrid-cell': {
+                  borderBottom: '1px solid var(--border) !important',
+                  display: 'flex',
+                  alignItems: 'center',
+                },
+                '& .MuiDataGrid-columnHeaders': {
+                  borderBottom: '1px solid var(--border) !important',
+                  backgroundColor: 'var(--surface-2) !important',
+                  minHeight: '40px !important',
+                  maxHeight: '40px !important',
+                  lineHeight: '40px !important',
+                  textTransform: 'uppercase',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  letterSpacing: '0.05em',
+                  color: 'inherit',
+                },
+                '& .MuiDataGrid-columnHeader': {
+                  backgroundColor: 'var(--surface-2) !important',
+                },
+                '& .MuiDataGrid-columnSeparator': {
+                  color: 'var(--border) !important',
+                },
+                '& .MuiDataGrid-columnHeaderTitle': {
+                  fontWeight: 'bold',
+                },
+                '& .MuiDataGrid-row:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.02)',
+                },
+                '& .MuiDataGrid-virtualScroller': {
+                  overflowY: 'auto',
+                },
+                '& .MuiDataGrid-footerContainer': {
+                  borderTop: '1px solid var(--border) !important',
+                  backgroundColor: 'var(--surface-2) !important',
+                  color: 'inherit',
+                },
+                '& .MuiDataGrid-withBorderColor': {
+                  borderColor: 'var(--border) !important',
+                },
+                '& .MuiTablePagination-root': {
+                  color: 'inherit',
+                  fontFamily: 'inherit !important',
+                },
+                '& .MuiTablePagination-actions button': {
+                  color: 'inherit',
+                },
+                '& .MuiTablePagination-select': {
+                  color: 'inherit',
+                  fontFamily: 'inherit !important',
+                },
+                '& .MuiTablePagination-displayedRows': {
+                  fontFamily: 'inherit !important',
+                },
+                '& .MuiTablePagination-selectLabel': {
+                  fontFamily: 'inherit !important',
+                },
+                color: 'inherit',
+                fontFamily: 'inherit',
+              }}
+            />
           </div>
 
           {/* BOTTOM SECTION: PASS CRITERIA CONFIG OR TIMELINE */}
-          <AnimatePresence mode="wait">
-            {activeCategory.includes("Unresponsive") ? (
-              <motion.div
-                key="unresponsive-timeline"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-              >
-                <UnresponsiveTimelineEditor
-                  activeCategory={activeCategory}
-                  unresponsiveCriteria={unresponsiveCriteria}
-                  setUnresponsiveCriteria={setUnresponsiveCriteria}
-                  availableSignals={currentSignalsList.map(s => s.name)}
-                  loadedFiles={loadedFiles}
-                  signalValuesCache={signalValuesCache}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="pass-criteria-config"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-                className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 p-5 flex flex-col gap-4"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold uppercase text-muted-foreground tracking-widest text-left">
-                    Pass Criteria
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-3 text-sm text-foreground/80 font-medium text-left">
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    The evaluation signal
-                  </span>
-                  <div className="w-[180px]">
-                    <Select
-                      value={currentPassCriteria.signal}
-                      onValueChange={(val) =>
-                        updatePassCriteriaField(activeCategory, "signal", val)
-                      }
+          <Collapsible
+            open={isCollapsibleOpen}
+            onOpenChange={setIsCollapsibleOpen}
+            className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 flex flex-col relative shrink-0"
+          >
+            <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-12 rounded-t-lg rounded-b-none border-b-0 bg-surface-2/80 hover:bg-surface-2 p-0 flex items-center justify-center text-muted-foreground hover:text-foreground shadow-[0_-4px_10px_-2px_rgba(0,0,0,0.1)]"
+                >
+                  {isCollapsibleOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent className="data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden">
+              <div className="p-0">
+                <AnimatePresence mode="wait">
+                  {activeCategory.includes("Unresponsive") ? (
+                    <motion.div
+                      key="unresponsive-timeline"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeInOut" }}
                     >
-                      <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
-                        <SelectValue placeholder="Signal" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                        {(() => {
-                          const seen = new Set<string>();
-                          const items = currentSignalsList
-                            .filter(
-                              (s) =>
-                                s &&
-                                typeof s.name === "string" &&
-                                s.name.trim() !== "",
-                            )
-                            .filter((s) => {
-                              if (seen.has(s.name)) return false;
-                              seen.add(s.name);
-                              return true;
-                            })
-                            .map((s) => s.name);
-
-                          if (
-                            currentPassCriteria.signal &&
-                            !seen.has(currentPassCriteria.signal)
-                          ) {
-                            items.push(currentPassCriteria.signal);
-                          }
-
-                          return items.map((name) => (
-                            <SelectItem key={name} value={name} className="text-sm">
-                              {name}
-                            </SelectItem>
-                          ));
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    must be
-                  </span>
-
-                  <div className="w-[85px]">
-                    <Select
-                      value={
-                        ["None", ">", "<", ">=", "<=", "==", "!="].includes(
-                          currentPassCriteria.operator1,
-                        )
-                          ? currentPassCriteria.operator1
-                          : "None"
-                      }
-                      onValueChange={(val) =>
-                        updatePassCriteriaField(activeCategory, "operator1", val)
-                      }
+                      <UnresponsiveTimelineEditor
+                        activeCategory={activeCategory}
+                        unresponsiveCriteria={unresponsiveCriteria}
+                        setUnresponsiveCriteria={setUnresponsiveCriteria}
+                        availableSignals={currentSignalsList.map(s => s.name)}
+                        loadedFiles={loadedFiles}
+                        signalValuesCache={signalValuesCache}
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="pass-criteria-config"
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.25, ease: "easeInOut" }}
+                      className="bg-surface-2/50 backdrop-blur-md border-t border-border/50 p-5 flex flex-col gap-4"
                     >
-                      <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
-                        <SelectValue placeholder="Op1" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                        <SelectItem value="None" className="text-sm">
-                          None
-                        </SelectItem>
-                        <SelectItem value=">" className="text-sm">
-                          &gt;
-                        </SelectItem>
-                        <SelectItem value="<" className="text-sm">
-                          &lt;
-                        </SelectItem>
-                        <SelectItem value=">=" className="text-sm">
-                          &gt;=
-                        </SelectItem>
-                        <SelectItem value="<=" className="text-sm">
-                          &lt;=
-                        </SelectItem>
-                        <SelectItem value="==" className="text-sm">
-                          ==
-                        </SelectItem>
-                        <SelectItem value="!=" className="text-sm">
-                          !=
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    than
-                  </span>
-
-                  <div className="w-[75px]">
-                    <Input
-                      type="number"
-                      value={currentPassCriteria.value1}
-                      onChange={(e) =>
-                        updatePassCriteriaField(
-                          activeCategory,
-                          "value1",
-                          parseFloat(e.target.value) || 0.0,
-                        )
-                      }
-                      className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                      step="0.1"
-                    />
-                  </div>
-
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    and
-                  </span>
-
-                  <div className="w-[85px]">
-                    <Select
-                      value={
-                        ["None", ">", "<", ">=", "<=", "==", "!="].includes(
-                          currentPassCriteria.operator2,
-                        )
-                          ? currentPassCriteria.operator2
-                          : "None"
-                      }
-                      onValueChange={(val) =>
-                        updatePassCriteriaField(activeCategory, "operator2", val)
-                      }
-                    >
-                      <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
-                        <SelectValue placeholder="Op2" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
-                        <SelectItem value="None" className="text-sm">
-                          None
-                        </SelectItem>
-                        <SelectItem value=">" className="text-sm">
-                          &gt;
-                        </SelectItem>
-                        <SelectItem value="<" className="text-sm">
-                          &lt;
-                        </SelectItem>
-                        <SelectItem value=">=" className="text-sm">
-                          &gt;=
-                        </SelectItem>
-                        <SelectItem value="<=" className="text-sm">
-                          &lt;=
-                        </SelectItem>
-                        <SelectItem value="==" className="text-sm">
-                          ==
-                        </SelectItem>
-                        <SelectItem value="!=" className="text-sm">
-                          !=
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    than
-                  </span>
-
-                  <div className="w-[75px]">
-                    <Input
-                      type="number"
-                      value={currentPassCriteria.value2}
-                      onChange={(e) =>
-                        updatePassCriteriaField(
-                          activeCategory,
-                          "value2",
-                          parseFloat(e.target.value) || 0.0,
-                        )
-                      }
-                      className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                      step="0.1"
-                    />
-                  </div>
-
-                  <div className="h-5 w-[1px] bg-border mx-1 shrink-0" />
-
-                  <HoverCard openDelay={10} closeDelay={100}>
-                    <HoverCardTrigger asChild>
-                      <div className="cursor-help flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0 p-1 rounded-md hover:bg-white/5" title="Evaluation Mask Start">
-                        <Drama className="w-4 h-4 text-primary" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold uppercase text-muted-foreground tracking-widest text-left">
+                          Pass Criteria
+                        </span>
                       </div>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="w-64 bg-popover border border-border text-popover-foreground p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl z-50">
-                      <div className="font-semibold text-primary mb-1">
-                        Evaluation Mask Start
-                      </div>
-                      <div>
-                        Specifies the start time of the evaluation mask in seconds. Data before this timestamp is ignored in calculations.
-                      </div>
-                    </HoverCardContent>
-                  </HoverCard>
 
-                  <div className="w-16">
-                    <Input
-                      type="number"
-                      value={currentPassCriteria.mask}
-                      onChange={(e) =>
-                        updatePassCriteriaField(
-                          activeCategory,
-                          "mask",
-                          parseFloat(e.target.value) || 0.0,
-                        )
-                      }
-                      className="h-8 bg-surface-2/50 border border-border text-center text-sm rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
-                      step="0.1"
-                    />
-                  </div>
-                  <span className="text-muted-foreground text-sm whitespace-nowrap">seconds</span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-3 text-sm text-foreground/80 font-medium text-left">
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          The evaluation signal
+                        </span>
+                        <div className="w-[180px]">
+                          <Select
+                            value={currentPassCriteria.signal}
+                            onValueChange={(val) =>
+                              updatePassCriteriaField(activeCategory, "signal", val)
+                            }
+                          >
+                            <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
+                              <SelectValue placeholder="Signal" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                              {(() => {
+                                const seen = new Set<string>();
+                                const items = currentSignalsList
+                                  .filter(
+                                    (s) =>
+                                      s &&
+                                      typeof s.name === "string" &&
+                                      s.name.trim() !== "",
+                                  )
+                                  .filter((s) => {
+                                    if (seen.has(s.name)) return false;
+                                    seen.add(s.name);
+                                    return true;
+                                  })
+                                  .map((s) => s.name);
+
+                                if (
+                                  currentPassCriteria.signal &&
+                                  !seen.has(currentPassCriteria.signal)
+                                ) {
+                                  items.push(currentPassCriteria.signal);
+                                }
+
+                                return items.map((name) => (
+                                  <SelectItem key={name} value={name} className="text-sm">
+                                    {name}
+                                  </SelectItem>
+                                ));
+                              })()}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          must be
+                        </span>
+
+                        <div className="w-[85px]">
+                          <Select
+                            value={
+                              ["None", ">", "<", ">=", "<=", "==", "!="].includes(
+                                currentPassCriteria.operator1,
+                              )
+                                ? currentPassCriteria.operator1
+                                : "None"
+                            }
+                            onValueChange={(val) =>
+                              updatePassCriteriaField(activeCategory, "operator1", val)
+                            }
+                          >
+                            <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
+                              <SelectValue placeholder="Op1" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                              <SelectItem value="None" className="text-sm">
+                                None
+                              </SelectItem>
+                              <SelectItem value=">" className="text-sm">
+                                &gt;
+                              </SelectItem>
+                              <SelectItem value="<" className="text-sm">
+                                &lt;
+                              </SelectItem>
+                              <SelectItem value=">=" className="text-sm">
+                                &gt;=
+                              </SelectItem>
+                              <SelectItem value="<=" className="text-sm">
+                                &lt;=
+                              </SelectItem>
+                              <SelectItem value="==" className="text-sm">
+                                ==
+                              </SelectItem>
+                              <SelectItem value="!=" className="text-sm">
+                                !=
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          than
+                        </span>
+
+                        <div className="w-[75px]">
+                          <Input
+                            type="number"
+                            value={currentPassCriteria.value1}
+                            onChange={(e) =>
+                              updatePassCriteriaField(
+                                activeCategory,
+                                "value1",
+                                parseFloat(e.target.value) || 0.0,
+                              )
+                            }
+                            className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
+                            step="0.1"
+                          />
+                        </div>
+
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          and
+                        </span>
+
+                        <div className="w-[85px]">
+                          <Select
+                            value={
+                              ["None", ">", "<", ">=", "<=", "==", "!="].includes(
+                                currentPassCriteria.operator2,
+                              )
+                                ? currentPassCriteria.operator2
+                                : "None"
+                            }
+                            onValueChange={(val) =>
+                              updatePassCriteriaField(activeCategory, "operator2", val)
+                            }
+                          >
+                            <SelectTrigger className="h-8 bg-surface-2/50 border border-border text-sm text-foreground rounded-lg px-2 hover:bg-surface-2/70">
+                              <SelectValue placeholder="Op2" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover border border-border text-popover-foreground backdrop-blur-xl text-sm">
+                              <SelectItem value="None" className="text-sm">
+                                None
+                              </SelectItem>
+                              <SelectItem value=">" className="text-sm">
+                                &gt;
+                              </SelectItem>
+                              <SelectItem value="<" className="text-sm">
+                                &lt;
+                              </SelectItem>
+                              <SelectItem value=">=" className="text-sm">
+                                &gt;=
+                              </SelectItem>
+                              <SelectItem value="<=" className="text-sm">
+                                &lt;=
+                              </SelectItem>
+                              <SelectItem value="==" className="text-sm">
+                                ==
+                              </SelectItem>
+                              <SelectItem value="!=" className="text-sm">
+                                !=
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          than
+                        </span>
+
+                        <div className="w-[75px]">
+                          <Input
+                            type="number"
+                            value={currentPassCriteria.value2}
+                            onChange={(e) =>
+                              updatePassCriteriaField(
+                                activeCategory,
+                                "value2",
+                                parseFloat(e.target.value) || 0.0,
+                              )
+                            }
+                            className="h-8 bg-surface-2/50 border border-border text-sm text-center rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
+                            step="0.1"
+                          />
+                        </div>
+
+                        <div className="h-5 w-[1px] bg-border mx-1 shrink-0" />
+
+                        <HoverCard openDelay={10} closeDelay={100}>
+                          <HoverCardTrigger asChild>
+                            <div className="cursor-help flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0 p-1 rounded-md hover:bg-white/5" title="Evaluation Mask Start">
+                              <Drama className="w-4 h-4 text-primary" />
+                            </div>
+                          </HoverCardTrigger>
+                          <HoverCardContent className="w-64 bg-popover border border-border text-popover-foreground p-3 text-xs leading-relaxed text-left rounded-lg shadow-xl z-50">
+                            <div className="font-semibold text-primary mb-1">
+                              Evaluation Mask Start
+                            </div>
+                            <div>
+                              Specifies the start time of the evaluation mask in seconds. Data before this timestamp is ignored in calculations.
+                            </div>
+                          </HoverCardContent>
+                        </HoverCard>
+
+                        <div className="w-16">
+                          <Input
+                            type="number"
+                            value={currentPassCriteria.mask}
+                            onChange={(e) =>
+                              updatePassCriteriaField(
+                                activeCategory,
+                                "mask",
+                                parseFloat(e.target.value) || 0.0,
+                              )
+                            }
+                            className="h-8 bg-surface-2/50 border border-border text-center text-sm rounded-lg px-2 hover:bg-surface-2/70 focus:bg-background text-foreground"
+                            step="0.1"
+                          />
+                        </div>
+                        <span className="text-muted-foreground text-sm whitespace-nowrap">seconds</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
 
