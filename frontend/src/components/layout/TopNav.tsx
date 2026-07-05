@@ -310,7 +310,8 @@ export function TopNav() {
           100% { transform: rotate(360deg); }
         }
         .hover-spin-fast:hover svg {
-          animation: spin-fast 0.6s linear infinite;
+          animation: spin-fast 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+          animation-delay: 0.25s;
         }
 
         @keyframes bounce-subtle {
@@ -318,7 +319,8 @@ export function TopNav() {
           50% { transform: translateY(-2px); }
         }
         .hover-bounce-subtle:hover svg {
-          animation: bounce-subtle 0.5s ease-in-out infinite;
+          animation: bounce-subtle 0.7s ease-in-out infinite;
+          animation-delay: 0.1s;
         }
 
         @keyframes sun-spin {
@@ -327,7 +329,8 @@ export function TopNav() {
           100% { transform: rotate(360deg) scale(1); }
         }
         .hover-sun-spin:hover svg {
-          animation: sun-spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+          animation: sun-spin 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+          animation-delay: 0.25s;
         }
       `}</style>
       <header className="relative w-full h-[52px] bg-background flex items-center justify-between px-8 z-40 sticky top-0">

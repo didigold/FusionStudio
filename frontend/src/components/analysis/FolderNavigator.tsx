@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Folder, File, CheckSquare, LayoutGrid, Locate, LocateOff, FileChartColumnIncreasing, FolderRoot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -50,6 +50,19 @@ const getAllFilesUnderNode = (node: any): string[] => {
   return files
 }
 
+const findPathToNode = (nodes: any[], targetPath: string, currentPath: string[] = []): string[] | null => {
+  for (const node of nodes) {
+    if (node.type === 'file' && node.path === targetPath) {
+      return currentPath;
+    }
+    if (node.children) {
+      const found = findPathToNode(node.children, targetPath, [...currentPath, node.name]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export function FolderNavigator({
   results,
   selectedPath,
@@ -63,6 +76,18 @@ export function FolderNavigator({
 }: FolderNavigatorProps) {
   // We track the path of folder names to navigate down the tree
   const [currentPath, setCurrentPath] = useState<string[]>([]);
+  const lastNavigatedPath = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (selectedPath && results.length > 0 && selectedPath !== lastNavigatedPath.current) {
+      const foundPath = findPathToNode(results, selectedPath);
+      if (foundPath && foundPath.length > 0) {
+        // Navigate to the parent folder so the case folder is visible as an item
+        setCurrentPath(foundPath.slice(0, -1));
+        lastNavigatedPath.current = selectedPath;
+      }
+    }
+  }, [selectedPath, results]);
 
   // Find the current node by traversing the results tree
   const currentNodeContent = useMemo(() => {
@@ -323,6 +348,7 @@ export function FolderNavigator({
                   // Folder Node
                   const folderCheckState = getFolderCheckboxState(node);
                   const totalFiles = getAllFilesUnderNode(node).length;
+                  const containsSelected = selectedPath && getAllFilesUnderNode(node).includes(selectedPath);
                   return (
                     <motion.div
                       layout
@@ -331,7 +357,12 @@ export function FolderNavigator({
                       exit={{ opacity: 0, scale: 0.95 }}
                       key={node.name || idx}
                       onClick={() => navigateTo(node.name)}
-                      className="flex flex-col gap-2 p-3 rounded-xl border border-border/50 bg-card hover:bg-surface-3 cursor-pointer transition-all group"
+                      className={cn(
+                        "flex flex-col gap-2 p-3 rounded-xl border transition-all cursor-pointer group",
+                        containsSelected 
+                          ? "bg-primary/10 border-primary/40 ring-1 ring-primary/20 shadow-sm" 
+                          : "border-border/50 bg-card hover:bg-surface-3"
+                      )}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <Folder className="w-5 h-5 text-amber-500/80 group-hover:text-amber-500 shrink-0" />

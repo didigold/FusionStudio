@@ -173,7 +173,7 @@ const SidebarMenuItem = React.forwardRef<HTMLDivElement, React.ComponentProps<"d
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  "inline-flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium w-full transition-all duration-200 hover:bg-[#E6E4E1]/10 dark:hover:bg-[#E6E4E1]/20 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0 select-none",
+  "inline-flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium w-full transition-all duration-200 hover:bg-[#E6E4E1]/10 dark:hover:bg-[#E6E4E1]/20 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0 select-none",
   {
     variants: {
       variant: {
@@ -243,7 +243,7 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonP
           ref={ref} 
           className={cn(
             sidebarMenuButtonVariants({ variant, size }), 
-            !sidebarOpen && "flex w-10 h-10 p-0 justify-center mx-auto rounded-lg [&>span]:justify-center [&>span]:gap-0",
+            !sidebarOpen && "flex w-10 h-10 p-0 justify-center mx-auto rounded-xl [&>span]:justify-center [&>span]:gap-0",
             className
           )} 
           {...props} 
@@ -258,7 +258,7 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonP
         className={cn(
           sidebarMenuButtonVariants({ variant, size }), 
           "relative overflow-hidden", 
-          !sidebarOpen && "flex w-10 h-10 p-0 justify-center mx-auto rounded-lg [&>span]:justify-center [&>span]:gap-0",
+          !sidebarOpen && "flex w-10 h-10 p-0 justify-center mx-auto rounded-xl [&>span]:justify-center [&>span]:gap-0",
           className
         )}
         onClick={handleClick}

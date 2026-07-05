@@ -73,17 +73,14 @@ function ExpandableGroup({
   const handleItemClick = useCallback(
     (value: string) => {
       onTabChange(value);
-      if (!sidebarOpen) {
-        onToggle();
-      }
     },
-    [onTabChange, onToggle, sidebarOpen],
+    [onTabChange],
   );
 
   const groupButton = (
     <SidebarMenuButton
       size="sm"
-      variant={isActive ? "active" : "default"}
+      variant={isActive && !isExpanded ? "active" : "default"}
       onClick={() => {
         onToggle();
       }}
@@ -120,26 +117,50 @@ function ExpandableGroup({
   );
 
   return (
-    <div className="flex flex-col">
-      {!sidebarOpen ? (
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <SidebarMenuItem>{groupButton}</SidebarMenuItem>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              <span className="text-xs font-bold">{label}</span>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      ) : (
-        <SidebarMenuItem>{groupButton}</SidebarMenuItem>
+    <div className={cn(
+      "flex flex-col relative group/expandable",
+      !sidebarOpen && isExpanded ? "w-10 mx-auto rounded-xl overflow-hidden" : "p-[1px] gap-0 w-full"
+    )}>
+      <AnimatePresence>
+        {!sidebarOpen && isExpanded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="absolute inset-0 border border-primary/20 bg-primary/5 rounded-xl pointer-events-none z-20"
+          />
+        )}
+      </AnimatePresence>
+      <div className="relative z-10">
+        {!sidebarOpen ? (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <SidebarMenuItem>{groupButton}</SidebarMenuItem>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                <span className="text-xs font-bold">{label}</span>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <SidebarMenuItem>{groupButton}</SidebarMenuItem>
+        )}
+      </div>
+
+      {isExpanded && (
+        <div className={cn(
+          "h-[1px] bg-border/50 relative z-10",
+          sidebarOpen ? "mx-2 my-1" : "mx-0"
+        )} />
       )}
 
       <div
         className={cn(
-          "flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
-          isExpanded ? "max-h-[500px] opacity-100 mt-0.5" : "max-h-0 opacity-0"
+          "flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative z-10",
+          isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0",
+          sidebarOpen ? "mt-0.5" : "mt-0"
         )}
       >
         {children.length > 0 ? (
