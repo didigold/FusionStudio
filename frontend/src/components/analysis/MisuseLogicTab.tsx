@@ -1436,6 +1436,46 @@ export function MisuseLogicTab() {
           mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
           -webkit-mask-image: linear-gradient(to right, black calc(100% - 18px), transparent 100%);
         }
+        .pill-marquee-container {
+          overflow: hidden;
+          white-space: nowrap;
+          width: 140px;
+          position: relative;
+          transition: padding-right 0.2s ease, mask-image 0.2s ease, -webkit-mask-image 0.2s ease;
+          mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);
+          -webkit-mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);
+          display: flex;
+          align-items: center;
+        }
+        .group:hover .pill-marquee-container.has-clear {
+          padding-right: 18px;
+          mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 18px), transparent);
+          -webkit-mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 18px), transparent);
+        }
+        .pill-normal-container {
+          overflow: hidden;
+          white-space: nowrap;
+          width: auto;
+          max-width: 140px;
+          position: relative;
+          transition: padding-right 0.2s ease;
+          display: flex;
+          align-items: center;
+          color: inherit;
+        }
+        .group:hover .pill-normal-container.has-clear {
+          padding-right: 18px;
+        }
+        .pill-marquee-text {
+          display: inline-block;
+          white-space: nowrap;
+          transition: transform 0.2s ease;
+          color: inherit;
+        }
+        .group:hover .pill-marquee-text.animate {
+          animation: marquee-path 12s linear infinite;
+          animation-play-state: running;
+        }
         .pill-clear-btn {
           position: absolute;
           right: 0;
@@ -1457,24 +1497,28 @@ export function MisuseLogicTab() {
         .group:has(.pill-clear-btn:hover) svg {
           color: #ef4444 !important;
         }
-        .group:has(.pill-clear-btn:hover) .pill-text {
+        .group:has(.pill-clear-btn:hover) .pill-text,
+        .group:has(.pill-clear-btn:hover) .pill-marquee-text,
+        .group:has(.pill-clear-btn:hover) .pill-normal-container span {
           color: #ef4444 !important;
         }
         .group:has(.pill-clear-btn:hover) .pill-clear-btn {
           color: #ef4444 !important;
         }
-        .group:has(.pill-add-btn:hover) {
+        .group:has(.pill-add-btn):hover {
           background-color: rgba(59, 130, 246, 0.15) !important;
           border-color: rgba(59, 130, 246, 0.4) !important;
           color: #3b82f6 !important;
         }
-        .group:has(.pill-add-btn:hover) svg {
+        .group:has(.pill-add-btn):hover svg {
           color: #3b82f6 !important;
         }
-        .group:has(.pill-add-btn:hover) .pill-text {
+        .group:has(.pill-add-btn):hover .pill-text,
+        .group:has(.pill-add-btn):hover .pill-marquee-text,
+        .group:has(.pill-add-btn):hover .pill-normal-container span {
           color: #3b82f6 !important;
         }
-        .group:has(.pill-add-btn:hover) .pill-add-btn {
+        .group:has(.pill-add-btn):hover .pill-add-btn {
           color: #3b82f6 !important;
         }
       `}</style>
@@ -1638,13 +1682,28 @@ export function MisuseLogicTab() {
               >
                 <Box className="w-3.5 h-3.5 shrink-0" />
                 <div className="relative flex items-center justify-center min-w-0">
-                  <span
-                    className="pill-text truncate max-w-[140px] leading-none flex items-center justify-center h-full transition-all duration-200 has-clear"
-                  >
-                    {loadedFiles[activeCategory]
-                      ? loadedFiles[activeCategory].split(/[/\\]/).pop()
-                      : "No MF4 Loaded"}
-                  </span>
+                  {(() => {
+                    const fileName = loadedFiles[activeCategory]
+                      ? loadedFiles[activeCategory].split(/[/\\]/).pop() || ""
+                      : "No MF4 Loaded";
+                    const isLong = fileName.length > 15;
+                    return (
+                      <div className={cn(isLong ? "pill-marquee-container" : "pill-normal-container", "has-clear")}>
+                        <span
+                          className={cn(
+                            isLong ? "pill-marquee-text text-primary leading-none animate" : "text-primary leading-none"
+                          )}
+                          style={isLong ? { animationDuration: `${Math.max(6, fileName.length * 0.25)}s` } : undefined}
+                        >
+                          {isLong ? (
+                            <>{fileName}&ensp;&ensp;&ensp;&ensp;{fileName}</>
+                          ) : (
+                            fileName
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })()}
                   {loadedFiles[activeCategory] ? (
                     <button
                       onClick={(e) => {

@@ -176,6 +176,7 @@ export function MisuseTimelineEditor({
                         return arrows[idx] || "→";
                       }
                       if (idx === 1) {
+                        if (isCsrInitial) return "→";
                         if (isCsr && isCosOr15Min) return "≥90s";
                         return arrows[idx] || "→";
                       }

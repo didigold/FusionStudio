@@ -149,7 +149,7 @@ const DEFAULT_MISUSE_CRITERIA: Record<string, MisusePhase[]> = {
   ],
   "CSR — Initial Phase": [
     { phaseName: "Detection", alertType: "visual", signal: "", enabled: true, verificationMethod: "video" },
-    { phaseName: "Audio Warning", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, timeConstraint: "≥90", timeConstraintUnit: "s", verificationMethod: "signal" }
+    { phaseName: "Audio Warning", alertType: "audio", signal: "SoundPressure", min_freq: 800, max_freq: 2000, threshold: 0.5, enabled: true, verificationMethod: "signal" }
   ],
   "CSR — Change of Status": [
     { phaseName: "Detection", alertType: "signal", signal: "LapBeltOnly", operator: "==", value: 1, enabled: true, verificationMethod: "signal", mask: "previous", timeConstraint: "≥90", timeConstraintUnit: "s" }
