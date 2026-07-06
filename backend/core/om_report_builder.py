@@ -1131,10 +1131,12 @@ class OMReportBuilder:
                 
                 # Detect audio phase by presence of frequency fields (not just signal name)
                 has_audio_fields = phase.get('min_freq') is not None or phase.get('max_freq') is not None
-                is_audio_by_name = sig.lower().find("sound") >= 0 or sig.lower().find("audio") >= 0 or sig.lower().find("buzzer") >= 0
+                is_audio_by_name = sig and (sig.lower().find("sound") >= 0 or sig.lower().find("audio") >= 0 or sig.lower().find("buzzer") >= 0)
                 is_audio = has_audio_fields or is_audio_by_name
                 
-                if is_audio:
+                if phase.get('alertType') == 'visual':
+                    sig_desc = "Visual (Manual)"
+                elif is_audio:
                     min_f = phase.get('min_freq', phase.get('frequency', 1000))
                     max_f = phase.get('max_freq', phase.get('frequency', 2000))
                     thresh = phase.get('threshold', 0.5)
