@@ -180,7 +180,6 @@ export function MisuseTimelineEditor({
                         return arrows[idx] || "→";
                       }
                       if (idx === 2) {
-                        if (isCsrInitial) return "≥90s";
                         return arrows[idx] || "→";
                       }
                       return arrows[idx] || "→";

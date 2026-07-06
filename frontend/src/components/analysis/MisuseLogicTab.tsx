@@ -71,6 +71,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
 import { reportingApi } from "@/api/reportingApi";
+import { omApi } from "@/api/omApi";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -194,16 +195,6 @@ export function MisuseLogicTab() {
     }
   }, [analysisSelectedFile]);
 
-  // Auto-load channels when selected file or category changes and list is empty
-  useEffect(() => {
-    if (analysisSelectedFile && activeCategory) {
-      const currentList = signalsConfig[activeCategory] || [];
-      const onlySoundPressure = currentList.length === 0 || (currentList.length === 1 && currentList[0].name === "SoundPressure");
-      if (onlySoundPressure) {
-        autoLoadChannelsAndMerge(undefined, undefined, undefined, true, activeCategory);
-      }
-    }
-  }, [analysisSelectedFile, activeCategory, autoLoadChannelsAndMerge, signalsConfig]);
 
   // Filter signals state
   const [filterQuery, setFilterQuery] = useState("");
@@ -828,7 +819,7 @@ export function MisuseLogicTab() {
     }
   };
 
-  // Fetch unique signal values lazily — only for CHECKED signals (max 5),
+  // Fetch unique signal values lazily — only for CHECKED signals (max 6),
   // sequentially with concurrency limit to avoid overwhelming the backend
   // with parallel MDF reads on large OM files.
   useEffect(() => {
@@ -836,7 +827,7 @@ export function MisuseLogicTab() {
     if (!activeFile) return;
 
     const categorySignals = signalsConfig[activeCategory] || [];
-    // Only fetch values for checked signals (max 5) — the rest don't need dropdowns
+    // Only fetch values for checked signals (max 6) — the rest don't need dropdowns
     const checkedSignals = categorySignals.filter(
       (sig) => sig && sig.checked && sig.name !== "SoundPressure"
     );
@@ -1034,7 +1025,7 @@ export function MisuseLogicTab() {
 
     try {
       const backendConfigs = getBackendCategoryConfigs();
-      const res = await reportingApi.gazePreview({
+      const res = await omApi.omPreview({
         file_path: analysisSelectedFile,
         protocol,
         metadata: {
@@ -1132,7 +1123,7 @@ export function MisuseLogicTab() {
 
     try {
       const backendConfigs = getBackendCategoryConfigs();
-      await reportingApi.gazeGenerate({
+      await omApi.omGenerate({
         files: analysisCheckedFiles,
         protocol,
         metadata: {
@@ -1211,7 +1202,7 @@ export function MisuseLogicTab() {
   const columns: GridColDef[] = useMemo(() => [
     {
       field: "checked",
-      headerName: `${checkedCount}/5`,
+      headerName: `${checkedCount}/6`,
       width: 64,
       sortable: false,
       disableColumnMenu: true,
@@ -1222,7 +1213,7 @@ export function MisuseLogicTab() {
             onCheckedChange={(checked) =>
               updateSignalField(activeCategory, params.row.name, "checked", !!checked)
             }
-            disabled={!params.value && checkedCount >= 5}
+            disabled={!params.value && checkedCount >= 6}
             className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
           />
         </div>

@@ -569,6 +569,17 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
             if is_audio and "SoundPressure" in signals:
                 sig_name = "SoundPressure"
             
+            if phase.get('alertType') == 'visual':
+                first_match_time = None
+                if driver_marks and len(driver_marks) > 1:
+                    try:
+                        first_match_time = float(driver_marks[1])
+                    except:
+                        pass
+                signal_times[f"phase_{idx}"] = first_match_time
+                logger.info(f"Visual phase {idx} resolved to time={first_match_time}")
+                continue
+
             if not sig_name or sig_name not in signals:
                 signal_times[f"phase_{idx}"] = None
                 continue
@@ -1096,8 +1107,7 @@ def update_excel_results(config: dict, file_path: str):
 async def gaze_preview(req: GazePreviewRequest):
     import traceback
     from backend.routers.analysis import _load_marks_dict, _get_marks_key
-    from backend.core.report_builder import MatplotlibReportBuilder
-    from backend.core.om_report_builder import OMReportBuilder
+    from backend.core.ga_report_builder import GAReportBuilder
     try:
         if not os.path.exists(req.file_path):
             return {"status": "error", "message": f"File not found: {req.file_path}"}
@@ -1161,7 +1171,7 @@ async def gaze_preview(req: GazePreviewRequest):
         if config.get("target_category", "").startswith("OoP") or config.get("target_category", "").startswith("CSR"):
             builder = OMReportBuilder(config)
         else:
-            builder = MatplotlibReportBuilder(config)
+            builder = GAReportBuilder(config)
         builder.generate(preview_output_path, dpi=300)
         
         return {
@@ -1198,9 +1208,8 @@ async def gaze_generate(req: GazeGenerateRequest):
         def run(self):
             global _active_worker
             from backend.routers.analysis import _load_marks_dict, _get_marks_key
-            from backend.core.report_builder import MatplotlibReportBuilder
-            from backend.core.om_report_builder import OMReportBuilder
-            
+            from backend.core.ga_report_builder import GAReportBuilder
+                        
             try:
                 total_files = len(req.files)
                 success_count = 0
@@ -1285,7 +1294,7 @@ async def gaze_generate(req: GazeGenerateRequest):
                         if config.get("target_category", "").startswith("OoP") or config.get("target_category", "").startswith("CSR"):
                             builder = OMReportBuilder(config)
                         else:
-                            builder = MatplotlibReportBuilder(config)
+                            builder = GAReportBuilder(config)
                         builder.generate(output_png, dpi=300)
                         
                         update_excel_results(config=config, file_path=file_path)
@@ -1407,4 +1416,4 @@ async def open_file_in_os_viewer(req: OpenFileRequest):
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Failed to open file externally: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": str(e)}

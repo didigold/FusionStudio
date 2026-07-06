@@ -1,23 +1,274 @@
 """
-OM (Occupant Monitoring) Report Builder for FusionStudio.
-Extends MatplotlibReportBuilder with all OM-specific rendering logic.
+Matplotlib-based Report Builder for FusionStudio.
+Generates professional A4 engineering reports with logos, graphs, tables.
 """
 import os
 import numpy as np
+from datetime import datetime
+from backend.core.utils import resource_path, shared_asset_path
+from backend.core.audio_analysis import find_first_valid_event
 
-from backend.core.report_builder import MatplotlibReportBuilder
+# Global flag for OpenCV availability
+OPENCV_AVAILABLE = False
+try:
+    import cv2
+    OPENCV_AVAILABLE = True
+except Exception:
+    pass
 
+def _get_rounded_rect_path(x1, y1, x2, y2, rx, ry):
+    import matplotlib.path as mpath
+    kappa = 0.552284749831
+    kx, ky = kappa * rx, kappa * ry
+    verts = [
+        (x1 + rx, y1),
+        (x2 - rx, y1),
+        (x2 - rx + kx, y1), (x2, y1 + ry - ky), (x2, y1 + ry),
+        (x2, y2 - ry),
+        (x2, y2 - ry + ky), (x2 - rx + kx, y2), (x2 - rx, y2),
+        (x1 + rx, y2),
+        (x1 + rx - kx, y2), (x1, y2 - ry + ky), (x1, y2 - ry),
+        (x1, y1 + ry),
+        (x1, y1 + ry - ky), (x1 + rx - kx, y1), (x1 + rx, y1),
+        (x1, y1)
+    ]
+    codes = [
+        mpath.Path.MOVETO,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.CLOSEPOLY
+    ]
+    return mpath.Path(verts, codes)
 
-class OMReportBuilder(MatplotlibReportBuilder):
+def _get_bottom_rounded_rect_path(x1, y1, x2, y2, rx, ry):
+    import matplotlib.path as mpath
+    kappa = 0.552284749831
+    kx, ky = kappa * rx, kappa * ry
+    verts = [
+        (x1 + rx, y1),
+        (x2 - rx, y1),
+        (x2 - rx + kx, y1), (x2, y1 + ry - ky), (x2, y1 + ry),
+        (x2, y2),
+        (x1, y2),
+        (x1, y1 + ry),
+        (x1, y1 + ry - ky), (x1 + rx - kx, y1), (x1 + rx, y1),
+        (x1, y1)
+    ]
+    codes = [
+        mpath.Path.MOVETO,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.LINETO,
+        mpath.Path.LINETO,
+        mpath.Path.LINETO,
+        mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+        mpath.Path.CLOSEPOLY
+    ]
+    return mpath.Path(verts, codes)
+
+class OMReportBuilder:
     """
-    Generates A4 OM reports (Correct Belt Routing / Out of Position variants).
-    Overrides layout, camera frames, signal plots and summary table for OM specifics.
+    Generates professional A4 technical reports using matplotlib.
+    All elements are rendered at high quality for 300dpi export.
     """
+    
+    A4_WIDTH = 8.27
+    A4_HEIGHT = 11.69
+    
+    # Margin settings
+    MARGIN_X = 0.08
+    CONTENT_WIDTH = 1.0 - (2 * MARGIN_X)
+    
+    COLORS = {
+        'primary': '#003366',      # Dark blue
+        'secondary': '#d93d04',    # Orange (Applus)
+        'pass': '#099440',         # Green
+        'fail': '#D32F2F',         # Red
+        'text': '#000000',         # Black
+        'text_white': '#FFFFFF',   # White
+        'text_light': '#666666',
+        'grid': '#CCCCCC',
+        'border': '#B8D4E8',       # Light blue border
+        'border_light': '#DDDDDD',
+        'background': '#FFFFFF',
+        'frame_header': '#D0E8F8', # Light blue for frame headers
+    }
+    
+    def __init__(self, config: dict):
+        self.config = config
+        self.fig = None
+        # Use pre-calculated signal_times from config if available
+        self.signal_times = config.get('signal_times', {})
+        self._ensure_all_signal_times()
+        
+        import matplotlib.pyplot as plt
+        plt.rcParams['font.family'] = 'Calibri'
+        plt.rcParams['font.sans-serif'] = ['Calibri', 'Arial', 'DejaVu Sans']
+        
+    def _ensure_all_signal_times(self):
+        """Ensure signal_times is populated for all signals before any plotting begins."""
+        import numpy as np
+        signals = self.config.get('signals', {})
+        for name, data in signals.items():
+            if name not in self.signal_times or self.signal_times[name] is None:
+                first_match_time = None
+                if name == "SoundPressure":
+                    try:
+                        samples = data['samples']
+                        timestamps = data['timestamps']
+                        samples_numeric = [float(s) for s in samples]
+                        
+                        audio_params = self.config.get('audio_params', {})
+                        min_f = audio_params.get('min_freq', 0)
+                        max_f = audio_params.get('max_freq', 0)
+                        threshold = audio_params.get('threshold', 0)
+                        
+                        if threshold > 0:
+                            if min_f > 0 or max_f > 0:
+                                try:
+                                    timestamps_np = np.array(timestamps)
+                                    samples_np = np.array(samples_numeric)
+                                    dt = np.mean(np.diff(timestamps_np))
+                                    fs = 1.0 / dt
+                                    nyq = 0.5 * fs
+                                    
+                                    # Apply safety limits to normalized frequencies to avoid butterworth filter errors
+                                    low = max(1e-6, float(min_f) / nyq)
+                                    high = min(1.0 - 1e-6, float(max_f) / nyq)
+                                    if low >= high:
+                                        high = low + 0.1
+                                        if high >= 1.0:
+                                            low = 0.1
+                                            high = 0.9
+                                    
+                                    from scipy.signal import butter, filtfilt
+                                    b, a = butter(4, [low, high], btype='band')
+                                    samples_numeric = list(filtfilt(b, a, samples_np))
+                                except Exception:
+                                    pass
+                            
+                            first_match_time = find_first_valid_event(
+                                np.array(samples_numeric),
+                                np.array(timestamps),
+                                float(threshold),
+                                ">="
+                            )
+                    except Exception:
+                        pass
+                else:
+                    threshold = data.get('threshold')
+                    operator = data.get('operator')
+                    if threshold is not None and operator and operator != 'None':
+                        samples = data['samples']
+                        timestamps = data['timestamps']
+                        
+                        threshold_numeric = None
+                        is_numeric_threshold = False
+                        try:
+                            threshold_numeric = float(threshold)
+                            is_numeric_threshold = True
+                        except (ValueError, TypeError):
+                            pass
+                        
+                        try:
+                            samples_numeric = [float(s) for s in samples]
+                            is_numeric_signal = True
+                        except:
+                            is_numeric_signal = False
+                        
+                        # Use configurable mask from config if available
+                        mask_start = self.config.get('mask', 6.0)
+                        
+                        if is_numeric_threshold and is_numeric_signal:
+                            for t, val in zip(timestamps, samples_numeric):
+                                if t < mask_start: continue
+                                match = False
+                                if operator == '>': match = val > threshold_numeric
+                                elif operator == '<': match = val < threshold_numeric
+                                elif operator == '>=': match = val >= threshold_numeric
+                                elif operator == '<=': match = val <= threshold_numeric
+                                elif operator == '==': match = abs(val - threshold_numeric) < 1e-6
+                                elif operator == '!=': match = abs(val - threshold_numeric) >= 1e-6
+                                if match:
+                                    first_match_time = t
+                                    break
+                        else:
+                            samples_str = [str(s) for s in samples]
+                            threshold_str = str(threshold)
+                            mask_start = self.config.get('mask', 6.0)
+                            for t, val_str in zip(timestamps, samples_str):
+                                if t < mask_start: continue
+                                match = False
+                                if operator == '==': match = val_str == threshold_str
+                                elif operator == '!=': match = val_str != threshold_str
+                                if match:
+                                    first_match_time = t
+                                    break
+                
+                self.signal_times[name] = first_match_time
 
-    # ------------------------------------------------------------------
-    # Title
-    # ------------------------------------------------------------------
-
+    def generate(self, output_path: str, dpi: int = 300) -> str:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        
+        self.fig = plt.figure(figsize=(self.A4_WIDTH, self.A4_HEIGHT), dpi=dpi)
+        self.fig.patch.set_facecolor('white')
+        
+        self._add_header()
+        self._add_title()
+        
+        self._add_top_band()
+        self._add_plots()
+        self._add_summary_table()
+        self._add_om_bottom_legend()
+        self._add_footer()
+        
+        self.fig.savefig(output_path, dpi=dpi, facecolor='white', 
+                         edgecolor='none')
+        plt.close(self.fig)
+        return os.path.abspath(output_path)
+    
+    def _add_header(self):
+        header_ax = self.fig.add_axes([self.MARGIN_X, 0.935, self.CONTENT_WIDTH, 0.05])
+        header_ax.axis('off')
+        
+        company_logo_path = shared_asset_path("logos/APPLUS+IDIADA.png")
+        if os.path.exists(company_logo_path):
+            self._add_logo(header_ax, company_logo_path, (0.0, 0.5), max_size=(0.045, 0.22))
+        
+        # Use relative path if available, otherwise default protocol version
+        banner_text = self.config.get('relative_path')
+        if not banner_text:
+            banner_text = "euro-ncap-protocol-safe-driving-driver-engagement-v11"
+            
+        header_ax.text(0.5, 0.5, banner_text, 
+                      fontsize=9, color=self.COLORS['text_light'],
+                      ha='center', va='center', transform=header_ax.transAxes)
+        
+        oem_name = self.config.get('oem_name', '')
+        if not oem_name:
+            oem_name = self.config.get('metadata', {}).get('oem_name', '')
+        
+        if oem_name:
+            oem_logo_path = None
+            for cand in [oem_name, oem_name.title(), oem_name.upper()]:
+                p = shared_asset_path(f"logos/{cand}.png")
+                if os.path.exists(p):
+                    oem_logo_path = p
+                    break
+            if oem_logo_path and os.path.exists(oem_logo_path):
+                self._add_logo(header_ax, oem_logo_path, (1.0, 0.5), max_size=(0.035, 0.22))
+        
+        import matplotlib.pyplot as plt
+        header_ax.axhline(y=0.0, xmin=0, xmax=1, color=self.COLORS['border_light'], linewidth=1)
+    
     def _add_title(self):
         title_ax = self.fig.add_axes([self.MARGIN_X, 0.89, self.CONTENT_WIDTH, 0.035])
         title_ax.axis('off')
@@ -62,12 +313,13 @@ class OMReportBuilder(MatplotlibReportBuilder):
         )
 
         if use_dual_om_frames:
-            cam_width_dual = 0.28
-            cam_height_dual = cam_width_dual * (self.A4_WIDTH / self.A4_HEIGHT)
-            gap = 0.02
-            total_dual_width = (2 * cam_width_dual) + gap
-            left_cam_x = (1.0 - total_dual_width) / 2.0
-            right_margin_x = left_cam_x + cam_width_dual + gap
+            # Keep same height as before
+            cam_height_dual = 0.28 * (self.A4_WIDTH / self.A4_HEIGHT)
+            # Use width = 0.41 to occupy most of the page (0.41 * 2 = 0.82, leaving 0.08 for margins and 0.02 for gap)
+            cam_width_dual = 0.41
+            
+            left_cam_x = self.MARGIN_X
+            right_margin_x = 1.0 - self.MARGIN_X - cam_width_dual
 
             # Left frame: "Misuse" at tgaze time
             camera_ax_left = self.fig.add_axes(
@@ -95,6 +347,251 @@ class OMReportBuilder(MatplotlibReportBuilder):
     # Camera frame: always extract from video for OM
     # ------------------------------------------------------------------
 
+    def _draw_gauge(self, ax):
+        import numpy as np
+        import matplotlib.patches as patches
+        import json
+
+        category = self.config.get('target_category', '')
+        try:
+            all_rules = self.config.get('gauge_rules')
+            if not isinstance(all_rules, dict):
+                config_path = self.config.get('gauge_rules_path')
+                if not config_path or not os.path.exists(config_path):
+                    from backend.core.utils import user_data_path
+                    config_path = user_data_path('config/gauge_rules.json')
+                    if not os.path.exists(config_path):
+                        config_path = resource_path('config/gauge_rules.json')
+                if os.path.exists(config_path):
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        all_rules = json.load(f)
+                else:
+                    all_rules = {}
+        except Exception:
+            all_rules = {}
+            
+        gauge_conf = all_rules.get("Other", {'min': 0, 'max': 5, 'ticks': [0, 1, 2, 3, 4, 5], 'green_range': (2, 4)})
+        for key, conf in all_rules.items():
+            if key != "Other" and key in category:
+                gauge_conf = conf
+                break
+
+        t_event_value = self.config.get('t_event', 'No warn')
+        val_for_needle = gauge_conf['min']
+        if isinstance(t_event_value, (int, float)):
+            val_for_needle = float(t_event_value)
+            val_for_needle = max(gauge_conf['min'], min(gauge_conf['max'], val_for_needle))
+        elif t_event_value == 'No warn':
+            val_for_needle = gauge_conf['min']
+            
+        if isinstance(t_event_value, (int, float)):
+            display_text = f"{t_event_value:.2f}s"
+        else:
+            display_text = f"{t_event_value}"
+
+        ax.axis('off')
+        ax.set_aspect('equal')
+        vmin = gauge_conf['min']
+        vmax = gauge_conf['max']
+        
+        # Center of the circular dial — enlarged and vertically centered
+        CX, CY = 0.5, 0.5
+        
+        # Angle mapping: min=225°(bottom-left), max=-45°(bottom-right), sweeps 270°
+        def val_to_angle(v):
+            return 225.0 - (270.0 * (v - vmin) / (vmax - vmin))
+
+        # Radius settings
+        R_OUT       = 0.42   # Outer dial circle
+        R_TICKS_OUT = 0.39   # Start of tick marks (outermost)
+        R_TICKS_IN  = 0.33   # End of major tick marks (inward)
+        R_SPOKE     = 0.19   # Where spoke lines stop (just outside hub)
+        R_HUB       = 0.17   # Center hub PNG radius
+        
+        CYAN_GLOW = '#00F2FE'
+        
+        # 1. Dark circular face — brand colour #1A1D1C
+        ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='#1A1D1C', zorder=2))
+        
+        # 2. Multi-layered cyan glowing rim
+        for lw, alpha in [(1.0, 0.9), (2.5, 0.4), (5.0, 0.12)]:
+            ax.add_patch(patches.Circle((CX, CY), R_OUT, facecolor='none',
+                                        edgecolor=CYAN_GLOW, linewidth=lw, alpha=alpha, zorder=3))
+        
+        # White outer ring just inside the rim (sits behind tick tips)
+        ax.add_patch(patches.Circle((CX, CY), R_TICKS_OUT, facecolor='none',
+                                    edgecolor='#FFFFFF', linewidth=1.2, alpha=1.0, zorder=3))
+
+        # 3. Fine tick marks (white) + thin spoke lines toward hub
+        n_fine = 60
+        for i in range(n_fine + 1):
+            val_t = vmin + (vmax - vmin) * (i / n_fine)
+            a_rad = np.radians(val_to_angle(val_t))
+            r_inner = R_TICKS_OUT - 0.016
+            r_outer_fine = R_TICKS_OUT - 0.003
+            x1 = CX + r_outer_fine * np.cos(a_rad)
+            y1 = CY + r_outer_fine * np.sin(a_rad)
+            x2 = CX + r_inner * np.cos(a_rad)
+            y2 = CY + r_inner * np.sin(a_rad)
+            # White fine tick
+            ax.plot([x1, x2], [y1, y2], color='#FFFFFF', linewidth=1.8, alpha=1.0,
+                    solid_capstyle='round', zorder=4)
+            # Thin spoke
+            xs = CX + R_SPOKE * np.cos(a_rad)
+            ys = CY + R_SPOKE * np.sin(a_rad)
+            ax.plot([x2, xs], [y2, ys], color='#8899AA', linewidth=0.35, alpha=0.20,
+                    solid_capstyle='butt', zorder=3)
+
+        # 4. Major ticks (white, thick) + prominent spoke + label
+        for t in gauge_conf['ticks']:
+            if t < vmin or t > vmax:
+                continue
+            a_rad = np.radians(val_to_angle(t))
+            r_outer_major = R_TICKS_OUT - 0.006
+            r_outer_halo = R_TICKS_OUT - 0.010
+            x1 = CX + r_outer_major * np.cos(a_rad)
+            y1 = CY + r_outer_major * np.sin(a_rad)
+            x1_halo = CX + r_outer_halo * np.cos(a_rad)
+            y1_halo = CY + r_outer_halo * np.sin(a_rad)
+            x2 = CX + R_TICKS_IN * np.cos(a_rad)
+            y2 = CY + R_TICKS_IN * np.sin(a_rad)
+            # Subtle glow halo behind major tick
+            ax.plot([x1_halo, x2], [y1_halo, y2], color='#FFFFFF', linewidth=7.0, alpha=0.18,
+                    solid_capstyle='round', zorder=4)
+            # White major tick (bright core)
+            ax.plot([x1, x2], [y1, y2], color='#FFFFFF', linewidth=3.5, alpha=1.0,
+                    solid_capstyle='round', zorder=5)
+            # Thin spoke from end of major tick to hub edge
+            xs = CX + R_SPOKE * np.cos(a_rad)
+            ys = CY + R_SPOKE * np.sin(a_rad)
+            ax.plot([x2, xs], [y2, ys], color='#8899AA', linewidth=0.55, alpha=0.30,
+                    solid_capstyle='butt', zorder=4)
+            # Label — slightly bigger, bold white
+            txt_r = R_TICKS_IN - 0.055
+            ax.text(CX + txt_r * np.cos(a_rad), CY + txt_r * np.sin(a_rad),
+                    str(t), fontsize=8.5, color='#FFFFFF',
+                    ha='center', va='center', fontweight='bold', zorder=5)
+
+        # 5. Glowing needle PNG — upscale 4× before rotating for sharpness
+        # NOTE: PIL rotate() only accepts NEAREST/BILINEAR/BICUBIC — NOT LANCZOS.
+        needle_path = resource_path('assets/speedometer_indicator.png')
+        needle_drawn = False
+        if os.path.exists(needle_path):
+            try:
+                from PIL import Image
+                img_needle = Image.open(needle_path).convert('RGBA')
+                # 4× upscale with LANCZOS before rotating for better quality
+                SCALE = 4
+                img_needle = img_needle.resize(
+                    (img_needle.width * SCALE, img_needle.height * SCALE),
+                    Image.LANCZOS)
+                
+                # The new needle PNG points straight UP.
+                # In matplotlib display coords (y up), this is exactly 90° from East (CCW).
+                REF_ANGLE_DEG = 90.0
+                target_angle  = val_to_angle(val_for_needle)
+                rotation_deg  = target_angle - REF_ANGLE_DEG
+                # PIL rotate with positive angle matches matplotlib counter-clockwise rotation
+                img_needle_rot = img_needle.rotate(
+                    rotation_deg, expand=False, resample=Image.BICUBIC)
+                
+                # Resize needle back so it renders smoothly in matplotlib
+                img_needle_rot = img_needle_rot.resize((800, 800), Image.LANCZOS)
+
+                # Overlay needle on gauge
+                # Increase multiplier so it's longer
+                needle_size = R_OUT * 2.0 * 0.95
+                extent = [CX - needle_size / 2, CX + needle_size / 2,
+                          CY - needle_size / 2, CY + needle_size / 2]
+                ax.imshow(np.array(img_needle_rot), extent=extent, zorder=10,
+                          interpolation='lanczos')
+                needle_drawn = True
+            except Exception:
+                pass
+
+        # Fallback: drawn glowing line needle
+        if not needle_drawn:
+            a_needle = np.radians(val_to_angle(val_for_needle))
+            nx1 = CX + R_HUB * np.cos(a_needle)
+            ny1 = CY + R_HUB * np.sin(a_needle)
+            nx2 = CX + (R_TICKS_OUT - 0.01) * np.cos(a_needle)
+            ny2 = CY + (R_TICKS_OUT - 0.01) * np.sin(a_needle)
+            for lw, alpha in [(5.0, 0.15), (3.0, 0.45), (1.5, 0.8)]:
+                ax.plot([nx1, nx2], [ny1, ny2], color=CYAN_GLOW, linewidth=lw, alpha=alpha, zorder=10)
+            ax.plot([nx1, nx2], [ny1, ny2], color='#FFFFFF', linewidth=0.6, alpha=0.95, zorder=11)
+            for r_f, c_f, a_f in [(0.030, CYAN_GLOW, 0.15), (0.018, '#FFFFFF', 0.65), (0.007, '#FFFFFF', 0.9)]:
+                ax.add_patch(patches.Circle((nx2, ny2), r_f, facecolor=c_f, edgecolor='none', alpha=a_f, zorder=12))
+
+        # 6. Center hub PNG (circle.png) — upscaled for crispness, drawn ABOVE needle
+        hub_path = resource_path('assets/circle.png')
+        hub_drawn = False
+        if os.path.exists(hub_path):
+            try:
+                from PIL import Image, ImageOps
+                img_hub = Image.open(hub_path).convert('RGBA')
+                # Crop to square (centered) to prevent oval distortion
+                side = min(img_hub.width, img_hub.height)
+                img_hub = ImageOps.fit(img_hub, (side, side), method=Image.LANCZOS, centering=(0.5, 0.5))
+                # Upscale if needed for crispness
+                if img_hub.width < 512:
+                    img_hub = img_hub.resize((512, 512), Image.LANCZOS)
+                hub_size = R_HUB * 2.0
+                hub_extent = [CX - hub_size / 2, CX + hub_size / 2,
+                              CY - hub_size / 2, CY + hub_size / 2]
+                ax.imshow(np.array(img_hub), extent=hub_extent, zorder=14,
+                          interpolation='lanczos')
+                hub_drawn = True
+            except Exception:
+                pass
+
+        if not hub_drawn:
+            # Fallback drawn hub
+            for lw, alpha in [(1.5, 0.3), (0.8, 0.6)]:
+                ax.add_patch(patches.Circle((CX, CY), R_HUB + lw * 0.01,
+                                            facecolor='none', edgecolor=CYAN_GLOW,
+                                            linewidth=1.5, alpha=alpha, zorder=13))
+            ax.add_patch(patches.Circle((CX, CY), R_HUB, facecolor='#0A0E17', zorder=14))
+
+        # 6. Value text centered on hub (above everything)
+        from matplotlib.font_manager import FontProperties
+        font_path = resource_path('assets/Montserrat-ExtraBold.ttf')
+        if os.path.exists(font_path):
+            font_val = FontProperties(fname=font_path, size=21)
+            font_unit = FontProperties(fname=font_path, size=12.5)
+            font_fallback = FontProperties(fname=font_path, size=16)
+        else:
+            font_val = FontProperties(weight='bold', size=21)
+            font_unit = FontProperties(weight='bold', size=12.5)
+            font_fallback = FontProperties(weight='bold', size=16)
+
+        if isinstance(t_event_value, (int, float)):
+            val_str = f"{t_event_value:.2f}"
+            unit_str = "s"
+            ax.text(CX, CY + 0.015, val_str,
+                    fontproperties=font_val, color='#FFFFFF',
+                    ha='center', va='center', zorder=16)
+            ax.text(CX, CY - 0.060, unit_str,
+                    fontproperties=font_unit, color='#FFFFFF',
+                    ha='center', va='center', zorder=16)
+        else:
+            ax.text(CX, CY, str(t_event_value),
+                    fontproperties=font_fallback, color='#FFFFFF',
+                    ha='center', va='center', zorder=16)
+
+        # 7. Glass lens overlay (lens.png) — topmost layer
+        lens_path = resource_path('assets/lens.png')
+        if os.path.exists(lens_path):
+            try:
+                from PIL import Image
+                img_lens = Image.open(lens_path)
+                extent = [CX - R_OUT, CX + R_OUT, CY - R_OUT, CY + R_OUT]
+                ax.imshow(np.array(img_lens), extent=extent, zorder=17)
+            except Exception:
+                pass
+
+        ax.set_xlim(0.0, 1.0)
+        ax.set_ylim(0.0, 1.0)
+    
     def _draw_camera_frame(self, ax, video_path_override=None, frame_time_override=None, title="Gaze Location/Behaviour"):
         from PIL import Image
 
@@ -136,26 +633,45 @@ class OMReportBuilder(MatplotlibReportBuilder):
         frame = self._extract_frame_from_video(video_path, frame_time)
         if frame is not None:
             try:
+                import matplotlib.patches as patches
+                from backend.core.ga_report_builder import _get_rounded_rect_path
+                
                 img = Image.fromarray(frame)
-                min_dim = min(img.width, img.height)
-                left = (img.width - min_dim) / 2
-                top = (img.height - min_dim) / 2
-                right = (img.width + min_dim) / 2
-                bottom = (img.height + min_dim) / 2
-                img = img.crop((left, top, right, bottom))
+                
+                # Target physical aspect ratio of the image area (which is the bottom 88% of the frame)
+                pos = ax.get_position()
+                W_in = pos.width * self.A4_WIDTH
+                H_in = pos.height * self.A4_HEIGHT * 0.88
+                target_aspect = W_in / H_in
+                
+                current_aspect = img.width / img.height
+                if current_aspect > target_aspect:
+                    new_width = int(img.height * target_aspect)
+                    left = (img.width - new_width) / 2
+                    img = img.crop((left, 0, left + new_width, img.height))
+                else:
+                    new_height = int(img.width / target_aspect)
+                    top = (img.height - new_height) / 2
+                    img = img.crop((0, top, img.width, top + new_height))
+                
                 img = img.resize(
-                    (600, 600),
+                    (800, int(800 / target_aspect)),
                     Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS,
                 )
 
-                square_size = 0.85
-                cx, cy = 0.5, 0.44
-                extent = [
-                    cx - square_size / 2, cx + square_size / 2,
-                    cy - square_size / 2, cy + square_size / 2,
-                ]
+                extent = [0.0, 1.0, 0.0, 0.88]
+                
+                # Corner radii
+                rx_img = min(0.2, 0.08 / W_in)
+                ry_img = min(0.2, 0.08 / H_in)
+                from backend.core.ga_report_builder import _get_bottom_rounded_rect_path
+                img_path = _get_bottom_rounded_rect_path(0.0, 0.0, 1.0, 0.88, rx_img, ry_img)
+                clip_patch = patches.PathPatch(img_path, facecolor='none', edgecolor='none', transform=ax.transAxes)
+                ax.add_patch(clip_patch)
 
-                ax.imshow(np.array(img), extent=extent, zorder=3)
+                im = ax.imshow(np.array(img), extent=extent, aspect='auto', zorder=3)
+                im.set_clip_path(clip_patch)
+                
                 ax.text(
                     extent[0] + 0.02,
                     extent[3] - 0.02,
@@ -183,6 +699,44 @@ class OMReportBuilder(MatplotlibReportBuilder):
     # Plots: no Driver Behaviour row for OM
     # ------------------------------------------------------------------
 
+    def _pixelate_faces(self, image_rgb, blocks=15):
+        if not OPENCV_AVAILABLE or image_rgb is None: return image_rgb
+        try:
+            gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+            faces = []
+            for cname in ['haarcascade_frontalface_default.xml', 'haarcascade_profileface.xml', 'haarcascade_frontalface_alt.xml']:
+                cpath = os.path.join(cv2.data.haarcascades, cname)
+                if not os.path.exists(cpath): continue
+                clf = cv2.CascadeClassifier(cpath)
+                dtc = clf.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+                for f in dtc: faces.append(f)
+                if 'profile' in cname:
+                    dtcf = clf.detectMultiScale(cv2.flip(gray, 1), scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+                    _, w = gray.shape
+                    for (x, y, fw, fh) in dtcf: faces.append((w - x - fw, y, fw, fh))
+            if not faces: return image_rgb
+            out = image_rgb.copy()
+            for (x, y, w, h) in faces:
+                if w <= 0 or h <= 0: continue
+                roi = out[y:y+h, x:x+w]
+                hr, wr = roi.shape[:2]
+                if hr <= blocks or wr <= blocks: continue
+                pix = cv2.resize(cv2.resize(roi, (max(1, wr//blocks), max(1, hr//blocks)), interpolation=cv2.INTER_LINEAR), (wr, hr), interpolation=cv2.INTER_NEAREST)
+                out[y:y+h, x:x+w] = pix
+            return out
+        except Exception: return image_rgb
+
+    def _extract_frame_from_video(self, video_path, target_time_sec):
+        if not OPENCV_AVAILABLE or not video_path or not os.path.exists(video_path): return None
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened(): return None
+        fps, total = cap.get(cv2.CAP_PROP_FPS), int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if fps <= 0 or total <= 0: cap.release(); return None
+        cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, min(int(float(target_time_sec) * fps), total - 1)))
+        ok, fbgr = cap.read(); cap.release()
+        if not ok or fbgr is None: return None
+        return self._pixelate_faces(cv2.cvtColor(fbgr, cv2.COLOR_BGR2RGB))
+
     def _add_plots(self):
         try:
             signals = self.config.get('signals', {})
@@ -204,15 +758,21 @@ class OMReportBuilder(MatplotlibReportBuilder):
             available_plot_width = self.CONTENT_WIDTH - (2 * internal_padding_x)
             plot_start_x = self.MARGIN_X + internal_padding_x
 
-            if total_plots <= 2:
+            if total_plots == 1:
                 n_rows = 1
-                rows_config = [2]
+                rows_config = [1]
+            elif total_plots == 2:
+                n_rows = 2
+                rows_config = [1, 1]
             elif total_plots == 3:
                 n_rows = 2
                 rows_config = [2, 1]
-            elif total_plots <= 4:
+            elif total_plots == 4:
                 n_rows = 2
                 rows_config = [2, 2]
+            elif total_plots == 5:
+                n_rows = 2
+                rows_config = [3, 2]
             else:
                 n_rows = 2
                 rows_config = [3, 3]
@@ -256,6 +816,184 @@ class OMReportBuilder(MatplotlibReportBuilder):
     # ------------------------------------------------------------------
     # Extension hooks: OM-specific first-match line behaviour
     # ------------------------------------------------------------------
+
+    def _draw_driver_behaviour_plot(self, ax):
+        import matplotlib.pyplot as plt
+        ax.set_facecolor('white')
+        ax.set_title("Driver Behaviour", fontsize=8, fontweight='bold', color=self.COLORS['text'])
+        marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if t is not None])
+        if not marks:
+            ax.text(0.5, 0.5, "Post-Processing Required", ha='center', va='center', fontsize=8, color=self.COLORS['text_light'], style='italic')
+        else:
+            max_t = None
+            for d in self.config.get('signals', {}).values():
+                ts = d.get('timestamps', [])
+                if ts:
+                    try: max_t = max(max_t or 0, float(max(ts)))
+                    except Exception: pass
+            if max_t is None: max_t = marks[-1] + 1.0
+            xs, ys, st, lt = [0.0], [0], 0, 0.0
+            for t in marks:
+                xs.extend([t, t]); ys.extend([st, 1-st]); st = 1-st; lt = t
+            xs.append(max_t); ys.append(st)
+            ax.step(xs, ys, where='post', color=self.COLORS['primary'], linewidth=0.8)
+            ax.set_ylim(-0.1, 1.1)
+            ax.set_yticks([0, 1])
+            ax.set_yticklabels(['Troad', 'Taway'], fontsize=6, color=self.COLORS['text_light'])
+            psig = self.config.get('pass_signal_name')
+            if psig:
+                pt = self.signal_times.get(psig)
+                if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
+            
+            # For Unresponsive: draw vertical lines for each phase detection time
+            _category = self.config.get('target_category', '')
+            if 'Unresponsive' in _category:
+                _is_dtr = 'DTR' in _category
+                _phase_colors = ['#8E24AA', '#F59E0B', self.COLORS.get('fail', '#EF4444')] if _is_dtr else ['#F59E0B', self.COLORS.get('fail', '#EF4444')]
+                _sig_times = self.config.get('signal_times', {})
+                _phases = self.config.get('unresponsive_phases', [])
+                for _pi, _ph in enumerate(_phases):
+                    if not _ph.get('enabled', True):
+                        continue
+                    _t = _sig_times.get(f'phase_{_pi}')
+                    if _t is not None:
+                        _clr = _phase_colors[_pi % len(_phase_colors)]
+                        ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
+        ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
+        ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
+        ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
+                       direction='in', color=self.COLORS['border_light'])
+        for s in ['top', 'right']: ax.spines[s].set_visible(False)
+        for s in ['bottom', 'left']: ax.spines[s].set_color(self.COLORS['border_light'])
+    
+    def _draw_signal_plot(self, ax, name: str, data: dict):
+        import numpy as np
+        from scipy import signal
+        ts, smp = data.get('timestamps', []), data.get('samples', [])
+        thr, op, unt = data.get('threshold'), data.get('operator', 'None'), data.get('unit', 'Value')
+        dn = data.get('alias') or name
+        if isinstance(thr, bytes): thr = thr.decode('utf-8')
+        elif thr and isinstance(thr, str):
+            if thr.startswith("b'") and thr.endswith("'"): thr = thr[2:-1]
+        tn, is_nt = None, False
+        if thr:
+            try: tn, is_nt = float(thr), True
+            except (ValueError, TypeError): is_nt = False
+        ax.set_facecolor('white')
+        ax.set_title(dn, fontsize=8, fontweight='bold', color=self.COLORS['text'])
+        if not ts or not smp:
+            ax.text(0.5, 0.5, "No Data", ha='center', va='center'); ax.axis('off'); return
+        vmap = None
+        try: sn, tsn, is_ns = np.array(smp, dtype=float), np.array(ts, dtype=float), True
+        except:
+            uv = list(set(smp)); vmap = {v: i for i, v in enumerate(uv)}
+            sn, tsn, is_ns = np.array([vmap[v] for v in smp]), np.array(ts), False
+        if name == "SoundPressure":
+             ap = self.config.get('audio_params', {})
+             minf, maxf, th = ap.get('min_freq', 0), ap.get('max_freq', 0), ap.get('threshold', 0)
+             suf = ""
+             if minf > 0 or maxf > 0:
+                 try:
+                    nyq = 0.5 / np.mean(np.diff(tsn))
+                    lo = max(1e-6, minf / nyq)
+                    hi = min(1.0 - 1e-6, maxf / nyq)
+                    if lo >= hi:
+                        hi = lo + 0.1
+                        if hi >= 1.0:
+                            lo = 0.1
+                            hi = 0.9
+                    b, a = signal.butter(4, [lo, hi], btype='band')
+                    sn = signal.filtfilt(b, a, sn); suf = f" ({minf}-{maxf} Hz)"
+                 except Exception: pass
+             ax.set_title(dn + suf, fontsize=8, fontweight='bold', color=self.COLORS['text'])
+             # Only draw horizontal threshold line for non-Unresponsive scenarios
+             _category = self.config.get('target_category', '')
+             if self.config.get('show_thresholds', False) and th > 0 and 'Unresponsive' not in _category:
+                 ax.axhline(y=th, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
+        else:
+             # Only draw horizontal threshold line for non-Unresponsive scenarios if enabled
+             _category = self.config.get('target_category', '')
+             if self.config.get('show_thresholds', False) and is_nt and op and op != 'None' and 'Unresponsive' not in _category:
+                 ax.axhline(y=tn, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
+        ax.plot(tsn, sn, color=self.COLORS['primary'], linewidth=0.8)
+        if self.config.get('om_plot_show_marks'):
+            marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if isinstance(t, (int, float))])
+            if self.config.get('om_plot_show_shading'):
+                for i in range(0, len(marks) - 1, 2):
+                    if marks[i+1] > marks[i]: ax.axvspan(marks[i], marks[i+1], color=self.COLORS['primary'], alpha=0.08)
+            for mt in marks: ax.axvline(x=mt, color=self.COLORS['text_light'], linestyle='--', linewidth=0.6, alpha=0.65)
+        if self.config.get('om_plot_show_shading'):
+            # Removed Movement Start line and shading for misuse categories
+            pass
+        fmt = self.signal_times.get(name)
+        _category = self.config.get('target_category', '')
+        _is_unresponsive = 'Unresponsive' in _category
+        # For Unresponsive + SoundPressure: suppress the default first-match vertical line
+        if fmt is not None and not self._is_first_match_line_hidden(name):
+            if not (_is_unresponsive and name == 'SoundPressure'):
+                ax.axvline(x=fmt, color=self._get_first_match_line_color(name), linestyle='-', linewidth=0.8)
+        for _x, _c, _ls, _lw, _a in self._get_extra_axvlines(name): ax.axvline(x=_x, color=_c, linestyle=_ls, linewidth=_lw, alpha=_a)
+        psig = self.config.get('pass_signal_name')
+        if psig and psig != name:
+            pt = self.signal_times.get(psig)
+            if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
+        # For Unresponsive: draw vertical lines for each phase detection time (all plots)
+        if _is_unresponsive:
+            _is_dtr = 'DTR' in _category
+            _phase_colors = ['#8E24AA', '#F59E0B', self.COLORS.get('fail', '#EF4444')] if _is_dtr else ['#F59E0B', self.COLORS.get('fail', '#EF4444')]
+            _phase_shorts = ['DW', 'DW2', 'EF'] if _is_dtr else ['DW', 'EF']
+            _sig_times = self.config.get('signal_times', {})
+            _phases = self.config.get('unresponsive_phases', [])
+            _ymax = ax.get_ylim()[1] if ax.get_ylim()[1] != ax.get_ylim()[0] else 1.0
+            for _pi, _ph in enumerate(_phases):
+                if not _ph.get('enabled', True):
+                    continue
+                _t = _sig_times.get(f'phase_{_pi}')
+                if _t is not None:
+                    _clr = _phase_colors[_pi % len(_phase_colors)]
+                    ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
+        
+        # For Misuse (OoP/CSR): shade the warning duration area
+        _is_misuse = 'OoP' in _category or 'CSR' in _category
+        if _is_misuse:
+            _sig_times = self.config.get('signal_times', {})
+            _phases = self.config.get('unresponsive_phases', [])
+            for _pi, _ph in enumerate(_phases):
+                if not _ph.get('enabled', True):
+                    continue
+                _t = _sig_times.get(f'phase_{_pi}')
+                _dur = _sig_times.get(f'phase_{_pi}_duration')
+                if _t is not None and _dur is not None and _dur > 0:
+                    ax.axvspan(_t, _t + _dur, color=self.COLORS.get('secondary', '#d93d04'), alpha=0.15)
+        ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
+        ax.set_ylabel(unt, fontsize=6, color=self.COLORS['text_light'])
+        if not is_ns and vmap:
+            y_vals = list(vmap.values())
+            raw_lbls = [(v.decode('utf-8') if isinstance(v, bytes) else str(v)) for v in vmap.keys()]
+            
+            import os
+            common = os.path.commonprefix(raw_lbls) if len(raw_lbls) > 1 else ""
+            if len(common) > 2:
+                cleaned_lbls = [lbl[len(common):].strip() for lbl in raw_lbls]
+            else:
+                cleaned_lbls = raw_lbls
+                
+            ax.set_yticks(y_vals)
+            ax.set_yticklabels([])  # Hide default tick labels
+            
+            # Draw labels rotated 90° at two vertical offset levels to avoid overlap
+            for i, (y, lbl) in enumerate(zip(y_vals, cleaned_lbls)):
+                # Alternate between two x columns: close and far from axis
+                x_offset = -0.02 - (0.07 * (i % 2))
+                ax.text(x_offset, y, lbl, transform=ax.get_yaxis_transform(),
+                        ha='center', va='center', fontsize=5, color=self.COLORS['text_light'],
+                        rotation=90, rotation_mode='anchor')
+        ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
+                       direction='in', color=self.COLORS['border_light'])
+        ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
+        for s in ['top', 'right']: ax.spines[s].set_visible(False)
+        ax.spines['bottom'].set_color(self.COLORS['border_light'])
+        ax.spines['left'].set_color(self.COLORS['border_light'])
 
     def _is_first_match_line_hidden(self, name: str) -> bool:
         """Hide the first-match line for the CBR detection helper signal."""
@@ -307,6 +1045,20 @@ class OMReportBuilder(MatplotlibReportBuilder):
     # Summary table: OM metrics layout
     # ------------------------------------------------------------------
 
+    def _add_om_bottom_legend(self):
+        self._add_om_bottom_legend_impl()
+
+    def _add_om_bottom_legend_impl(self):
+        # Removed: Movement Start legend and Audible Warning legend
+        pass
+        
+    def _get_signal_color(self, name: str) -> str:
+        if name == "SoundPressure": return self.COLORS.get('secondary', '#d93d04')
+        pal = ['#099440', '#8E24AA', '#E91E63', '#00897B', '#FF6F00', '#1565C0', '#C62828', '#6A1B9A']
+        names = list(self.config.get('signals', {}).keys())
+        idx = names.index(name) % len(pal) if name in names else sum(ord(c) for c in name) % len(pal)
+        return pal[idx]
+
     def _add_summary_table(self):
         self._add_unresponsive_timeline()
 
@@ -314,5 +1066,392 @@ class OMReportBuilder(MatplotlibReportBuilder):
     # Bottom legend specific to OM warning reports
     # ------------------------------------------------------------------
 
-    def _add_om_bottom_legend(self):
-        self._add_om_bottom_legend_impl()
+    def _clean_single_value(self, sig_name: str, raw_val):
+        """Clean/format a signal value for compact display in the timeline."""
+        if raw_val is None:
+            return "—"
+        if isinstance(raw_val, float):
+            if raw_val == int(raw_val):
+                return str(int(raw_val))
+            return f"{raw_val:.2f}".rstrip('0').rstrip('.')
+        if isinstance(raw_val, int):
+            return str(raw_val)
+        s = str(raw_val).strip()
+        return s
+
+    def _add_unresponsive_timeline(self):
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.patches as patches
+            
+            category = self.config.get('target_category', '')
+            
+            is_dtr = "DTR" in category
+            is_misuse = "OoP" in category or "CSR" in category
+            
+            tb = 0.055 if is_misuse else 0.04
+            mx, th = float(self.MARGIN_X), 0.15
+            fax = self.fig.add_axes([mx, tb, float(self.CONTENT_WIDTH), th])
+            fax.axis('off')
+            
+            header_title = "OCCUPANT MONITORING PHASE EVALUATION" if is_misuse else "UNRESPONSIVE DRIVER TIMELINE EVALUATION"
+            
+            self._draw_frame_with_header(fax, header_title, header_height_ratio=0.18)
+            
+            tax = self.fig.add_axes([mx, tb, float(self.CONTENT_WIDTH), th])
+            tax.axis('off')
+            tax.set_xlim(0, 1)
+            tax.set_ylim(0, 1)
+            
+            phases = self.config.get('unresponsive_phases', [])
+            signal_times = self.config.get('signal_times', {})
+            tgaze = self.config.get('tgaze', 0.0)
+            
+            if is_misuse:
+                m0_label = "Initial Trigger"
+            else:
+                m0_label = "Eyes off road" if is_dtr else "Eyes closed"
+            
+            milestones = [{"label": m0_label, "time": tgaze, "signal": "Gaze Event" if not is_misuse else "Misuse Trigger", "value": "", "triggered": True, "enabled": True}]
+            
+            sigs_conf = self.config.get('signals', {})
+            
+            for idx, phase in enumerate(phases):
+                pname = phase.get('phaseName')
+                if pname == "Escalation Warning" or pname == "Escalated Distraction Warning" or pname == "Sleep Warning":
+                    if pname != "Sleep Warning":
+                        pname = "Distinct Warning"
+                sig = phase.get('signal')
+                t_trig = signal_times.get(f"phase_{idx}")
+                if t_trig is None:
+                    t_trig = signal_times.get(sig)
+                
+                alias = sigs_conf.get(sig, {}).get('alias') or sig
+                enabled = phase.get('enabled', True)
+                
+                # Detect audio phase by presence of frequency fields (not just signal name)
+                has_audio_fields = phase.get('min_freq') is not None or phase.get('max_freq') is not None
+                is_audio_by_name = sig.lower().find("sound") >= 0 or sig.lower().find("audio") >= 0 or sig.lower().find("buzzer") >= 0
+                is_audio = has_audio_fields or is_audio_by_name
+                
+                if is_audio:
+                    min_f = phase.get('min_freq', phase.get('frequency', 1000))
+                    max_f = phase.get('max_freq', phase.get('frequency', 2000))
+                    thresh = phase.get('threshold', 0.5)
+                    sig_desc = f"Audio ({min_f}-{max_f}Hz, ≥{thresh}dB)"
+                else:
+                    raw_val = phase.get('value', 0)
+                    val_str = str(raw_val) if raw_val is not None else ''
+                    
+                    sig_data = sigs_conf.get(sig, {})
+                    smp = sig_data.get('samples', [])
+                    try:
+                        str_smp = []
+                        for s in smp:
+                            if isinstance(s, bytes):
+                                str_smp.append(s.decode('utf-8'))
+                            elif s is not None:
+                                str_smp.append(str(s))
+                        uv = list(set(str_smp))
+                        sig_common = os.path.commonprefix(uv) if len(uv) > 1 else ""
+                        if len(sig_common) > 2 and val_str.startswith(sig_common):
+                            val_str = val_str[len(sig_common):].strip()
+                    except Exception:
+                        pass
+                    
+                    sig_desc = f"{alias} {phase.get('operator', '==')} {val_str}"
+                    
+                # Get cluster duration if available
+                phase_duration = signal_times.get(f"phase_{idx}_duration")
+                if phase_duration is not None:
+                    sig_desc = f"{sig_desc} | {phase_duration:.1f}s"
+                
+                milestones.append({
+                    "label": pname,
+                    "time": t_trig if enabled else None,
+                    "signal": sig,
+                    "value": sig_desc,
+                    "triggered": (t_trig is not None) if enabled else False,
+                    "enabled": enabled,
+                    "constraint": phase.get("timeConstraint"),
+                    "constraint_unit": phase.get("timeConstraintUnit", "s"),
+                    "duration": phase_duration
+                })
+                
+            num_m = len(milestones)
+            start_x = 0.08
+            end_x = 0.92
+            dx = (end_x - start_x) / (num_m - 1) if num_m > 1 else 0
+            x_coords = [start_x + i * dx for i in range(num_m)]
+            
+            tax.annotate("", xy=(end_x + 0.05, 0.58), xytext=(start_x - 0.05, 0.58),
+                         arrowprops=dict(arrowstyle="-|>", color=self.COLORS['text_light'], lw=1.2, mutation_scale=8, facecolor=self.COLORS['text_light']))
+            
+            def _check_time_constraint(delta, constraint_str, unit="s"):
+                if delta is None or not constraint_str: return False, ""
+                try:
+                    c = constraint_str.replace(" ", "").lower()
+                    if c.startswith("≤") or c.startswith("<="): 
+                        val_str = c[1:] if c.startswith("≤") else c[2:]
+                        val, op, lbl = float(val_str), lambda d, v: d <= v, f"≤ {val_str}{unit}"
+                    elif c.startswith("≥") or c.startswith(">="): 
+                        val_str = c[1:] if c.startswith("≥") else c[2:]
+                        val, op, lbl = float(val_str), lambda d, v: d >= v, f"≥ {val_str}{unit}"
+                    elif c.startswith("<"): val, op, lbl = float(c[1:]), lambda d, v: d < v, f"< {c[1:]}{unit}"
+                    elif c.startswith(">"): val, op, lbl = float(c[1:]), lambda d, v: d > v, f"> {c[1:]}{unit}"
+                    elif c.startswith("=="): val, op, lbl = float(c[2:]), lambda d, v: abs(d - v) < 0.001, f"== {c[2:]}{unit}"
+                    else: val, op, lbl = float(c), lambda d, v: abs(d - v) < 0.001, f"== {c}{unit}"
+                    return op(delta, val), lbl
+                except: return False, ""
+            
+            dy = -0.10 if is_misuse else 0.0
+            
+            for i in range(num_m):
+                x = x_coords[i]
+                t = milestones[i]['time']
+                enabled = milestones[i].get('enabled', True)
+                t_lbl = f"{t:.2f}s" if t is not None else ("No trig" if enabled else "Disabled")
+                
+                tick_color = self.COLORS['text_light'] if enabled else '#D3D3D3'
+                lbl_color = self.COLORS['text'] if enabled else '#A9A9A9'
+                t_color = (self.COLORS['primary'] if t is not None else self.COLORS['fail']) if enabled else '#C0C0C0'
+                
+                tax.plot([x, x], [0.48 + dy, 0.68 + dy], color=tick_color, lw=1.0)
+                tax.text(x, 0.74 + dy, milestones[i]['label'], fontsize=6.5, color=lbl_color, ha='center', va='bottom', fontweight='bold')
+                tax.text(x, 0.69 + dy, t_lbl, fontsize=6, color=t_color, ha='center', va='bottom', fontweight='semibold')
+                
+                if i > 0:
+                    y_offset = (0.38 + dy) - (0.08 * ((i - 1) % 2))
+                    sig_lbl_color = self.COLORS['primary'] if enabled else '#A9A9A9'
+                    sig_bg_color = self.COLORS['frame_header'] if enabled else '#F5F5F5'
+                    
+                    tax.annotate(milestones[i]['value'], xy=(x, 0.48 + dy), xytext=(x, y_offset),
+                                 arrowprops=dict(arrowstyle="->", color=tick_color, lw=0.6, alpha=0.7),
+                                 fontsize=5, color=sig_lbl_color, ha='center', va='top', fontweight='bold',
+                                 bbox=dict(facecolor=sig_bg_color, edgecolor='none', boxstyle='round,pad=0.2', alpha=1.0))
+                    
+                    # For misuse: show duration constraint evaluation under the badge
+                    if is_misuse:
+                        duration_constraint = milestones[i].get('constraint')
+                        duration_unit = milestones[i].get('constraint_unit', 's')
+                        event_dur = milestones[i].get('duration')
+                        
+                        if duration_constraint and event_dur is not None:
+                            c_lower = duration_constraint.replace(" ", "").lower()
+                            is_dur_constraint = c_lower.startswith("≥") or c_lower.startswith(">=") or c_lower.startswith(">")
+                            
+                            if is_dur_constraint:
+                                dur_ok, dur_lbl = _check_time_constraint(event_dur, duration_constraint, duration_unit)
+                                dur_stamp = "OK" if dur_ok else "FAIL"
+                                dur_color = self.COLORS['pass'] if dur_ok else self.COLORS['fail']
+                                tax.text(x, 0.32 + dy, dur_stamp, fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                         bbox=dict(facecolor=dur_color, edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+                else:
+                    tax.text(x, 0.38 + dy, milestones[i]['value'], fontsize=5, color=lbl_color, ha='center', va='top')
+
+            for i in range(num_m - 1):
+                x_curr, x_next = x_coords[i], x_coords[i+1]
+                mid_x = (x_curr + x_next) / 2
+                t_curr, t_next = milestones[i]['time'], milestones[i+1]['time']
+                step_enabled = milestones[i+1].get('enabled', True)
+                
+                limit_lbl = ""
+                ok = False
+                delta = None
+                if t_curr is not None and t_next is not None:
+                    delta = t_next - t_curr
+                
+                if is_misuse:
+                    # Match MisuseTimelineEditor logic for gaps
+                    target_lower = category.lower()
+                    is_csr = "csr" in target_lower
+                    is_cos_or_15 = "change of status" in target_lower or "15 min" in target_lower
+                    is_initial = "initial phase" in target_lower
+
+                    if i == 0 and (is_cos_or_15 or is_initial):
+                        limit_lbl = "≤ 30s"
+                        ok = delta is not None and delta <= 30.0
+                    elif i == 1 and is_csr and is_cos_or_15:
+                        limit_lbl = "≥ 90s"
+                        ok = delta is not None and delta >= 90.0
+                    else:
+                        limit_lbl = ""
+                        ok = True
+                    
+                    display_delta = delta
+                elif is_dtr:
+                    if i == 0:
+                        limit_lbl = "3 - 4s"
+                        ok = delta is not None and 3.0 <= delta <= 4.0
+                    elif i == 1:
+                        limit_lbl = "4s"
+                        ok = delta is not None and delta <= 4.0
+                    elif i == 2:
+                        if num_m == 4:
+                            limit_lbl = "≤ 5s"
+                            ok = delta is not None and delta <= 5.0
+                        else:
+                            limit_lbl = "< 1s"
+                            ok = delta is not None and delta < 1.0
+                    elif i == 3:
+                        limit_lbl = "≤ 5s"
+                        ok = delta is not None and delta <= 5.0
+                else:
+                    if i == 0:
+                        limit_lbl = "≤ 7s"
+                        ok = delta is not None and delta <= 7.0
+                    elif i == 1:
+                        limit_lbl = "≤ 5s"
+                        ok = delta is not None and delta <= 5.0
+                
+                delta_lbl = f"{display_delta:.2f}s" if display_delta is not None else "--"
+                
+                arrow_color = self.COLORS['text_light'] if step_enabled else '#D3D3D3'
+                text_color = self.COLORS['text_light'] if step_enabled else '#A9A9A9'
+                
+                tax.annotate("", xy=(x_next, 0.46 + dy), xytext=(x_curr, 0.46 + dy),
+                             arrowprops=dict(arrowstyle="<->", color=arrow_color, lw=0.7))
+                tax.text(mid_x, 0.48 + dy, limit_lbl, fontsize=5.5, color=text_color, ha='center', va='bottom', fontweight='semibold')
+                
+                if step_enabled:
+                    if limit_lbl:
+                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=6.5, color=self.COLORS['primary'] if ok else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        stamp_text = "OK" if ok else "FAIL"
+                        stamp_color = self.COLORS['pass'] if ok else self.COLORS['fail']
+                        tax.text(mid_x, 0.58 + dy, stamp_text, fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=stamp_color, edgecolor='none', boxstyle='round,pad=0.22', alpha=1.0), zorder=10)
+                    else:
+                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=6.5, color=self.COLORS['primary'], ha='center', va='top', fontweight='bold')
+
+            if not is_misuse:
+                if is_dtr:
+                    if len(milestones) > 2 and milestones[2].get('enabled', True):
+                        t0, t2 = milestones[0]['time'], milestones[2]['time']
+                        ok_m02 = False
+                        if t0 is not None and t2 is not None:
+                            ok_m02 = 6.0 <= (t2 - t0) <= 8.0
+                        lbl_m02 = f"{(t2 - t0):.2f}s" if (t0 is not None and t2 is not None) else "--"
+                        
+                        tax.annotate("", xy=(x_coords[2], 0.22), xytext=(x_coords[0], 0.22),
+                                     arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.25, "6 - 8s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.22, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+
+                    target_idx = 3 if num_m == 4 else 4
+                    if num_m > target_idx and milestones[target_idx].get('enabled', True):
+                        target_limit_lbl = "≤ 13s" if num_m == 4 else "13 - 14s"
+                        t0 = milestones[0]['time']
+                        t_end = milestones[target_idx]['time'] if num_m > target_idx else None
+                        ok_end = False
+                        if t0 is not None and t_end is not None:
+                            if num_m == 4:
+                                ok_end = (t_end - t0) <= 13.0
+                            else:
+                                ok_end = 13.0 <= (t_end - t0) <= 14.0
+                        lbl_end = f"{(t_end - t0):.2f}s" if (t0 is not None and t_end is not None) else "--"
+                        
+                        tax.annotate("", xy=(x_coords[target_idx], 0.10), xytext=(x_coords[0], 0.10),
+                                     arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.13, target_limit_lbl, fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.05, lbl_end, fontsize=6.5, color=self.COLORS['primary'] if ok_end else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.10, "OK" if ok_end else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=self.COLORS['pass'] if ok_end else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+                else:
+                    target_idx = 2 if num_m > 2 else num_m - 1
+                    if num_m > target_idx and milestones[target_idx].get('enabled', True):
+                        t0 = milestones[0]['time']
+                        t_end = milestones[target_idx]['time'] if num_m > target_idx else None
+                        
+                        ok_m02 = False
+                        if t0 is not None and t_end is not None:
+                            ok_m02 = (t_end - t0) <= 12.0
+                        lbl_m02 = f"{(t_end - t0):.2f}s" if (t0 is not None and t_end is not None) else "--"
+                        
+                        tax.annotate("", xy=(x_coords[target_idx], 0.16), xytext=(x_coords[0], 0.16),
+                                     arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.19, "≤ 12s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.16, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
+
+    def _add_footer(self):
+        fax = self.fig.add_axes([self.MARGIN_X, 0.015, self.CONTENT_WIDTH, 0.04]); fax.axis('off')
+        category = self.config.get('target_category', '')
+        test_date = self.config.get('test_date', datetime.now())
+        if test_date.tzinfo is not None:
+            offset = test_date.strftime('%z')
+            if offset:
+                offset_str = f"UTC{offset[:3]}:{offset[3:]}"
+                tz_suffix = f" ({offset_str})"
+            else:
+                tz_suffix = ""
+            lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}{tz_suffix}"
+        else:
+            lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}"
+        if self.config.get('filename'): lt += f" | File: {self.config.get('filename')}"
+        if self.config.get('vehicle'): lt += f" | Vehicle: {self.config.get('vehicle')}"
+        fax.text(0.0, 0.4, lt, fontsize=6, color=self.COLORS['text_light'], ha='left', va='center')
+        rt = f"Analyst: {self.config.get('analyst', '')} | Engineer: {self.config.get('engineer', '')}"
+        if self.config.get('track'): rt += f" | Track: {self.config.get('track', '')}"
+        fax.text(1.0, 0.4, rt, fontsize=6, color=self.COLORS['text_light'], ha='right', va='center')
+
+    def _draw_frame_with_header(self, ax, title, header_height_ratio=0.15):
+        import matplotlib.patches as patches
+        
+        # Get absolute dimensions of the axis in inches
+        pos = ax.get_position()
+        W_in = pos.width * self.A4_WIDTH
+        H_in = pos.height * self.A4_HEIGHT
+        
+        # Target radius in inches (e.g. 0.12 inches)
+        R_in = 0.12
+        rx = min(0.4, R_in / W_in)
+        ry = min(0.4, R_in / H_in)
+        
+        # Build the rounded rectangle path in axes coordinates (0.0 to 1.0)
+        rr_path = _get_rounded_rect_path(0.0, 0.0, 1.0, 1.0, rx, ry)
+        
+        # Draw background patch with rounded path
+        f = patches.PathPatch(rr_path, facecolor='white', edgecolor=self.COLORS['border'], linewidth=1.5, transform=ax.transAxes, clip_on=False)
+        ax.add_patch(f)
+        
+        # Draw the header background rectangle
+        hr = patches.Rectangle((0.0, 1.0 - header_height_ratio), 1.0, header_height_ratio, facecolor=self.COLORS['frame_header'], edgecolor='none', transform=ax.transAxes)
+        # Clip the header background to the rounded rectangle shape
+        hr.set_clip_path(f)
+        ax.add_patch(hr)
+        
+        # Draw the border outline patch (on top of header)
+        b = patches.PathPatch(rr_path, facecolor='none', edgecolor=self.COLORS['border'], linewidth=1.5, transform=ax.transAxes, clip_on=False, zorder=5)
+        ax.add_patch(b)
+        
+        # Add the header title text
+        ax.text(0.5, 1.0 - header_height_ratio/2, title, fontsize=8, fontweight='bold', color=self.COLORS['primary'], ha='center', va='center', zorder=6, transform=ax.transAxes)
+
+    def _add_logo(self, ax, image_path: str, position: tuple, max_size: tuple = (1.0, 1.0)):
+        from PIL import Image
+        import numpy as np
+        from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+        try:
+            img = Image.open(image_path)
+            if img.mode != 'RGBA': img = img.convert('RGBA')
+            if max(img.width, img.height) > 1000:
+                sf = 1000 / max(img.width, img.height)
+                img = img.resize((int(img.width * sf), int(img.height * sf)), Image.LANCZOS)
+            bbox = ax.get_window_extent().transformed(self.fig.dpi_scale_trans.inverted())
+            apx, hpx = bbox.width * self.fig.dpi, bbox.height * self.fig.dpi
+            tw, th = apx * max_size[0], hpx * max_size[1]
+            iw, ih = img.size
+            if iw > 0 and ih > 0:
+                z = min(tw/iw, th/ih)
+                if z < 0.001: z = 0.05
+            else: z = 0.1
+            ib = OffsetImage(np.array(img), zoom=z); ib.image.axes = ax
+            ax.add_artist(AnnotationBbox(ib, position, frameon=False, xycoords='axes fraction', box_alignment=(0.5 if position[0] == 0.5 else position[0], 0.5)))
+        except Exception: pass

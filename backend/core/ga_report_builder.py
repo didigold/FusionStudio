@@ -71,7 +71,7 @@ def _get_bottom_rounded_rect_path(x1, y1, x2, y2, rx, ry):
     ]
     return mpath.Path(verts, codes)
 
-class MatplotlibReportBuilder:
+class GAReportBuilder:
     """
     Generates professional A4 technical reports using matplotlib.
     All elements are rendered at high quality for 300dpi export.
@@ -1085,14 +1085,15 @@ class MatplotlibReportBuilder:
             import matplotlib.pyplot as plt
             import matplotlib.patches as patches
             
-            mx, tb, th = float(self.MARGIN_X), 0.04, 0.15
-            fax = self.fig.add_axes([mx, tb, float(self.CONTENT_WIDTH), th])
-            fax.axis('off')
-            
             category = self.config.get('target_category', '')
             
             is_dtr = "DTR" in category
             is_misuse = "OoP" in category or "CSR" in category
+            
+            tb = 0.055 if is_misuse else 0.04
+            mx, th = float(self.MARGIN_X), 0.15
+            fax = self.fig.add_axes([mx, tb, float(self.CONTENT_WIDTH), th])
+            fax.axis('off')
             
             header_title = "OCCUPANT MONITORING PHASE EVALUATION" if is_misuse else "UNRESPONSIVE DRIVER TIMELINE EVALUATION"
             
@@ -1204,6 +1205,8 @@ class MatplotlibReportBuilder:
                     return op(delta, val), lbl
                 except: return False, ""
             
+            dy = -0.10 if is_misuse else 0.0
+            
             for i in range(num_m):
                 x = x_coords[i]
                 t = milestones[i]['time']
@@ -1214,16 +1217,16 @@ class MatplotlibReportBuilder:
                 lbl_color = self.COLORS['text'] if enabled else '#A9A9A9'
                 t_color = (self.COLORS['primary'] if t is not None else self.COLORS['fail']) if enabled else '#C0C0C0'
                 
-                tax.plot([x, x], [0.48, 0.68], color=tick_color, lw=1.0)
-                tax.text(x, 0.74, milestones[i]['label'], fontsize=6.5, color=lbl_color, ha='center', va='bottom', fontweight='bold')
-                tax.text(x, 0.69, t_lbl, fontsize=6, color=t_color, ha='center', va='bottom', fontweight='semibold')
+                tax.plot([x, x], [0.48 + dy, 0.68 + dy], color=tick_color, lw=1.0)
+                tax.text(x, 0.74 + dy, milestones[i]['label'], fontsize=6.5, color=lbl_color, ha='center', va='bottom', fontweight='bold')
+                tax.text(x, 0.69 + dy, t_lbl, fontsize=6, color=t_color, ha='center', va='bottom', fontweight='semibold')
                 
                 if i > 0:
-                    y_offset = 0.38 - (0.08 * ((i - 1) % 2))
+                    y_offset = (0.38 + dy) - (0.08 * ((i - 1) % 2))
                     sig_lbl_color = self.COLORS['primary'] if enabled else '#A9A9A9'
                     sig_bg_color = self.COLORS['frame_header'] if enabled else '#F5F5F5'
                     
-                    tax.annotate(milestones[i]['value'], xy=(x, 0.48), xytext=(x, y_offset),
+                    tax.annotate(milestones[i]['value'], xy=(x, 0.48 + dy), xytext=(x, y_offset),
                                  arrowprops=dict(arrowstyle="->", color=tick_color, lw=0.6, alpha=0.7),
                                  fontsize=5, color=sig_lbl_color, ha='center', va='top', fontweight='bold',
                                  bbox=dict(facecolor=sig_bg_color, edgecolor='none', boxstyle='round,pad=0.2', alpha=1.0))
@@ -1242,10 +1245,10 @@ class MatplotlibReportBuilder:
                                 dur_ok, dur_lbl = _check_time_constraint(event_dur, duration_constraint, duration_unit)
                                 dur_stamp = "OK" if dur_ok else "FAIL"
                                 dur_color = self.COLORS['pass'] if dur_ok else self.COLORS['fail']
-                                tax.text(x, 0.32, dur_stamp, fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                tax.text(x, 0.32 + dy, dur_stamp, fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
                                          bbox=dict(facecolor=dur_color, edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
                 else:
-                    tax.text(x, 0.38, milestones[i]['value'], fontsize=5, color=lbl_color, ha='center', va='top')
+                    tax.text(x, 0.38 + dy, milestones[i]['value'], fontsize=5, color=lbl_color, ha='center', va='top')
 
             for i in range(num_m - 1):
                 x_curr, x_next = x_coords[i], x_coords[i+1]
@@ -1260,13 +1263,22 @@ class MatplotlibReportBuilder:
                     delta = t_next - t_curr
                 
                 if is_misuse:
-                    # For misuse categories: use hardcoded limits per protocol
-                    # Time between triggers: ≤30s
-                    # Audio duration: ≥90s (evaluated separately as badge under milestone)
-                    limit_lbl = "≤ 30s"
-                    ok = delta is not None and delta <= 30.0
+                    # Match MisuseTimelineEditor logic for gaps
+                    target_lower = category.lower()
+                    is_csr = "csr" in target_lower
+                    is_cos_or_15 = "change of status" in target_lower or "15 min" in target_lower
+                    is_initial = "initial phase" in target_lower
+
+                    if i == 0 and (is_cos_or_15 or is_initial):
+                        limit_lbl = "≤ 30s"
+                        ok = delta is not None and delta <= 30.0
+                    elif i == 1 and is_csr and is_cos_or_15:
+                        limit_lbl = "≥ 90s"
+                        ok = delta is not None and delta >= 90.0
+                    else:
+                        limit_lbl = ""
+                        ok = True
                     
-                    # Display delta (time difference) below the line
                     display_delta = delta
                 elif is_dtr:
                     if i == 0:
@@ -1298,17 +1310,19 @@ class MatplotlibReportBuilder:
                 arrow_color = self.COLORS['text_light'] if step_enabled else '#D3D3D3'
                 text_color = self.COLORS['text_light'] if step_enabled else '#A9A9A9'
                 
-                tax.annotate("", xy=(x_next, 0.46), xytext=(x_curr, 0.46),
+                tax.annotate("", xy=(x_next, 0.46 + dy), xytext=(x_curr, 0.46 + dy),
                              arrowprops=dict(arrowstyle="<->", color=arrow_color, lw=0.7))
-                tax.text(mid_x, 0.48, limit_lbl, fontsize=5.5, color=text_color, ha='center', va='bottom', fontweight='semibold')
+                tax.text(mid_x, 0.48 + dy, limit_lbl, fontsize=5.5, color=text_color, ha='center', va='bottom', fontweight='semibold')
                 
                 if step_enabled:
-                    tax.text(mid_x, 0.42, delta_lbl, fontsize=6.5, color=self.COLORS['primary'] if ok else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                    
-                    stamp_text = "OK" if ok else "FAIL"
-                    stamp_color = self.COLORS['pass'] if ok else self.COLORS['fail']
-                    tax.text(mid_x, 0.58, stamp_text, fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
-                             bbox=dict(facecolor=stamp_color, edgecolor='none', boxstyle='round,pad=0.22', alpha=1.0), zorder=10)
+                    if limit_lbl:
+                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=6.5, color=self.COLORS['primary'] if ok else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        stamp_text = "OK" if ok else "FAIL"
+                        stamp_color = self.COLORS['pass'] if ok else self.COLORS['fail']
+                        tax.text(mid_x, 0.58 + dy, stamp_text, fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
+                                 bbox=dict(facecolor=stamp_color, edgecolor='none', boxstyle='round,pad=0.22', alpha=1.0), zorder=10)
+                    else:
+                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=6.5, color=self.COLORS['primary'], ha='center', va='top', fontweight='bold')
 
             if not is_misuse:
                 if is_dtr:
