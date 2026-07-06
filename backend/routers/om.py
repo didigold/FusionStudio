@@ -152,6 +152,36 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
 
     target_signals_conf = dict(signals_conf)
     unresponsive_phases = cat_conf.get('unresponsive_phases', [])
+
+    # Extract OM specific audio params from unresponsive_phases to decouple from global AudioTab
+    om_audio_min_freq = 230.0
+    om_audio_max_freq = 2000.0
+    om_audio_threshold = 0.5
+    om_audio_mask = mask_start
+
+    for phase in unresponsive_phases:
+        p_sig = phase.get('signal')
+        has_audio_fields = phase.get('min_freq') is not None or phase.get('max_freq') is not None or phase.get('frequency') is not None
+        is_audio_by_name = p_sig and (p_sig.lower().find("sound") >= 0 or p_sig.lower().find("audio") >= 0 or p_sig.lower().find("buzzer") >= 0)
+        is_audio = has_audio_fields or is_audio_by_name
+        if is_audio:
+            if phase.get('min_freq') is not None:
+                om_audio_min_freq = float(phase.get('min_freq'))
+            if phase.get('max_freq') is not None:
+                om_audio_max_freq = float(phase.get('max_freq'))
+            elif phase.get('frequency') is not None:
+                om_audio_max_freq = float(phase.get('frequency'))
+            if phase.get('threshold') is not None:
+                om_audio_threshold = float(phase.get('threshold'))
+            
+            mask_val = phase.get('mask')
+            if mask_val is not None and str(mask_val).strip().lower() != 'previous' and str(mask_val).strip() != '':
+                try:
+                    om_audio_mask = float(mask_val)
+                except ValueError:
+                    pass
+            break
+
     for phase in unresponsive_phases:
         sig_name = phase.get('signal')
         if sig_name and sig_name not in target_signals_conf:
@@ -280,13 +310,14 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
             eval_start = tgaze
 
         if sig_name == "SoundPressure":
+            eval_start = om_audio_mask
             try:
-                audio_thresh = micro.get('threshold') if (micro and micro.get('threshold') is not None) else threshold
+                audio_thresh = om_audio_threshold
                 if len(samples) > 0 and len(timestamps) > 0:
                     samples_numeric = samples
                     try:
-                        min_f = micro.get('min_freq') if (micro and micro.get('min_freq') is not None) else 230
-                        max_f = micro.get('max_freq') if (micro and micro.get('max_freq') is not None) else 2000
+                        min_f = om_audio_min_freq
+                        max_f = om_audio_max_freq
                         samples_np = np.array(samples, dtype=float)
                         dur = timestamps[-1] - timestamps[0]
                         fs = len(samples) / dur if dur > 0 else 44100
@@ -476,30 +507,6 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
                             mask_start=eval_start
                         )
                         
-                        # Calculate total event duration using envelope of filtered audio
-                        if first_match_time is not None:
-                            samples_arr = np.array(samples_numeric)
-                            timestamps_arr = np.array(timestamps)
-                            
-                            # Use envelope (absolute value smoothed) for duration calculation
-                            envelope = np.abs(samples_arr)
-                            # Smooth with moving average (100ms window)
-                            window_size = max(1, int(0.1 * len(samples_arr) / (timestamps_arr[-1] - timestamps_arr[0])))
-                            if window_size > 1:
-                                kernel = np.ones(window_size) / window_size
-                                envelope = np.convolve(envelope, kernel, mode='same')
-                            
-                            above_mask = envelope >= float(audio_thresh)
-                            above_mask = above_mask & (timestamps_arr >= eval_start)
-                            above_indices = np.flatnonzero(above_mask)
-                            
-                            if len(above_indices) > 0:
-                                first_idx = above_indices[0]
-                                last_idx = above_indices[-1]
-                                event_start = timestamps_arr[first_idx]
-                                event_end = timestamps_arr[last_idx]
-                                total_duration = event_end - event_start
-                                signal_times[f"phase_{idx}_duration"] = total_duration
                 except Exception as e:
                     logger.error(f"Error calculating audio for phase {idx}: {e}")
             elif threshold is not None and operator and operator != 'None':
@@ -534,8 +541,10 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
             if first_match_time is not None:
                 signal_times[f"phase_{idx}"] = first_match_time
                 # Only use cluster_duration if total duration wasn't already calculated (for audio)
+                logger.info(f"Phase {idx}: cluster_duration is {cluster_duration}")
                 if cluster_duration is not None and f"phase_{idx}_duration" not in signal_times:
                     signal_times[f"phase_{idx}_duration"] = cluster_duration
+                logger.info(f"Phase {idx} signal_times: {signal_times}")
             else:
                 is_unresponsive_pass = False
 
@@ -812,9 +821,10 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
         't_event_color': t_event_color,
         'mask': mask_start,
         'audio_params': {
-            'min_freq': float(micro.get('min_freq')) if (micro and micro.get('min_freq') is not None) else 230.0,
-            'max_freq': float(micro.get('max_freq')) if (micro and micro.get('max_freq') is not None) else 2000.0,
-            'threshold': float(micro.get('threshold')) if (micro and micro.get('threshold') is not None) else (float(signals_conf.get('SoundPressure', {}).get('threshold')) if ('SoundPressure' in signals_conf and signals_conf.get('SoundPressure', {}).get('threshold') is not None) else 0.0)
+            'min_freq': om_audio_min_freq,
+            'max_freq': om_audio_max_freq,
+            'threshold': om_audio_threshold,
+            'mask': om_audio_mask
         },
         'gauge_rules': normalized_gauge_rules,
         'driver_marks': driver_marks,
@@ -910,10 +920,9 @@ class _OMReportingWorker:
         def stop(self):
             self.is_running = False
 
-        def run(self):
+        def run(self, req, loop, on_progress):
             global _active_worker
             from backend.routers.analysis import _load_marks_dict, _get_marks_key
-            from backend.core.report_builder import MatplotlibReportBuilder
             from backend.core.om_report_builder import OMReportBuilder
             
             try:
@@ -1112,7 +1121,7 @@ async def generate_om_report(req: OMGenerateRequest):
     _active_worker = worker
 
     def _run():
-        worker.run()
+        worker.run(req, loop, on_progress)
 
     _worker_thread = Thread(target=_run, daemon=True)
     _worker_thread.start()

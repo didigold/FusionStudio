@@ -153,12 +153,14 @@ class OMReportBuilder:
                                 except Exception:
                                     pass
                             
+                            mask_t = audio_params.get('mask', self.config.get('mask', 6.0))
                             first_match_time = find_first_valid_event(
                                 np.array(samples_numeric),
                                 np.array(timestamps),
                                 float(threshold),
-                                ">="
-                            )
+                                ">=",
+                                mask_start=mask_t
+                            )[0]
                     except Exception:
                         pass
                 else:
@@ -921,7 +923,7 @@ class OMReportBuilder:
             if self.config.get('om_plot_show_shading'):
                 for i in range(0, len(marks) - 1, 2):
                     if marks[i+1] > marks[i]: ax.axvspan(marks[i], marks[i+1], color=self.COLORS['primary'], alpha=0.08)
-            for mt in marks: ax.axvline(x=mt, color=self.COLORS['text_light'], linestyle='--', linewidth=0.6, alpha=0.65)
+            for mt in marks: self._safe_axvline(ax, x=mt, color=self.COLORS['text_light'], linestyle='--', linewidth=0.6, alpha=0.65)
         if self.config.get('om_plot_show_shading'):
             # Removed Movement Start line and shading for misuse categories
             pass
@@ -931,12 +933,12 @@ class OMReportBuilder:
         # For Unresponsive + SoundPressure: suppress the default first-match vertical line
         if fmt is not None and not self._is_first_match_line_hidden(name):
             if not (_is_unresponsive and name == 'SoundPressure'):
-                ax.axvline(x=fmt, color=self._get_first_match_line_color(name), linestyle='-', linewidth=0.8)
-        for _x, _c, _ls, _lw, _a in self._get_extra_axvlines(name): ax.axvline(x=_x, color=_c, linestyle=_ls, linewidth=_lw, alpha=_a)
+                self._safe_axvline(ax, x=fmt, color=self._get_first_match_line_color(name), linestyle='-', linewidth=0.8)
+        for _x, _c, _ls, _lw, _a in self._get_extra_axvlines(name): self._safe_axvline(ax, x=_x, color=_c, linestyle=_ls, linewidth=_lw, alpha=_a)
         psig = self.config.get('pass_signal_name')
         if psig and psig != name:
             pt = self.signal_times.get(psig)
-            if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
+            if pt is not None: self._safe_axvline(ax, x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
         # For Unresponsive: draw vertical lines for each phase detection time (all plots)
         if _is_unresponsive:
             _is_dtr = 'DTR' in _category
@@ -951,7 +953,7 @@ class OMReportBuilder:
                 _t = _sig_times.get(f'phase_{_pi}')
                 if _t is not None:
                     _clr = _phase_colors[_pi % len(_phase_colors)]
-                    ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
+                    self._safe_axvline(ax, x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
         
         # For Misuse (OoP/CSR): shade the warning duration area
         _is_misuse = 'OoP' in _category or 'CSR' in _category
@@ -1026,6 +1028,17 @@ class OMReportBuilder:
         if om_warning_time is not None:
             return [(om_warning_time, self.COLORS['fail'], '-', 0.8, 0.95)]
         return []
+
+    def _safe_axvline(self, ax, x, **kwargs):
+        if x is None:
+            return
+        try:
+            xmin, xmax = ax.get_xlim()
+            if xmin is None or xmax is None or np.isnan(xmin) or np.isnan(xmax):
+                ax.set_xlim(0.0, 1.0)
+            ax.axvline(x=x, **kwargs)
+        except Exception:
+            pass
 
     def _get_om_warning_time(self):
         span = self.config.get('om_audio_event_span')

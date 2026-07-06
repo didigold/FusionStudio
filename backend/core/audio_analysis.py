@@ -16,7 +16,7 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 def find_first_valid_event(samples, timestamps, threshold, operator='>',
-                           min_cluster_duration=0.05, mask_start=6.0):
+                           min_cluster_duration=0.1, mask_start=6.0):
     """
     Clustering-based detection that eliminates single-spike false positives.
     
@@ -74,8 +74,8 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
     if len(starts) == 0:
         return None, None
     
-    # Support bridging gaps between spikes (useful for sound waves)
-    max_gap_duration = 0.05  # 50ms gap allowed
+    # Support bridging gaps between spikes (useful for sound waves and AM modulation dips)
+    max_gap_duration = 0.5  # 500ms gap allowed
     
     # Merge clusters
     merged_starts = [starts[0]]
@@ -89,9 +89,9 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
             merged_starts.append(s)
             merged_ends.append(e)
             
-    # Return the FIRST cluster that meets the minimum duration
+    # 1. Extract valid clusters and calculate their peaks
+    valid_clusters = []
     for s, e in zip(merged_starts, merged_ends):
-        # Clamp to valid indices
         s_clamped = min(s, len(timestamps) - 1)
         e_clamped = min(e - 1, len(timestamps) - 1)  # inclusive end
         
@@ -100,9 +100,57 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
         duration = cluster_end - cluster_start
         
         if duration >= min_cluster_duration:
-            return cluster_start, duration
+            peak_val = np.max(samples[s_clamped:e_clamped+1])
+            valid_clusters.append({
+                'start': cluster_start,
+                'end': cluster_end,
+                'duration': duration,
+                'peak': peak_val
+            })
+
+    if not valid_clusters:
+        return None, None
+
+    # 2. Group into chains separated by <= 2.5 seconds
+    chains = []
+    current_chain = [valid_clusters[0]]
+    for i in range(1, len(valid_clusters)):
+        prev = current_chain[-1]
+        curr = valid_clusters[i]
+        if curr['start'] - prev['end'] <= 2.5:
+            current_chain.append(curr)
+        else:
+            chains.append(current_chain)
+            current_chain = [curr]
+    chains.append(current_chain)
+
+    # 3. Evaluate chains
+    for chain in chains:
+        # Trim trailing outliers (e.g., noise spikes merged at the end)
+        if len(chain) > 2:
+            peaks = [c['peak'] for c in chain]
+            median_peak = np.median(peaks)
+            while len(chain) > 2:
+                last_peak = chain[-1]['peak']
+                # If peak is drastically different from median, pop it
+                if last_peak > 1.8 * median_peak or last_peak < 0.4 * median_peak:
+                    chain.pop()
+                else:
+                    break
+
+        chain_start = chain[0]['start']
+        chain_end = chain[-1]['end']
+        total_duration = chain_end - chain_start
+        
+        # Condition 1: Long continuous warning
+        if total_duration >= 3.0:
+            return chain_start, total_duration
             
-    # No cluster met the minimum duration — all were noise spikes
+        # Condition 2: Repeating warning (multiple beeps)
+        if len(chain) > 1:
+            return chain_start, total_duration
+
+    # No cluster met the criteria
     return None, None
 
 def obtain_peak_frequency(file_path, start_time=9, end_time=10.5, min_freq=230, max_freq=2000, signal_name='SoundPressure'):

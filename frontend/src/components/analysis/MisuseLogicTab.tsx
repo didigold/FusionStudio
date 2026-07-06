@@ -1037,11 +1037,6 @@ export function MisuseLogicTab() {
         },
         category_configs: backendConfigs,
         gauge_rules: gaugeRules,
-        micro: {
-          min_freq: audioMinFreq,
-          max_freq: audioMaxFreq,
-          threshold: audioThreshold,
-        },
         source_dir: analysisSourcePath,
         report_camera_settings: {
           left: reportCameraLeft,
@@ -1135,11 +1130,6 @@ export function MisuseLogicTab() {
         },
         category_configs: backendConfigs,
         gauge_rules: gaugeRules,
-        micro: {
-          min_freq: audioMinFreq,
-          max_freq: audioMaxFreq,
-          threshold: audioThreshold,
-        },
         source_dir: analysisSourcePath,
         report_camera_settings: {
           left: reportCameraLeft,
