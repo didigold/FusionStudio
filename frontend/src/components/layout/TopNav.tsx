@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAppStore } from "@/store/useAppStore";
 import { FolderBrowser } from "@/components/analysis/FolderBrowser";
+import { SplitText } from "@/components/ui/SplitText";
 import {
   Dialog,
   DialogContent,
@@ -35,11 +36,26 @@ import { useTheme } from "@/hooks/useTheme";
 
 const PLACEHOLDERS = [
   "Select project folder...",
-  "Path to your next project...",
-  "Select the folder that will guide you to Euro NCAP's Hall of Fame...",
-  "Let's load some signals...",
-  "Point to your project data..."
+  "Point to your sensor data directory...",
+  "Ready to analyze? Select target folder...",
+  "Feed me some telemetry data...",
+  "Locate your signal files...",
+  "Where is the magic hidden? Choose folder...",
+  "Path to your next data workspace..."
 ];
+
+const renderStaticText = (text: string) => {
+  const words = text.split(' ');
+  return words.map((word, wIdx) => (
+    <span key={wIdx} className="inline-block whitespace-nowrap mr-[0.25em]">
+      {word.split('').map((char, cIdx) => (
+        <span key={cIdx} className="inline-block">
+          {char}
+        </span>
+      ))}
+    </span>
+  ));
+};
 
 export function TopNav() {
   const {
@@ -65,53 +81,47 @@ export function TopNav() {
 
   const [scanning, setScanning] = useState(false);
   const [userProfile, setUserProfile] = useState<{username: string}>({username: "Loading..."});
-  const [currentPlaceholder, setCurrentPlaceholder] = useState("");
+
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [placeholderStatus, setPlaceholderStatus] = useState<'entering' | 'waiting' | 'deleting' | 'idle'>('entering');
+  const [deletingText, setDeletingText] = useState("");
+
+  const handleEntranceComplete = () => {
+    setPlaceholderStatus('waiting');
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    let phraseIndex = 0;
-    let charIndex = 0;
-    let isDeleting = false;
     let timer: NodeJS.Timeout;
+    if (placeholderStatus === 'waiting') {
+      timer = setTimeout(() => {
+        setDeletingText(PLACEHOLDERS[phraseIndex]);
+        setPlaceholderStatus('deleting');
+      }, 2000); // Stay for 2s after animation completes
+    } else if (placeholderStatus === 'idle') {
+      timer = setTimeout(() => {
+        setPhraseIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
+        setPlaceholderStatus('entering');
+      }, 500); // 0.5s pause before starting next SplitText
+    }
+    return () => clearTimeout(timer);
+  }, [placeholderStatus, phraseIndex]);
 
-    const tick = () => {
-      if (!isMounted) return;
-      const currentPhrase = PLACEHOLDERS[phraseIndex];
+  useEffect(() => {
+    if (placeholderStatus !== 'deleting') return;
 
-      if (!isDeleting) {
-        // Typing
-        setCurrentPlaceholder(currentPhrase.substring(0, charIndex + 1));
-        charIndex++;
-
-        if (charIndex === currentPhrase.length) {
-          // Pause at end of phrase
-          isDeleting = true;
-          timer = setTimeout(tick, 3000);
-        } else {
-          timer = setTimeout(tick, 80 + Math.random() * 30); // smooth typing
-        }
+    let currentText = PLACEHOLDERS[phraseIndex];
+    let interval = setInterval(() => {
+      if (currentText.length > 0) {
+        currentText = currentText.slice(0, -1);
+        setDeletingText(currentText);
       } else {
-        // Deleting
-        setCurrentPlaceholder(currentPhrase.substring(0, charIndex - 1));
-        charIndex--;
-
-        if (charIndex === 0) {
-          isDeleting = false;
-          phraseIndex = (phraseIndex + 1) % PLACEHOLDERS.length;
-          timer = setTimeout(tick, 500);
-        } else {
-          timer = setTimeout(tick, 20); // fast deleting
-        }
+        clearInterval(interval);
+        setPlaceholderStatus('idle');
       }
-    };
+    }, 25);
 
-    tick();
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, []);
+    return () => clearInterval(interval);
+  }, [placeholderStatus, phraseIndex]);
 
   useEffect(() => {
     fetch("/api/user/me")
@@ -339,19 +349,19 @@ export function TopNav() {
 
 
         {/* Center: Data Source Input Area (Fixed Position) */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-10">
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center -space-x-px z-10">
           <div className="relative">
             <div
               className={cn(
-                "nav-entry-wrapper relative h-9 flex items-center bg-surface-2 border rounded-lg px-2 shadow-inner",
+                "nav-entry-wrapper relative h-9 flex items-center bg-surface-2 border rounded-l-lg rounded-r-none px-2 shadow-inner",
                 analysisSourcePath
                   ? "w-[560px] hover:w-[600px] focus-within:w-[600px]"
                   : "w-[600px]",
                 isFocused
-                  ? "border-orange-500 ring-1 ring-orange-500/20"
+                  ? "border-orange-500 ring-1 ring-orange-500/20 z-20"
                   : !analysisSourcePath
-                    ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]"
-                    : "border-border",
+                    ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)] z-10"
+                    : "border-border z-10",
               )}
             >
               <div className="nav-input-area">
@@ -381,10 +391,42 @@ export function TopNav() {
                       setDropdownOpen(false);
                     }, 150);
                   }}
-                  placeholder={currentPlaceholder}
+                  placeholder=""
                   style={{ outline: "none", border: "none", boxShadow: "none" }}
-                  className="bg-transparent text-[13px] text-foreground/90 placeholder:text-muted-foreground/50 w-full pl-2 pr-2 relative z-0"
+                  className="bg-transparent text-sm text-foreground/90 w-full pl-2 pr-2 relative z-10"
                 />
+                {/* Custom animated placeholder */}
+                {!localPath && (
+                  <div className="absolute inset-y-0 left-2 right-2 flex items-center pointer-events-none text-sm text-muted-foreground/50 select-none z-0">
+                    {placeholderStatus === 'entering' || placeholderStatus === 'waiting' ? (
+                      <SplitText
+                        text={PLACEHOLDERS[phraseIndex]}
+                        className="text-sm font-normal text-muted-foreground/50"
+                        delay={40}
+                        duration={0.5}
+                        ease="power2.out"
+                        splitType="chars"
+                        from={{ opacity: 0, y: 15 }}
+                        to={{ opacity: 1, y: 0 }}
+                        textAlign="left"
+                        onLetterAnimationComplete={handleEntranceComplete}
+                      />
+                    ) : placeholderStatus === 'deleting' ? (
+                      <div
+                        className="split-parent text-sm font-normal text-muted-foreground/50"
+                        style={{
+                          textAlign: 'left',
+                          overflow: 'hidden',
+                          display: 'inline-block',
+                          whiteSpace: 'normal',
+                          wordWrap: 'break-word',
+                        }}
+                      >
+                        {renderStaticText(deletingText)}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
                 {/* Fade overlay — right edge */}
                 <div
                   className="nav-fade-right"
@@ -464,7 +506,7 @@ export function TopNav() {
               }
             }}
             variant="outline"
-            className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0"
+            className="w-10 h-9 rounded-r-lg rounded-l-none border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 z-10"
             title={isPathChanged ? "Load Project Path" : "Browse Folder"}
           >
             {scanning ? (
