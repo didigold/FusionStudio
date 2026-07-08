@@ -76,6 +76,7 @@ export function SplitText({
           ...to,
           duration,
           ease,
+          clearProps: 'all',
           stagger: delay / 1000,
           scrollTrigger: {
             trigger: el,
@@ -121,12 +122,17 @@ export function SplitText({
   const words = text.split(' ');
 
   const renderContent = () => {
+    const itemStyle: React.CSSProperties = {
+      willChange: 'transform, opacity',
+      ...(from?.opacity !== undefined ? { opacity: Number(from.opacity) } : {})
+    };
+
     if (splitType === 'words') {
       return words.map((word, wIdx) => (
         <span
           key={wIdx}
           className="split-item inline-block whitespace-nowrap mr-[0.25em]"
-          style={{ willChange: 'transform, opacity' }}
+          style={itemStyle}
         >
           {word}
         </span>
@@ -140,7 +146,7 @@ export function SplitText({
           <span
             key={cIdx}
             className="split-item inline-block"
-            style={{ willChange: 'transform, opacity' }}
+            style={itemStyle}
           >
             {char}
           </span>
