@@ -156,10 +156,33 @@ function ExpandableGroup({
         )} />
       )}
 
-      <div
+      <motion.div
+        initial={false}
+        animate={isExpanded ? "open" : "collapsed"}
+        variants={{
+          open: {
+            height: "auto",
+            opacity: 1,
+            transition: {
+              height: {
+                type: "spring",
+                stiffness: 280,
+                damping: 18,
+              },
+              opacity: { duration: 0.2 }
+            }
+          },
+          collapsed: {
+            height: 0,
+            opacity: 0,
+            transition: {
+              height: { duration: 0.25, ease: "easeInOut" },
+              opacity: { duration: 0.15 }
+            }
+          }
+        }}
         className={cn(
-          "flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative z-10",
-          isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0",
+          "flex flex-col overflow-hidden relative z-10",
           sidebarOpen ? "mt-0.5" : "mt-0"
         )}
       >
@@ -204,7 +227,7 @@ function ExpandableGroup({
             </div>
           )
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -1,6 +1,12 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock, IdCardLanyard, ArrowRight } from "lucide-react";
+import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock, IdCardLanyard, ArrowRight, Folder, HardDrive, ChevronRight, Monitor, Download, FileText, Image, Music, Video, Home } from "lucide-react";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +37,37 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useTheme } from "@/hooks/useTheme";
+
+interface DirEntry {
+  name: string
+  is_dir: boolean
+  is_drive?: boolean
+  is_shortcut?: boolean
+  full_path?: string
+}
+
+const shortcutIcons: Record<string, any> = {
+  Desktop: Monitor,
+  Escritorio: Monitor,
+  Downloads: Download,
+  Descargas: Download,
+  Documents: FileText,
+  Documentos: FileText,
+  Pictures: Image,
+  Imágenes: Image,
+  Music: Music,
+  Música: Music,
+  Videos: Video,
+  Vídeos: Video,
+};
+
+function getEntryIcon(entry: DirEntry) {
+  if (entry.is_drive) return HardDrive;
+  if (entry.is_shortcut) return shortcutIcons[entry.name] || Folder;
+  return Folder;
+}
+
+
 
 
 
@@ -78,6 +115,9 @@ export function TopNav() {
   } = useAppStore();
 
   const { toggleTheme, isDark } = useTheme();
+
+
+
 
   const [scanning, setScanning] = useState(false);
   const [userProfile, setUserProfile] = useState<{username: string}>({username: "Loading..."});
@@ -130,7 +170,7 @@ export function TopNav() {
       .catch(err => console.error("Failed to fetch user profile", err));
   }, []);
 
-  const [browseOpen, setBrowseOpen] = useState(false);
+
   const [promptedPath, setPromptedPath] = useState("");
   const [promptFolderBrowserOpen, setPromptFolderBrowserOpen] = useState(false);
   const [localPath, setLocalPath] = useState(analysisSourcePath);
@@ -138,6 +178,68 @@ export function TopNav() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [recentProjects, setRecentProjects] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const pathParts = localPath ? localPath.split(/[\\/]/).filter(Boolean) : [];
+  const buildPath = (index: number, parts: string[]) => {
+    const sep = localPath.includes("\\") ? "\\" : "/";
+    const prefix = localPath.startsWith("\\") ? "\\" : localPath.startsWith("/") ? "/" : "";
+    let result = prefix + parts.slice(0, index + 1).join(sep);
+    if (parts[0]?.endsWith(":") && index === 0) {
+      result += sep;
+    }
+    return result;
+  };
+
+  // States for folder browsing integrated in dropdown
+  const [browseEntries, setBrowseEntries] = useState<DirEntry[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState("");
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setBrowseLoading(true);
+      setBrowseError("");
+      try {
+        const res = await fetch("/api/analysis/browse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({ path: localPath }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          setBrowseError(data.error);
+          setBrowseEntries([]);
+        } else {
+          setBrowseEntries(data.entries || []);
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setBrowseError("Failed to browse directory");
+          setBrowseEntries([]);
+        }
+      } finally {
+        setBrowseLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [localPath, dropdownOpen]);
+
+  const handleClearOrRevert = () => {
+    if (isPathChanged) {
+      setLocalPath(analysisSourcePath || "");
+    } else {
+      setClearConfirmOpen(true);
+    }
+  };
+
 
   useEffect(() => {
     const loadRecent = () => {
@@ -265,22 +367,20 @@ export function TopNav() {
     <>
       <style>{`
         .nav-entry-wrapper {
-          transition: background-color 0.2s ease, border-color 0.2s ease, width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .nav-entry-wrapper .nav-clear-btn {
           max-width: 0;
-          opacity: 0;
           overflow: hidden;
           pointer-events: none;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          transition: max-width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, color 0.2s ease;
+          transition: max-width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .nav-entry-wrapper:hover .nav-clear-btn,
         .nav-entry-wrapper:focus-within .nav-clear-btn {
           max-width: 32px;
-          opacity: 1;
           pointer-events: auto;
         }
         .nav-fade-right {
@@ -344,24 +444,44 @@ export function TopNav() {
         }
       `}</style>
       <header className="relative w-full h-[52px] bg-background flex items-center justify-between px-8 z-40 sticky top-0">
+        {/* Backdrop overlay for focus shading */}
+        <AnimatePresence>
+          {dropdownOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-[1.5px] z-40 pointer-events-auto"
+              onMouseDown={() => {
+                setDropdownOpen(false);
+                setIsFocused(false);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Left Side: Empty placeholder (previously Applus Idiada Logo) */}
         <div className="flex items-center gap-2.5 shrink-0 select-none w-10 h-9" />
 
 
         {/* Center: Data Source Input Area (Fixed Position) */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center -space-x-px z-10">
+        <div className="absolute left-1/2 -translate-x-1/2 z-50">
           <div className="relative">
             <div
               className={cn(
-                "nav-entry-wrapper relative h-9 flex items-center bg-surface-2 border rounded-l-lg rounded-r-none px-2 shadow-inner",
-                analysisSourcePath
+                "nav-entry-wrapper relative h-9 flex items-center bg-surface-2 border px-2 shadow-inner",
+                analysisSourcePath || localPath
                   ? "w-[560px] hover:w-[600px] focus-within:w-[600px]"
                   : "w-[600px]",
-                isFocused
-                  ? "border-orange-500 ring-1 ring-orange-500/20 z-20"
-                  : !analysisSourcePath
-                    ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)] z-10"
-                    : "border-border z-10",
+                dropdownOpen
+                  ? "rounded-t-xl rounded-b-none border-t-orange-500 border-x-orange-500 border-b-border/40 z-50 w-[600px]"
+                  : "rounded-lg border-border z-10",
+                isFocused && !dropdownOpen
+                  ? "border-orange-500 ring-1 ring-orange-500/20"
+                  : !analysisSourcePath && !dropdownOpen
+                    ? "border-orange-500/20 shadow-[0_0_8px_rgba(249,115,22,0.15)]"
+                    : "",
               )}
             >
               <div className="nav-input-area">
@@ -435,88 +555,204 @@ export function TopNav() {
                   }}
                 />
               </div>
-              {analysisSourcePath && (
-                <button
-                  type="button"
-                  onClick={() => setClearConfirmOpen(true)}
-                  className="nav-clear-btn p-1 hover:bg-foreground/5 text-muted-foreground hover:text-foreground rounded-md transition-all"
-                  title="Clear Path"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <div className="flex items-center gap-1.5 shrink-0 z-20">
+                {scanning && (
+                  <div className="p-1">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                  </div>
+                )}
+                {!scanning && isPathChanged && (
+                  <>
+                    <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/60 bg-surface-3 text-[9px] font-medium text-muted-foreground select-none pointer-events-none uppercase tracking-wider font-mono">
+                      <span>Enter</span>
+                      <span className="text-[10px]">↵</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (pendingConfig) {
+                          confirmPromptedPath(localPath);
+                        } else {
+                          setAnalysisSourcePath(localPath);
+                          triggerScanForPath(localPath);
+                        }
+                      }}
+                      className="p-1 hover:bg-foreground/5 text-primary hover:text-primary-hover rounded-md transition-all"
+                      title="Load Project Path (Press Enter)"
+                    >
+                      <ArrowRight className="w-3.5 h-3.5 text-primary animate-pulse" />
+                    </button>
+                  </>
+                )}
+                {(analysisSourcePath || localPath) && (
+                  <button
+                    type="button"
+                    onClick={handleClearOrRevert}
+                    className="nav-clear-btn p-1 hover:bg-foreground/5 text-muted-foreground hover:text-foreground rounded-md"
+                    title={isPathChanged ? "Revert Changes" : "Clear Path"}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Recent Projects Dropdown */}
+            {/* Dropdown Panel */}
             <AnimatePresence>
-              {dropdownOpen && recentProjects.length > 0 && (
+              {dropdownOpen && (
                 <motion.div
                   initial={{ opacity: 0, y: -8, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.98 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute left-0 top-full mt-1.5 w-full bg-surface-2/95 backdrop-blur-md border border-border rounded-xl shadow-2xl z-[100] text-foreground overflow-hidden"
+                  className={cn(
+                    "absolute left-0 top-full w-full bg-surface-2/95 backdrop-blur-md border-x border-b border-t-0 rounded-b-xl shadow-2xl z-[100] text-foreground flex flex-col overflow-hidden",
+                    dropdownOpen ? "border-orange-500" : "border-border"
+                  )}
+                  style={{ maxHeight: '450px' }}
                 >
-                  <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 border-b border-border/40 select-none flex items-center gap-1.5">
-                    <Clock className="w-3 h-3" />
-                    Recent Projects
+                  {/* Recent Projects Section */}
+                  <div className="shrink-0 flex flex-col">
+                    <div className="px-4 py-2.5 text-xs font-bold text-foreground/80 select-none bg-surface-3/5">
+                      Recent Projects
+                    </div>
+                    {recentProjects.length > 0 ? (
+                      <div className="p-1.5 flex flex-col gap-0.5">
+                        {recentProjects.map((path) => (
+                          <button
+                            key={path}
+                            type="button"
+                            onMouseDown={(e) => {
+                              // Prevent blur from firing before click
+                              e.preventDefault();
+                              setLocalPath(path);
+                              setDropdownOpen(false);
+                              setIsFocused(false);
+                              if (pendingConfig) {
+                                confirmPromptedPath(path);
+                              } else {
+                                setAnalysisSourcePath(path);
+                                triggerScanForPath(path);
+                              }
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
+                          >
+                            <span className="truncate text-xs opacity-90">{path}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="h-9 px-4 text-xs text-muted-foreground/40 italic select-none flex items-center justify-center">
+                        No recent projects
+                      </div>
+                    )}
                   </div>
-                  <div className="p-1 flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
-                    {recentProjects.map((path) => (
-                      <button
-                        key={path}
-                        type="button"
-                        onMouseDown={(e) => {
-                          // Prevent blur from firing before click
-                          e.preventDefault();
-                          setLocalPath(path);
-                          setDropdownOpen(false);
-                          setIsFocused(false);
-                          if (pendingConfig) {
-                            confirmPromptedPath(path);
-                          } else {
-                            setAnalysisSourcePath(path);
-                            triggerScanForPath(path);
-                          }
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
-                      >
-                        <span className="truncate font-mono text-xs opacity-90">{path}</span>
-                      </button>
-                    ))}
+
+                  {/* Browse Folder Section */}
+                  <div className="flex-1 flex flex-col min-h-0 border-t border-border/40">
+                    <div className="px-4 py-2.5 text-xs font-bold text-foreground/80 select-none bg-surface-3/5 shrink-0">
+                      Browse Folder
+                    </div>
+
+                    {/* Integrated Breadcrumb for browsing */}
+                    {localPath && (
+                      <div className="px-4 py-1.5 border-b border-border/20 bg-surface-3/10 shrink-0 flex items-center min-h-[1.75rem] overflow-x-auto select-none">
+                        <Breadcrumb>
+                          <BreadcrumbList className="flex-wrap">
+                            <BreadcrumbItem>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setLocalPath("");
+                                }}
+                                className="flex items-center gap-1 p-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                              >
+                                <Home className="w-3.5 h-3.5" />
+                              </button>
+                            </BreadcrumbItem>
+                            {pathParts.map((part, i) => {
+                              const isLast = i === pathParts.length - 1;
+                              return (
+                                <React.Fragment key={i}>
+                                  <BreadcrumbSeparator className="text-muted-foreground/30 text-[10px]" />
+                                  <BreadcrumbItem>
+                                    {isLast ? (
+                                      <span className="text-xs font-medium text-foreground max-w-[120px] truncate">{part}</span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          setLocalPath(buildPath(i, pathParts));
+                                        }}
+                                        className="text-xs text-muted-foreground hover:text-foreground transition-colors max-w-[120px] truncate p-0.5 rounded hover:bg-white/5"
+                                      >
+                                        {part}
+                                      </button>
+                                    )}
+                                  </BreadcrumbItem>
+                                </React.Fragment>
+                              );
+                            })}
+                          </BreadcrumbList>
+                        </Breadcrumb>
+                      </div>
+                    )}
+                    
+                    <div className="flex-1 overflow-y-auto p-1.5 max-h-[220px]">
+                      {browseLoading && browseEntries.length === 0 ? (
+                        <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          Loading directory...
+                        </div>
+                      ) : browseError ? (
+                        <div className="px-4 py-3 text-xs text-red-400 select-none text-center">
+                          {browseError}
+                        </div>
+                      ) : browseEntries.length === 0 ? (
+                        <div className="px-4 py-3 text-xs text-muted-foreground/50 italic text-center select-none">
+                          Empty folder
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          {browseEntries.map((entry) => {
+                            const Icon = getEntryIcon(entry);
+                            return (
+                              <button
+                                key={entry.name + (entry.full_path || "")}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault(); // keep input focused
+                                  // Update path
+                                  let nextPath = "";
+                                  if (entry.full_path) {
+                                    nextPath = entry.full_path;
+                                  } else if (localPath) {
+                                    const sep = localPath.includes("\\") ? "\\" : "/";
+                                    const trail = localPath.endsWith("\\") || localPath.endsWith("/") ? "" : sep;
+                                    nextPath = localPath + trail + entry.name;
+                                  } else {
+                                    nextPath = entry.name;
+                                  }
+                                  setLocalPath(nextPath);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
+                              >
+                                <Icon className="w-3.5 h-3.5 shrink-0 text-primary/60" />
+                                <span className="truncate text-xs opacity-90">{entry.name}</span>
+                                <ChevronRight className="w-3 h-3 ml-auto shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-          {/* Browse button or Submit arrow */}
-          <Button
-            type="button"
-            onClick={() => {
-              if (isPathChanged) {
-                if (pendingConfig) {
-                  confirmPromptedPath(localPath);
-                } else {
-                  setAnalysisSourcePath(localPath);
-                  triggerScanForPath(localPath);
-                }
-              } else {
-                setBrowseOpen(true);
-              }
-            }}
-            variant="outline"
-            className="w-10 h-9 rounded-r-lg rounded-l-none border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 z-10"
-            title={isPathChanged ? "Load Project Path" : "Browse Folder"}
-          >
-            {scanning ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-            ) : isPathChanged ? (
-              <ArrowRight className="w-3.5 h-3.5 text-primary animate-pulse" />
-            ) : (
-              <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
-            )}
-          </Button>
         </div>
 
         {/* Right Side: Import/Save Config buttons and User Profile */}
@@ -707,11 +943,6 @@ export function TopNav() {
         </DialogContent>
       </Dialog>
 
-      <FolderBrowser
-        open={browseOpen}
-        onOpenChange={setBrowseOpen}
-        onSelect={handleFolderSelect}
-      />
       <FolderBrowser
         open={promptFolderBrowserOpen}
         onOpenChange={setPromptFolderBrowserOpen}
