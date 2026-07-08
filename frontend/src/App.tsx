@@ -71,7 +71,7 @@ export default function App() {
           <Toaster />
 
           {/* Main Content Area */}
-          <div className="flex flex-1 overflow-hidden pt-2 px-4 pb-4">
+          <div className="flex flex-1 overflow-hidden pt-0 pr-2 pb-2 pl-0">
             <main className="flex-1 relative">
               <Routes>
                 <Route path="/" element={<AnalysisTab />} />

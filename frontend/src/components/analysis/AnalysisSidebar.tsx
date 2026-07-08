@@ -322,7 +322,7 @@ export function AnalysisSidebar() {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-border/50 bg-surface-1"
+      className="border-r-0 bg-background"
     >
       {/* Persistent Sidebar Header */}
       <SidebarHeader className="h-[52px] flex items-center p-0 overflow-hidden shrink-0 relative w-full">

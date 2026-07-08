@@ -428,7 +428,7 @@ export default function AnalysisTab() {
 
 
   return (
-    <div className="flex h-full gap-0 p-1 overflow-hidden">
+    <div className="flex h-full gap-0 p-0 overflow-hidden">
       {/* Main Analysis Panel (Recordings + Content) */}
       <div className="flex-1 bg-surface-2 border border-border/50 rounded-3xl flex overflow-hidden shadow-sm relative min-h-0">
         {/* Recordings panel — attached inside the main container */}
