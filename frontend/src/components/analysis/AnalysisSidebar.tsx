@@ -18,6 +18,16 @@ import {
   Brain,
   PanelLeftClose,
   PanelLeftOpen,
+  IdCardLanyard,
+  ChevronsUpDown,
+  LogOut,
+  Settings,
+  Download,
+  HelpCircle,
+  Globe,
+  ArrowUpCircle,
+  Sun,
+  Moon
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppStore } from "@/store/useAppStore";
@@ -30,10 +40,19 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -283,6 +302,17 @@ function SidebarItem({ value, label, icon: Icon, spinner }: { value: string; lab
   return <SidebarMenuItem>{buttonContent}</SidebarMenuItem>;
 }
 
+interface CorporateUser {
+  username: string | null;
+  display_name: string | null;
+  email: string | null;
+  upn: string | null;
+  resolved_identity: string | null;
+  identity_source: string;
+  is_email_confirmed: boolean;
+  avatar_base64: string | null;
+}
+
 export function AnalysisSidebar() {
   const {
     analysisChronosRunning,
@@ -294,16 +324,41 @@ export function AnalysisSidebar() {
   } = useAppStore();
 
   const { open: sidebarOpen, toggleSidebar } = useSidebar();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
+  
+  const [userProfile, setUserProfile] = useState<CorporateUser | null>(() => {
+    try {
+      const saved = localStorage.getItem("corporate_user_profile");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [isHeaderLogoHovered, setIsHeaderLogoHovered] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/user/me")
+      .then(res => res.json())
+      .then(data => {
+        setUserProfile(data);
+        try {
+          localStorage.setItem("corporate_user_profile", JSON.stringify(data));
+        } catch (e) {
+          console.error("Failed to save user profile to localStorage", e);
+        }
+      })
+      .catch(err => console.error("Failed to fetch user profile", err));
+  }, []);
+
   const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
-    if (["tracking", "time-selector", "logic"].includes(activeTab)) return "Gaze Analysis";
+    if (["tracking", "audio", "time-selector", "logic"].includes(activeTab)) return "Gaze Analysis";
     if (["occupant-time", "misuse-logic"].includes(activeTab)) return "Occupant Monitoring";
     return null;
   });
   
   useEffect(() => {
-    if (["tracking", "time-selector", "logic"].includes(activeTab)) {
+    if (["tracking", "audio", "time-selector", "logic"].includes(activeTab)) {
       setExpandedGroup("Gaze Analysis");
     } else if (["occupant-time", "misuse-logic"].includes(activeTab)) {
       setExpandedGroup("Occupant Monitoring");
@@ -328,7 +383,7 @@ export function AnalysisSidebar() {
       <SidebarHeader className="h-[52px] flex items-center p-0 overflow-hidden shrink-0 relative w-full">
         <div className="flex items-center w-full px-[14px] h-full relative">
           <div
-            className="w-7 h-7 flex items-center justify-center cursor-pointer select-none group/logo-sidebar shrink-0 relative animate-none"
+            className="w-8 h-8 flex items-center justify-center cursor-pointer select-none group/logo-sidebar shrink-0 relative animate-none hover:bg-white/10 dark:hover:bg-white/10 rounded-lg transition-colors"
             onMouseEnter={() => setIsHeaderLogoHovered(true)}
             onMouseLeave={() => setIsHeaderLogoHovered(false)}
             onClick={toggleSidebar}
@@ -443,7 +498,6 @@ export function AnalysisSidebar() {
             )}
           </AnimatePresence>
           <SidebarMenu>
-            <SidebarItem value="audio" label="Audio" icon={Mic} />
             <SidebarItem value="metadata" label="Metadata" icon={FileText} />
             <ExpandableGroup
               label="Gaze Analysis"
@@ -457,6 +511,7 @@ export function AnalysisSidebar() {
                   icon: ScanFace,
                   showSpinner: analysisChronosRunning,
                 },
+                { value: "audio", label: "Audio", icon: Mic },
                 { value: "time-selector", label: "Gaze Time", icon: Clock },
                 {
                   value: "logic",
@@ -550,6 +605,18 @@ export function AnalysisSidebar() {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className={cn(
+        "p-2 border-t border-border/10 shrink-0",
+        !sidebarOpen && "px-1"
+      )}>
+        <SidebarUserButton 
+          userProfile={userProfile} 
+          toggleTheme={toggleTheme} 
+          isDark={isDark} 
+          sidebarOpen={sidebarOpen} 
+        />
+      </SidebarFooter>
     </Sidebar>
   );
 }
@@ -642,4 +709,169 @@ function LogSidebarButton({ isLogWriting }: { isLogWriting: boolean }) {
   }
 
   return <div className="w-full">{buttonContent}</div>;
+}
+
+function getInitials(name: string) {
+  if (!name || name === "Guest" || name === "Loading...") return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+function SidebarUserButton({
+  userProfile,
+  toggleTheme,
+  isDark,
+  sidebarOpen,
+}: {
+  userProfile: CorporateUser | null;
+  toggleTheme: () => void;
+  isDark: boolean;
+  sidebarOpen: boolean;
+}) {
+  const username = userProfile?.username || "Guest";
+  const displayName = userProfile?.display_name || userProfile?.email || username;
+  const emailSubtext = userProfile?.email || userProfile?.upn || "";
+  const badgeText = username.startsWith("AT") ? "IDI" : "EXT";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "w-full flex items-center gap-3 rounded-xl p-2 text-sm font-medium transition-all duration-200 hover:bg-[#E6E4E1]/15 dark:hover:bg-white/10 hover:text-foreground text-left focus:outline-none",
+            !sidebarOpen && "justify-center px-0 h-12 w-12 mx-auto"
+          )}
+        >
+          {/* Avatar Container */}
+          <div className="relative shrink-0">
+            <div className={cn(
+              "rounded-full p-[2px] border-2 border-orange-500 flex items-center justify-center transition-all duration-300",
+              sidebarOpen ? "h-10 w-10" : "h-8 w-8"
+            )}>
+              <Avatar className="h-full w-full rounded-full bg-surface-3">
+                {userProfile?.avatar_base64 ? (
+                  <AvatarImage 
+                    src={`data:image/jpeg;base64,${userProfile.avatar_base64}`} 
+                    alt={displayName} 
+                    className="object-cover rounded-full"
+                  />
+                ) : null}
+                <AvatarFallback className={cn(
+                  "bg-transparent flex items-center justify-center font-black text-foreground select-none",
+                  sidebarOpen ? "text-[11px]" : "text-[9px]"
+                )}>
+                  {getInitials(displayName)}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            {/* Overlay Badge */}
+            <div className={cn(
+              "absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white/20 select-none shadow-lg tracking-wider transition-all duration-300",
+              !sidebarOpen && "text-[7.5px] px-1 py-0 -bottom-1"
+            )}>
+              {badgeText}
+            </div>
+          </div>
+
+          {/* Name & Chevron */}
+          {sidebarOpen && (
+            <div className="flex items-center flex-1 min-w-0 gap-2">
+              <span className="flex-1 truncate font-bold text-foreground text-xs uppercase tracking-wide">
+                {displayName}
+              </span>
+              <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            </div>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        align={sidebarOpen ? "start" : "end"}
+        side={sidebarOpen ? "top" : "right"}
+        sideOffset={sidebarOpen ? 8 : 12}
+        className="w-56 bg-surface-2 border border-border text-foreground rounded-2xl shadow-xl p-1.5 z-[100]"
+      >
+        {/* User Header */}
+        <div className="flex items-center gap-3 px-2 py-2 select-none">
+          <div className="relative shrink-0">
+            <div className="h-10 w-10 rounded-full p-[2px] border-2 border-orange-500 flex items-center justify-center">
+              <Avatar className="h-full w-full rounded-full bg-surface-3">
+                {userProfile?.avatar_base64 ? (
+                  <AvatarImage 
+                    src={`data:image/jpeg;base64,${userProfile.avatar_base64}`} 
+                    alt={displayName} 
+                    className="object-cover rounded-full"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-transparent flex items-center justify-center font-black text-foreground select-none text-[11px]">
+                  {getInitials(displayName)}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white/20 select-none shadow-lg tracking-wider">
+              {badgeText}
+            </div>
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-bold text-foreground truncate">{displayName}</span>
+            {emailSubtext && emailSubtext !== displayName && (
+              <span className="text-[11px] text-muted-foreground truncate">{emailSubtext}</span>
+            )}
+          </div>
+        </div>
+        <DropdownMenuSeparator className="my-1 border-t border-border/40" />
+
+        {/* Items */}
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
+          <Settings className="w-4 h-4 text-muted-foreground" />
+          <span className="flex-1">All settings</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
+          <ArrowUpCircle className="w-4 h-4 text-muted-foreground" />
+          <span className="flex-1">Upgrade plan</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
+          <Download className="w-4 h-4 text-muted-foreground" />
+          <span className="flex-1">Install apps</span>
+        </DropdownMenuItem>
+        
+        <DropdownMenuSeparator className="my-1 border-t border-border/40" />
+        
+        {/* Theme Toggle inside Dropdown */}
+        <DropdownMenuItem 
+          onClick={toggleTheme}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer"
+        >
+          {isDark ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
+          <span className="flex-1">Appearance</span>
+          <span className="text-xs text-muted-foreground capitalize">{isDark ? "Dark" : "Light"}</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
+          <Globe className="w-4 h-4 text-muted-foreground" />
+          <span className="flex-1">Language</span>
+          <span className="text-xs text-muted-foreground">Default</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
+          <HelpCircle className="w-4 h-4 text-muted-foreground" />
+          <span className="flex-1">Help</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator className="my-1 border-t border-border/40" />
+
+        <DropdownMenuItem 
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-red-500/10 text-red-500 hover:text-red-500 cursor-pointer"
+        >
+          <LogOut className="w-4 h-4 text-red-500" />
+          <span className="flex-1 font-semibold">Sign out</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }

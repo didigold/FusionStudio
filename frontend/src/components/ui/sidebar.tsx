@@ -173,11 +173,11 @@ const SidebarMenuItem = React.forwardRef<HTMLDivElement, React.ComponentProps<"d
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  "inline-flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium w-full transition-all duration-200 hover:bg-[#E6E4E1]/10 dark:hover:bg-[#E6E4E1]/20 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0 select-none",
+  "inline-flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium w-full transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 focus-visible:outline-none focus-visible:ring-0 select-none",
   {
     variants: {
       variant: {
-        default: "text-muted-foreground [&:active]:outline-none [&:active]:ring-0",
+        default: "text-muted-foreground hover:bg-[#E6E4E1] hover:text-[#111110] dark:hover:bg-primary/10 dark:hover:text-primary [&:active]:outline-none [&:active]:ring-0",
         active: "bg-[#E6E4E1] text-[#111110] dark:bg-primary/10 dark:text-primary [&:active]:outline-none [&:active]:ring-0",
       },
       size: {

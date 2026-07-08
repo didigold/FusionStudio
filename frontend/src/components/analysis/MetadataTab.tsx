@@ -1,8 +1,7 @@
 import { useMemo } from "react"
-import { User, MapPin, Wrench, Users, ShieldCheck, Car } from "lucide-react"
+import { User, MapPin, Wrench, Users, Car } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { SearchableSelect } from "@/components/analysis/SearchableSelect"
 import { useAppStore } from "@/store/useAppStore"
 import { LogoLoop } from "@/components/ui/LogoLoop"
@@ -88,8 +87,6 @@ export function MetadataTab() {
     setAnalysisEngineer,
     analysisAnalyst,
     setAnalysisAnalyst,
-    analysisEuroNcap,
-    setAnalysisEuroNcap,
   } = useAppStore()
   
   const getOemLogoUrl = (oem: string) => {
@@ -190,17 +187,6 @@ export function MetadataTab() {
               onChange={(e) => setAnalysisAnalyst(e.target.value)}
               placeholder="Firstname Lastname"
               className="h-9 focus-visible:ring-orange-500"
-            />
-          </div>
-
-          <div className="flex items-center justify-between group/field py-1">
-            <Label htmlFor="euro-ncap" className="text-sm font-medium text-foreground flex items-center gap-2 cursor-pointer select-none">
-              <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" /> Euro NCAP
-            </Label>
-            <Switch
-              id="euro-ncap"
-              checked={analysisEuroNcap}
-              onCheckedChange={setAnalysisEuroNcap}
             />
           </div>
         </div>

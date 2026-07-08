@@ -378,7 +378,7 @@ export default function AnalysisTab() {
     useAppStore.setState({ analysisCheckedFiles: nextChecked })
   }, [analysisCheckedFiles, checkedFilesSet])
 
-  const SHOW_RECORDINGS_TABS = ['audio', 'metadata', 'tracking', 'time-selector', 'logic', 'occupant-time', 'misuse-logic'];
+  const SHOW_RECORDINGS_TABS = ['audio', 'tracking', 'time-selector', 'logic', 'occupant-time', 'misuse-logic'];
   const shouldShowRecordings = SHOW_RECORDINGS_TABS.includes(activeTab);
 
   // Check if we have OM structure to show FolderNavigator instead of Tree View

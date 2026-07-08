@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock, IdCardLanyard, ArrowRight, Folder, HardDrive, ChevronRight, Monitor, Download, FileText, Image, Music, Video, Home } from "lucide-react";
 import {
@@ -120,7 +120,7 @@ export function TopNav() {
 
 
   const [scanning, setScanning] = useState(false);
-  const [userProfile, setUserProfile] = useState<{username: string}>({username: "Loading..."});
+
 
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [placeholderStatus, setPlaceholderStatus] = useState<'entering' | 'waiting' | 'deleting' | 'idle'>('entering');
@@ -163,12 +163,7 @@ export function TopNav() {
     return () => clearInterval(interval);
   }, [placeholderStatus, phraseIndex]);
 
-  useEffect(() => {
-    fetch("/api/user/me")
-      .then(res => res.json())
-      .then(data => setUserProfile({username: data.username}))
-      .catch(err => console.error("Failed to fetch user profile", err));
-  }, []);
+
 
 
   const [promptedPath, setPromptedPath] = useState("");
@@ -178,6 +173,26 @@ export function TopNav() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [recentProjects, setRecentProjects] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const lastSubmittedPathRef = useRef<string>(analysisSourcePath || "");
+
+  useEffect(() => {
+    lastSubmittedPathRef.current = analysisSourcePath || "";
+  }, [analysisSourcePath]);
+
+  const handleSubmitPath = (path: string) => {
+    const trimmed = (path || "").trim();
+    if (!trimmed) return;
+    if (trimmed === lastSubmittedPathRef.current.trim()) return;
+
+    lastSubmittedPathRef.current = trimmed;
+    if (pendingConfig) {
+      confirmPromptedPath(trimmed);
+    } else {
+      setAnalysisSourcePath(trimmed);
+      triggerScanForPath(trimmed);
+    }
+  };
 
   const pathParts = localPath ? localPath.split(/[\\/]/).filter(Boolean) : [];
   const buildPath = (index: number, parts: string[]) => {
@@ -378,21 +393,11 @@ export function TopNav() {
           justify-content: center;
           transition: max-width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .nav-entry-wrapper:hover .nav-clear-btn,
-        .nav-entry-wrapper:focus-within .nav-clear-btn {
+        .nav-entry-wrapper:hover .nav-clear-btn {
           max-width: 32px;
           pointer-events: auto;
         }
-        .nav-fade-right {
-          position: absolute;
-          right: 0;
-          top: 0;
-          bottom: 0;
-          width: 40px;
-          pointer-events: none;
-          z-index: 1;
-          border-radius: 0 6px 6px 0;
-        }
+
         .nav-input-area {
           position: relative;
           flex: 1;
@@ -403,7 +408,7 @@ export function TopNav() {
           overflow: hidden;
         }
         .nav-entry-wrapper:has(.nav-clear-btn:hover) {
-          background-color: rgba(239, 68, 68, 0.15) !important;
+          background-color: color-mix(in srgb, var(--surface-2) 85%, #ef4444 15%) !important;
           border-color: rgba(239, 68, 68, 0.4) !important;
         }
         .nav-entry-wrapper:has(.nav-clear-btn:hover) input {
@@ -470,13 +475,12 @@ export function TopNav() {
           <div className="relative">
             <div
               className={cn(
-                "nav-entry-wrapper relative h-9 flex items-center bg-surface-2 border px-2 shadow-inner",
-                analysisSourcePath || localPath
-                  ? "w-[560px] hover:w-[600px] focus-within:w-[600px]"
-                  : "w-[600px]",
+                "nav-entry-wrapper relative flex items-center bg-surface-2 border px-2 shadow-inner transition-all duration-300",
                 dropdownOpen
-                  ? "rounded-t-xl rounded-b-none border-t-orange-500 border-x-orange-500 border-b-border/40 z-50 w-[600px]"
-                  : "rounded-lg border-border z-10",
+                  ? "h-11 shadow-md w-[680px] hover:w-[680px] focus-within:w-[680px] rounded-t-xl rounded-b-none border-t-orange-500 border-x-orange-500 border-b-border/40 z-50"
+                  : analysisSourcePath || localPath
+                    ? "h-9 w-[560px] hover:w-[600px] focus-within:w-[680px] rounded-lg border-border z-10"
+                    : "h-9 w-[600px] hover:w-[600px] focus-within:w-[680px] rounded-lg border-border z-10",
                 isFocused && !dropdownOpen
                   ? "border-orange-500 ring-1 ring-orange-500/20"
                   : !analysisSourcePath && !dropdownOpen
@@ -486,6 +490,7 @@ export function TopNav() {
             >
               <div className="nav-input-area">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={localPath}
                   onChange={(e) => setLocalPath(e.target.value)}
@@ -495,13 +500,9 @@ export function TopNav() {
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
+                      e.currentTarget.blur();
                       setDropdownOpen(false);
-                      if (pendingConfig) {
-                        confirmPromptedPath(localPath);
-                      } else {
-                        setAnalysisSourcePath(localPath);
-                        triggerScanForPath(localPath);
-                      }
+                      handleSubmitPath(localPath);
                     }
                   }}
                   onBlur={() => {
@@ -509,19 +510,29 @@ export function TopNav() {
                     setTimeout(() => {
                       setIsFocused(false);
                       setDropdownOpen(false);
+                      handleSubmitPath(inputRef.current?.value || "");
                     }, 150);
                   }}
                   placeholder=""
                   style={{ outline: "none", border: "none", boxShadow: "none" }}
-                  className="bg-transparent text-sm text-foreground/90 w-full pl-2 pr-2 relative z-10"
+                  className={cn(
+                    "bg-transparent text-foreground/90 w-full pl-2 pr-2 relative z-10 transition-all duration-300",
+                    dropdownOpen ? "text-lg" : "text-base"
+                  )}
                 />
                 {/* Custom animated placeholder */}
                 {!localPath && (
-                  <div className="absolute inset-y-0 left-2 right-2 flex items-center pointer-events-none text-sm text-muted-foreground/50 select-none z-0">
+                  <div className={cn(
+                    "absolute inset-y-0 left-2 right-2 flex items-center pointer-events-none text-muted-foreground/50 select-none z-0 transition-all duration-300",
+                    dropdownOpen ? "text-lg" : "text-base"
+                  )}>
                     {placeholderStatus === 'entering' || placeholderStatus === 'waiting' ? (
                       <SplitText
                         text={PLACEHOLDERS[phraseIndex]}
-                        className="text-sm font-normal text-muted-foreground/50"
+                        className={cn(
+                          "font-normal text-muted-foreground/50 transition-all duration-300",
+                          dropdownOpen ? "text-lg" : "text-base"
+                        )}
                         delay={40}
                         duration={0.5}
                         ease="power2.out"
@@ -533,7 +544,10 @@ export function TopNav() {
                       />
                     ) : placeholderStatus === 'deleting' ? (
                       <div
-                        className="split-parent text-sm font-normal text-muted-foreground/50"
+                        className={cn(
+                          "split-parent font-normal text-muted-foreground/50 transition-all duration-300",
+                          dropdownOpen ? "text-lg" : "text-base"
+                        )}
                         style={{
                           textAlign: 'left',
                           overflow: 'hidden',
@@ -547,13 +561,7 @@ export function TopNav() {
                     ) : null}
                   </div>
                 )}
-                {/* Fade overlay — right edge */}
-                <div
-                  className="nav-fade-right"
-                  style={{
-                    background: "linear-gradient(to right, transparent, var(--surface-2))",
-                  }}
-                />
+
               </div>
               <div className="flex items-center gap-1.5 shrink-0 z-20">
                 {scanning && (
@@ -562,31 +570,15 @@ export function TopNav() {
                   </div>
                 )}
                 {!scanning && isPathChanged && (
-                  <>
-                    <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/60 bg-surface-3 text-[9px] font-medium text-muted-foreground select-none pointer-events-none uppercase tracking-wider font-mono">
-                      <span>Enter</span>
-                      <span className="text-[10px]">↵</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (pendingConfig) {
-                          confirmPromptedPath(localPath);
-                        } else {
-                          setAnalysisSourcePath(localPath);
-                          triggerScanForPath(localPath);
-                        }
-                      }}
-                      className="p-1 hover:bg-foreground/5 text-primary hover:text-primary-hover rounded-md transition-all"
-                      title="Load Project Path (Press Enter)"
-                    >
-                      <ArrowRight className="w-3.5 h-3.5 text-primary animate-pulse" />
-                    </button>
-                  </>
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border border-border/60 bg-surface-3 text-xs font-bold text-muted-foreground select-none pointer-events-none uppercase tracking-wider font-mono shadow-sm">
+                    <span>Enter</span>
+                    <span className="text-sm font-bold">↵</span>
+                  </span>
                 )}
                 {(analysisSourcePath || localPath) && (
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={handleClearOrRevert}
                     className="nav-clear-btn p-1 hover:bg-foreground/5 text-muted-foreground hover:text-foreground rounded-md"
                     title={isPathChanged ? "Revert Changes" : "Clear Path"}
@@ -601,19 +593,22 @@ export function TopNav() {
             <AnimatePresence>
               {dropdownOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ 
+                    height: { type: "spring", stiffness: 350, damping: 25 },
+                    opacity: { duration: 0.15 }
+                  }}
                   className={cn(
-                    "absolute left-0 top-full w-full bg-surface-2/95 backdrop-blur-md border-x border-b border-t-0 rounded-b-xl shadow-2xl z-[100] text-foreground flex flex-col overflow-hidden",
+                    "absolute left-0 top-full w-full bg-surface-2/95 backdrop-blur-md border-x border-b border-t-0 rounded-b-xl shadow-2xl z-[100] text-foreground flex flex-col overflow-hidden origin-top",
                     dropdownOpen ? "border-orange-500" : "border-border"
                   )}
-                  style={{ maxHeight: '450px' }}
                 >
-                  {/* Recent Projects Section */}
+                  <div className="flex flex-col w-full" style={{ maxHeight: '450px' }}>
+                    {/* Recent Projects Section */}
                   <div className="shrink-0 flex flex-col">
-                    <div className="px-4 py-2.5 text-xs font-bold text-foreground/80 select-none bg-surface-3/5">
+                    <div className="px-4 py-2.5 text-sm font-bold text-foreground/80 select-none bg-surface-3/5">
                       Recent Projects
                     </div>
                     {recentProjects.length > 0 ? (
@@ -628,21 +623,17 @@ export function TopNav() {
                               setLocalPath(path);
                               setDropdownOpen(false);
                               setIsFocused(false);
-                              if (pendingConfig) {
-                                confirmPromptedPath(path);
-                              } else {
-                                setAnalysisSourcePath(path);
-                                triggerScanForPath(path);
-                              }
+                              inputRef.current?.blur();
+                              handleSubmitPath(path);
                             }}
-                            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
+                            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-left text-sm text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
                           >
-                            <span className="truncate text-xs opacity-90">{path}</span>
+                            <span className="truncate text-sm opacity-90">{path}</span>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="h-9 px-4 text-xs text-muted-foreground/40 italic select-none flex items-center justify-center">
+                      <div className="h-9 px-4 text-sm text-muted-foreground/40 italic select-none flex items-center justify-center">
                         No recent projects
                       </div>
                     )}
@@ -650,7 +641,7 @@ export function TopNav() {
 
                   {/* Browse Folder Section */}
                   <div className="flex-1 flex flex-col min-h-0 border-t border-border/40">
-                    <div className="px-4 py-2.5 text-xs font-bold text-foreground/80 select-none bg-surface-3/5 shrink-0">
+                    <div className="px-4 py-2.5 text-sm font-bold text-foreground/80 select-none bg-surface-3/5 shrink-0">
                       Browse Folder
                     </div>
 
@@ -666,19 +657,19 @@ export function TopNav() {
                                   e.preventDefault();
                                   setLocalPath("");
                                 }}
-                                className="flex items-center gap-1 p-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+                                className="flex items-center gap-1 p-0.5 rounded text-sm text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
                               >
-                                <Home className="w-3.5 h-3.5" />
+                                <Home className="w-4 h-4" />
                               </button>
                             </BreadcrumbItem>
                             {pathParts.map((part, i) => {
                               const isLast = i === pathParts.length - 1;
                               return (
                                 <React.Fragment key={i}>
-                                  <BreadcrumbSeparator className="text-muted-foreground/30 text-[10px]" />
+                                  <BreadcrumbSeparator className="text-muted-foreground/30 text-xs" />
                                   <BreadcrumbItem>
                                     {isLast ? (
-                                      <span className="text-xs font-medium text-foreground max-w-[120px] truncate">{part}</span>
+                                      <span className="text-sm font-medium text-foreground max-w-[120px] truncate">{part}</span>
                                     ) : (
                                       <button
                                         type="button"
@@ -686,7 +677,7 @@ export function TopNav() {
                                           e.preventDefault();
                                           setLocalPath(buildPath(i, pathParts));
                                         }}
-                                        className="text-xs text-muted-foreground hover:text-foreground transition-colors max-w-[120px] truncate p-0.5 rounded hover:bg-white/5"
+                                        className="text-sm text-muted-foreground hover:text-foreground transition-colors max-w-[120px] truncate p-0.5 rounded hover:bg-white/5"
                                       >
                                         {part}
                                       </button>
@@ -702,16 +693,16 @@ export function TopNav() {
                     
                     <div className="flex-1 overflow-y-auto p-1.5 max-h-[220px]">
                       {browseLoading && browseEntries.length === 0 ? (
-                        <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
+                        <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
                           Loading directory...
                         </div>
                       ) : browseError ? (
-                        <div className="px-4 py-3 text-xs text-red-400 select-none text-center">
+                        <div className="px-4 py-3 text-sm text-red-400 select-none text-center">
                           {browseError}
                         </div>
                       ) : browseEntries.length === 0 ? (
-                        <div className="px-4 py-3 text-xs text-muted-foreground/50 italic text-center select-none">
+                        <div className="px-4 py-3 text-sm text-muted-foreground/50 italic text-center select-none">
                           Empty folder
                         </div>
                       ) : (
@@ -737,11 +728,11 @@ export function TopNav() {
                                   }
                                   setLocalPath(nextPath);
                                 }}
-                                className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-left text-xs text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
+                                className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-left text-sm text-foreground/80 hover:text-foreground hover:bg-white/5 active:bg-white/10 transition-colors group"
                               >
-                                <Icon className="w-3.5 h-3.5 shrink-0 text-primary/60" />
-                                <span className="truncate text-xs opacity-90">{entry.name}</span>
-                                <ChevronRight className="w-3 h-3 ml-auto shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
+                                <Icon className="w-4 h-4 shrink-0 text-primary/60" />
+                                <span className="truncate text-sm opacity-90">{entry.name}</span>
+                                <ChevronRight className="w-3.5 h-3.5 ml-auto shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
                               </button>
                             );
                           })}
@@ -749,54 +740,57 @@ export function TopNav() {
                       )}
                     </div>
                   </div>
-                </motion.div>
+                </div>
+              </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Right Side: Import/Save Config buttons and User Profile */}
+        {/* Right Side: Import/Save Config buttons */}
         <div className="flex items-center gap-2 shrink-0 justify-end ml-auto">
           {/* Import / Save Config + Theme Toggle — unified icon group */}
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={() =>
-                document.getElementById("global-import-config-input")?.click()
-              }
-              variant="outline"
-              className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-spin-fast"
-              title="Import Configuration JSON"
-            >
-              <Cog className="w-3.5 h-3.5 text-muted-foreground" />
-            </Button>
-            <input
-              type="file"
-              id="global-import-config-input"
-              className="hidden"
-              accept=".json"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                  const fileContent = event.target?.result as string;
-                  await importConfigJSON(fileContent, file.name);
-                };
-                reader.readAsText(file);
-                e.target.value = ""; // Reset
-              }}
-            />
+            <div className="inline-flex rounded-lg shadow-sm">
+              <Button
+                type="button"
+                onClick={() =>
+                  document.getElementById("global-import-config-input")?.click()
+                }
+                variant="outline"
+                className="w-10 h-9 rounded-l-lg rounded-r-none border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-spin-fast border-r-0"
+                title="Import Configuration JSON"
+              >
+                <Cog className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
+              <input
+                type="file"
+                id="global-import-config-input"
+                className="hidden"
+                accept=".json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async (event) => {
+                    const fileContent = event.target?.result as string;
+                    await importConfigJSON(fileContent, file.name);
+                  };
+                  reader.readAsText(file);
+                  e.target.value = ""; // Reset
+                }}
+              />
 
-            <Button
-              type="button"
-              onClick={exportConfig}
-              variant="outline"
-              className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-bounce-subtle"
-              title="Save Configuration JSON"
-            >
-              <Save className="w-3.5 h-3.5 text-muted-foreground" />
-            </Button>
+              <Button
+                type="button"
+                onClick={exportConfig}
+                variant="outline"
+                className="w-10 h-9 rounded-r-lg rounded-l-none border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-bounce-subtle"
+                title="Save Configuration JSON"
+              >
+                <Save className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
+            </div>
 
             <Button
               type="button"
@@ -812,36 +806,6 @@ export function TopNav() {
               )}
             </Button>
           </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="default"
-                className="h-9 pl-2 pr-1.5 py-1 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-all flex items-center gap-2 shadow-sm"
-              >
-                <span className="text-[13px] font-bold tracking-wider uppercase px-2.5">
-                  {userProfile.username === "AT017769"
-                    ? "GOAT"
-                    : userProfile.username?.startsWith("AT")
-                    ? "STAFF"
-                    : "GUEST"}
-                </span>
-                <Avatar className="h-[26px] w-[26px]">
-                  <AvatarFallback className="bg-background text-foreground flex items-center justify-center">
-                    <IdCardLanyard className="w-4 h-4" />
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="min-w-[120px] bg-surface-2 border-border text-foreground"
-            >
-              <div className="px-3 py-2 text-sm font-bold text-muted-foreground text-center">
-                {userProfile.username}
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </header>
 
