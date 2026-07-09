@@ -465,7 +465,7 @@ export const useAppStore = create<AppState>((set) => ({
   sourcePath: '',
   setSourcePath: (path) => set({ sourcePath: path }),
 
-  analysisActiveTab: 'audio',
+  analysisActiveTab: 'metadata',
   setAnalysisActiveTab: (tab) => set({ analysisActiveTab: tab }),
 
   participants: [],

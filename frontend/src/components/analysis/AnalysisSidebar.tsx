@@ -821,66 +821,33 @@ function SidebarUserButton({
         <button
           type="button"
           className={cn(
-            "group w-full flex items-center gap-3 rounded-xl p-2 text-sm font-medium transition-all duration-200 focus:outline-none select-none text-left",
+            "group w-full flex items-center rounded-xl text-sm font-medium transition-all duration-200 focus:outline-none select-none",
             "hover:bg-[#E6E4E1] hover:text-[#111110] dark:hover:bg-primary/10 dark:hover:text-primary",
-            sidebarOpen ? "h-14" : "h-12",
+            sidebarOpen ? "h-14 p-2 gap-3 justify-start text-left" : "h-12 p-1.5 justify-center",
           )}
         >
           {/* Avatar Container */}
           <div className="relative shrink-0">
-            <div
-              className={cn(
-                "relative flex items-center justify-center rounded-full transition-all duration-300",
-                sidebarOpen ? "h-[42px] w-[42px]" : "h-9 w-9",
-              )}
-            >
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
-                <defs>
-                  <linearGradient id="avatar-ring-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#f97316" />
-                    <stop offset="50%" stopColor="#ef4444" />
-                    <stop offset="100%" stopColor="#fbbf24" />
-                  </linearGradient>
-                </defs>
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="48"
-                  fill="none"
-                  stroke="url(#avatar-ring-grad)"
-                  strokeWidth="4"
+            <Avatar className={cn(
+              "rounded-full bg-surface-3 transition-all duration-300",
+              sidebarOpen ? "h-10 w-10" : "h-9 w-9"
+            )}>
+              {userProfile?.avatar_base64 ? (
+                <AvatarImage
+                  src={`data:image/jpeg;base64,${userProfile.avatar_base64}`}
+                  alt={displayName}
+                  className="object-cover rounded-full"
                 />
-              </svg>
-              <Avatar className={cn(
-                "rounded-full bg-surface-3 relative z-10 transition-all duration-300",
-                sidebarOpen ? "h-[34px] w-[34px]" : "h-[28px] w-[28px]"
-              )}>
-                {userProfile?.avatar_base64 ? (
-                  <AvatarImage
-                    src={`data:image/jpeg;base64,${userProfile.avatar_base64}`}
-                    alt={displayName}
-                    className="object-cover rounded-full"
-                  />
-                ) : null}
-                <AvatarFallback
-                  className={cn(
-                    "bg-transparent flex items-center justify-center font-black text-foreground select-none",
-                    sidebarOpen ? "text-[11px]" : "text-[9px]",
-                  )}
-                >
-                  {getInitials(displayName)}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-            {/* Overlay Badge */}
-            <div
-              className={cn(
-                "absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white font-black rounded-full border border-white/20 shadow-lg select-none flex items-center justify-center text-center pb-[1px] leading-none z-20 ring-[1.5px] ring-white dark:ring-background transition-all duration-300",
-                sidebarOpen ? "px-1.5 h-3.5 text-[10px] min-w-[28px]" : "px-1 h-3 text-[8px] min-w-[22px]",
-              )}
-            >
-              {badgeText}
-            </div>
+              ) : null}
+              <AvatarFallback
+                className={cn(
+                  "bg-transparent flex items-center justify-center font-black text-foreground select-none",
+                  sidebarOpen ? "text-[12px]" : "text-[10px]",
+                )}
+              >
+                {getInitials(displayName)}
+              </AvatarFallback>
+            </Avatar>
           </div>
 
           {/* Name & Chevron */}
@@ -943,7 +910,7 @@ function SidebarUserButton({
               </Avatar>
             </div>
             {/* Badge overlay (IDI / EXT) */}
-            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white px-1.5 h-3.5 text-[10px] min-w-[28px] rounded-full font-black border border-white/20 shadow-lg flex items-center justify-center text-center pb-[1px] leading-none z-20 ring-[1.5px] ring-white dark:ring-background">
+            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white px-2 h-3.5 min-w-[26px] rounded-full font-black ring-2 ring-white shadow-md flex items-center justify-center text-center text-[10px] leading-none z-20">
               {badgeText}
             </div>
           </div>

@@ -173,6 +173,7 @@ export function TopNav() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [recentProjects, setRecentProjects] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [hoveredBtn, setHoveredBtn] = useState<"import" | "save" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastSubmittedPathRef = useRef<string>(analysisSourcePath || "");
 
@@ -751,18 +752,42 @@ export function TopNav() {
         <div className="flex items-center gap-2 shrink-0 justify-end ml-auto">
           {/* Import / Save Config + Theme Toggle — unified icon group */}
           <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-lg shadow-sm">
-              <Button
+            <div className="inline-flex rounded-lg border border-border bg-surface-2 shadow-sm overflow-hidden h-9">
+              <motion.button
                 type="button"
+                onMouseEnter={() => setHoveredBtn("import")}
+                onMouseLeave={() => setHoveredBtn(null)}
                 onClick={() =>
                   document.getElementById("global-import-config-input")?.click()
                 }
-                variant="outline"
-                className="w-10 h-9 rounded-l-lg rounded-r-none border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-spin-fast border-r-0"
+                className="h-full flex items-center justify-center text-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 outline-none select-none border-r border-border/40 hover-spin-fast"
+                animate={{
+                  width: hoveredBtn === "import" ? "150px" : "38px",
+                }}
+                transition={{
+                  type: "spring",
+                  stiffness: 260,
+                  damping: 18,
+                }}
                 title="Import Configuration JSON"
               >
-                <Cog className="w-3.5 h-3.5 text-muted-foreground" />
-              </Button>
+                <div className="flex items-center justify-center gap-2 overflow-hidden px-2 whitespace-nowrap">
+                  <Cog className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <AnimatePresence initial={false}>
+                    {hoveredBtn === "import" && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground shrink-0"
+                      >
+                        Import settings
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.button>
               <input
                 type="file"
                 id="global-import-config-input"
@@ -781,15 +806,39 @@ export function TopNav() {
                 }}
               />
 
-              <Button
+              <motion.button
                 type="button"
+                onMouseEnter={() => setHoveredBtn("save")}
+                onMouseLeave={() => setHoveredBtn(null)}
                 onClick={exportConfig}
-                variant="outline"
-                className="w-10 h-9 rounded-r-lg rounded-l-none border border-border bg-surface-2 text-foreground hover:bg-accent hover:border-accent transition-all shrink-0 hover-bounce-subtle"
+                className="h-full flex items-center justify-center text-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 outline-none select-none hover-bounce-subtle"
+                animate={{
+                  width: hoveredBtn === "save" ? "135px" : "38px",
+                }}
+                transition={{
+                  type: "spring",
+                  stiffness: 260,
+                  damping: 18,
+                }}
                 title="Save Configuration JSON"
               >
-                <Save className="w-3.5 h-3.5 text-muted-foreground" />
-              </Button>
+                <div className="flex items-center justify-center gap-2 overflow-hidden px-2 whitespace-nowrap">
+                  <Save className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <AnimatePresence initial={false}>
+                    {hoveredBtn === "save" && (
+                      <motion.span
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground shrink-0"
+                      >
+                        Save settings
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.button>
             </div>
           </div>
         </div>
