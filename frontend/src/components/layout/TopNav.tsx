@@ -769,7 +769,6 @@ export function TopNav() {
                   stiffness: 260,
                   damping: 18,
                 }}
-                title="Import Configuration JSON"
               >
                 <div className="flex items-center justify-center gap-2 overflow-hidden px-2 whitespace-nowrap">
                   <Cog className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -780,7 +779,7 @@ export function TopNav() {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
                         transition={{ duration: 0.15 }}
-                        className="text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground shrink-0"
+                        className="text-xs font-bold text-muted-foreground hover:text-foreground shrink-0"
                       >
                         Import settings
                       </motion.span>
@@ -820,7 +819,6 @@ export function TopNav() {
                   stiffness: 260,
                   damping: 18,
                 }}
-                title="Save Configuration JSON"
               >
                 <div className="flex items-center justify-center gap-2 overflow-hidden px-2 whitespace-nowrap">
                   <Save className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -831,7 +829,7 @@ export function TopNav() {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
                         transition={{ duration: 0.15 }}
-                        className="text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground shrink-0"
+                        className="text-xs font-bold text-muted-foreground hover:text-foreground shrink-0"
                       >
                         Save settings
                       </motion.span>

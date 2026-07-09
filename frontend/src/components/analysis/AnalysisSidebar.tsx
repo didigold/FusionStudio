@@ -155,7 +155,7 @@ function ExpandableGroup({
     <div
       className={cn(
         "flex flex-col relative group/expandable",
-        !sidebarOpen && isExpanded
+        !sidebarOpen
           ? "w-10 mx-auto rounded-xl overflow-hidden"
           : "p-[1px] gap-0 w-full",
       )}
