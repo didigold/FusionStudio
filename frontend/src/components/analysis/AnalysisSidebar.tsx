@@ -27,7 +27,7 @@ import {
   Globe,
   ArrowUpCircle,
   Sun,
-  Moon
+  Moon,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppStore } from "@/store/useAppStore";
@@ -52,6 +52,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
@@ -85,7 +89,8 @@ function ExpandableGroup({
   isExpanded,
   onToggle,
 }: ExpandableGroupProps) {
-  const { analysisActiveTab: activeTab, setAnalysisActiveTab: onTabChange } = useAppStore();
+  const { analysisActiveTab: activeTab, setAnalysisActiveTab: onTabChange } =
+    useAppStore();
   const { open: sidebarOpen } = useSidebar();
   const isActive = children.some((c) => c.value === activeTab);
 
@@ -107,7 +112,12 @@ function ExpandableGroup({
     >
       <motion.div
         animate={isActive ? { scale: [0.8, 1.15, 1] } : { scale: 1 }}
-        transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 15 }}
+        transition={{
+          duration: 0.3,
+          type: "spring",
+          stiffness: 300,
+          damping: 15,
+        }}
         className="flex shrink-0 items-center justify-center relative"
       >
         <GroupIcon className="w-4 h-4 shrink-0 transition-all duration-300" />
@@ -119,27 +129,37 @@ function ExpandableGroup({
           </div>
         )}
       </motion.div>
-      <span className={cn(
-        "text-left transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap",
-        sidebarOpen ? "flex-1 opacity-100 max-w-[150px] ml-1" : "opacity-0 max-w-0 ml-0 pointer-events-none"
-      )}>
+      <span
+        className={cn(
+          "text-left transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap",
+          sidebarOpen
+            ? "flex-1 opacity-100 max-w-[150px] ml-1"
+            : "opacity-0 max-w-0 ml-0 pointer-events-none",
+        )}
+      >
         {label}
       </span>
       <ChevronRight
         className={cn(
           "shrink-0 transition-all duration-300",
           isExpanded && "rotate-90",
-          sidebarOpen ? "w-3.5 h-3.5 opacity-100 scale-100" : "w-0 h-0 opacity-0 scale-0 pointer-events-none"
+          sidebarOpen
+            ? "w-3.5 h-3.5 opacity-100 scale-100"
+            : "w-0 h-0 opacity-0 scale-0 pointer-events-none",
         )}
       />
     </SidebarMenuButton>
   );
 
   return (
-    <div className={cn(
-      "flex flex-col relative group/expandable",
-      !sidebarOpen && isExpanded ? "w-10 mx-auto rounded-xl overflow-hidden" : "p-[1px] gap-0 w-full"
-    )}>
+    <div
+      className={cn(
+        "flex flex-col relative group/expandable",
+        !sidebarOpen && isExpanded
+          ? "w-10 mx-auto rounded-xl overflow-hidden"
+          : "p-[1px] gap-0 w-full",
+      )}
+    >
       <AnimatePresence>
         {!sidebarOpen && isExpanded && (
           <motion.div
@@ -169,10 +189,12 @@ function ExpandableGroup({
       </div>
 
       {isExpanded && (
-        <div className={cn(
-          "h-[1px] bg-border/50 relative z-10",
-          sidebarOpen ? "mx-2 my-1" : "mx-0"
-        )} />
+        <div
+          className={cn(
+            "h-[1px] bg-border/50 relative z-10",
+            sidebarOpen ? "mx-2 my-1" : "mx-0",
+          )}
+        />
       )}
 
       <motion.div
@@ -188,71 +210,90 @@ function ExpandableGroup({
                 stiffness: 280,
                 damping: 18,
               },
-              opacity: { duration: 0.2 }
-            }
+              opacity: { duration: 0.2 },
+            },
           },
           collapsed: {
             height: 0,
             opacity: 0,
             transition: {
               height: { duration: 0.25, ease: "easeInOut" },
-              opacity: { duration: 0.15 }
-            }
-          }
+              opacity: { duration: 0.15 },
+            },
+          },
         }}
         className={cn(
           "flex flex-col overflow-hidden relative z-10",
-          sidebarOpen ? "mt-0.5" : "mt-0"
+          sidebarOpen ? "mt-0.5" : "mt-0",
         )}
       >
-        {children.length > 0 ? (
-          children.map((item) => (
-            <SidebarMenuItem key={item.value}>
-              <SidebarMenuButton
-                variant={activeTab === item.value ? "active" : "default"}
-                size="sm"
-                onClick={() => handleItemClick(item.value)}
-                className={cn(
-                  "relative pl-10",
-                  !sidebarOpen && "pl-0"
-                )}
-              >
-                <motion.div
-                  animate={activeTab === item.value ? { scale: [0.8, 1.15, 1] } : { scale: 1 }}
-                  transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 15 }}
-                  className="flex shrink-0 items-center justify-center"
+        {children.length > 0
+          ? children.map((item) => (
+              <SidebarMenuItem key={item.value}>
+                <SidebarMenuButton
+                  variant={activeTab === item.value ? "active" : "default"}
+                  size="sm"
+                  onClick={() => handleItemClick(item.value)}
+                  className={cn("relative pl-10", !sidebarOpen && "pl-0")}
                 >
-                  <item.icon className="w-4 h-4 shrink-0 transition-all duration-300" />
-                </motion.div>
-                <span className={cn(
-                  "transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap text-left flex-1",
-                  sidebarOpen ? "opacity-100 max-w-[150px] ml-1" : "opacity-0 max-w-0 ml-0 pointer-events-none"
-                )}>
-                  {item.label}
-                </span>
-                {item.showSpinner && sidebarOpen && (
-                  <div className="absolute right-3">
-                    <Spinner className="size-3 text-primary/60" />
-                  </div>
-                )}
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))
-        ) : (
-          sidebarOpen && (
-            <div className="flex items-center gap-2 pl-10 pr-3 py-2 text-xs text-muted-foreground/50 italic">
-              <Construction className="w-3 h-3" />
-              <span>{emptyMessage || "Coming soon"}</span>
-            </div>
-          )
-        )}
+                  <motion.div
+                    animate={
+                      activeTab === item.value
+                        ? { scale: [0.8, 1.15, 1] }
+                        : { scale: 1 }
+                    }
+                    transition={{
+                      duration: 0.3,
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 15,
+                    }}
+                    className="flex shrink-0 items-center justify-center"
+                  >
+                    <item.icon className="w-4 h-4 shrink-0 transition-all duration-300" />
+                  </motion.div>
+                  <span
+                    className={cn(
+                      "transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap text-left flex-1",
+                      sidebarOpen
+                        ? "opacity-100 max-w-[150px] ml-1"
+                        : "opacity-0 max-w-0 ml-0 pointer-events-none",
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                  {item.showSpinner && sidebarOpen && (
+                    <div className="absolute right-3">
+                      <Spinner className="size-3 text-primary/60" />
+                    </div>
+                  )}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))
+          : sidebarOpen && (
+              <div className="flex items-center gap-2 pl-10 pr-3 py-2 text-xs text-muted-foreground/50 italic">
+                <Construction className="w-3 h-3" />
+                <span>{emptyMessage || "Coming soon"}</span>
+              </div>
+            )}
       </motion.div>
     </div>
   );
 }
 
-function SidebarItem({ value, label, icon: Icon, spinner }: { value: string; label: string; icon: any; spinner?: boolean }) {
-  const { analysisActiveTab: activeTab, setAnalysisActiveTab: onTabChange } = useAppStore();
+function SidebarItem({
+  value,
+  label,
+  icon: Icon,
+  spinner,
+}: {
+  value: string;
+  label: string;
+  icon: any;
+  spinner?: boolean;
+}) {
+  const { analysisActiveTab: activeTab, setAnalysisActiveTab: onTabChange } =
+    useAppStore();
   const { open: sidebarOpen } = useSidebar();
   const isActive = activeTab === value;
 
@@ -265,19 +306,33 @@ function SidebarItem({ value, label, icon: Icon, spinner }: { value: string; lab
     >
       <motion.div
         animate={isActive ? { scale: [0.8, 1.15, 1] } : { scale: 1 }}
-        transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 15 }}
+        transition={{
+          duration: 0.3,
+          type: "spring",
+          stiffness: 300,
+          damping: 15,
+        }}
         className="flex shrink-0 items-center justify-center"
       >
         <Icon className="w-4 h-4 shrink-0 transition-all duration-300" />
       </motion.div>
-      <span className={cn(
-        "transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap text-left",
-        sidebarOpen ? "flex-1 opacity-100 max-w-[150px] ml-1" : "opacity-0 max-w-0 ml-0 pointer-events-none"
-      )}>
+      <span
+        className={cn(
+          "transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap text-left",
+          sidebarOpen
+            ? "flex-1 opacity-100 max-w-[150px] ml-1"
+            : "opacity-0 max-w-0 ml-0 pointer-events-none",
+        )}
+      >
         {label}
       </span>
       {spinner && (
-        <div className={cn("transition-all duration-300", sidebarOpen ? "ml-auto" : "absolute right-1 top-1")}>
+        <div
+          className={cn(
+            "transition-all duration-300",
+            sidebarOpen ? "ml-auto" : "absolute right-1 top-1",
+          )}
+        >
           <Spinner className="size-3 text-primary/60" />
         </div>
       )}
@@ -325,7 +380,7 @@ export function AnalysisSidebar() {
 
   const { open: sidebarOpen, toggleSidebar } = useSidebar();
   const { isDark, toggleTheme } = useTheme();
-  
+
   const [userProfile, setUserProfile] = useState<CorporateUser | null>(() => {
     try {
       const saved = localStorage.getItem("corporate_user_profile");
@@ -339,8 +394,8 @@ export function AnalysisSidebar() {
 
   useEffect(() => {
     fetch("/api/user/me")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         setUserProfile(data);
         try {
           localStorage.setItem("corporate_user_profile", JSON.stringify(data));
@@ -348,15 +403,17 @@ export function AnalysisSidebar() {
           console.error("Failed to save user profile to localStorage", e);
         }
       })
-      .catch(err => console.error("Failed to fetch user profile", err));
+      .catch((err) => console.error("Failed to fetch user profile", err));
   }, []);
 
   const [expandedGroup, setExpandedGroup] = useState<string | null>(() => {
-    if (["tracking", "audio", "time-selector", "logic"].includes(activeTab)) return "Gaze Analysis";
-    if (["occupant-time", "misuse-logic"].includes(activeTab)) return "Occupant Monitoring";
+    if (["tracking", "audio", "time-selector", "logic"].includes(activeTab))
+      return "Gaze Analysis";
+    if (["occupant-time", "misuse-logic"].includes(activeTab))
+      return "Occupant Monitoring";
     return null;
   });
-  
+
   useEffect(() => {
     if (["tracking", "audio", "time-selector", "logic"].includes(activeTab)) {
       setExpandedGroup("Gaze Analysis");
@@ -375,10 +432,7 @@ export function AnalysisSidebar() {
     fusionState !== "idle";
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="border-r-0 bg-background"
-    >
+    <Sidebar collapsible="icon" className="border-r-0 bg-background">
       {/* Persistent Sidebar Header */}
       <SidebarHeader className="h-[52px] flex items-center p-0 overflow-hidden shrink-0 relative w-full">
         <div className="flex items-center w-full px-[14px] h-full relative">
@@ -445,10 +499,12 @@ export function AnalysisSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className={cn(
-        "py-3 px-2 flex flex-col gap-2 overflow-y-auto transition-all duration-300",
-        !sidebarOpen && "px-1 gap-0"
-      )}>
+      <SidebarContent
+        className={cn(
+          "py-3 px-2 flex flex-col gap-2 overflow-y-auto transition-all duration-300",
+          !sidebarOpen && "px-1 gap-0",
+        )}
+      >
         {/* File Customization */}
         <SidebarGroup>
           <AnimatePresence initial={false}>
@@ -503,7 +559,11 @@ export function AnalysisSidebar() {
               label="Gaze Analysis"
               icon={Eye}
               isExpanded={expandedGroup === "Gaze Analysis"}
-              onToggle={() => setExpandedGroup(expandedGroup === "Gaze Analysis" ? null : "Gaze Analysis")}
+              onToggle={() =>
+                setExpandedGroup(
+                  expandedGroup === "Gaze Analysis" ? null : "Gaze Analysis",
+                )
+              }
               children={[
                 {
                   value: "tracking",
@@ -526,7 +586,13 @@ export function AnalysisSidebar() {
               label="Occupant Monitoring"
               icon={UserCheck}
               isExpanded={expandedGroup === "Occupant Monitoring"}
-              onToggle={() => setExpandedGroup(expandedGroup === "Occupant Monitoring" ? null : "Occupant Monitoring")}
+              onToggle={() =>
+                setExpandedGroup(
+                  expandedGroup === "Occupant Monitoring"
+                    ? null
+                    : "Occupant Monitoring",
+                )
+              }
               children={[
                 {
                   value: "occupant-time",
@@ -606,15 +672,12 @@ export function AnalysisSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className={cn(
-        "p-2 border-t border-border/10 shrink-0",
-        !sidebarOpen && "px-1"
-      )}>
-        <SidebarUserButton 
-          userProfile={userProfile} 
-          toggleTheme={toggleTheme} 
-          isDark={isDark} 
-          sidebarOpen={sidebarOpen} 
+      <SidebarFooter className={cn("p-2 shrink-0", !sidebarOpen && "px-1")}>
+        <SidebarUserButton
+          userProfile={userProfile}
+          toggleTheme={toggleTheme}
+          isDark={isDark}
+          sidebarOpen={sidebarOpen}
         />
       </SidebarFooter>
     </Sidebar>
@@ -622,7 +685,8 @@ export function AnalysisSidebar() {
 }
 
 function LogSidebarButton({ isLogWriting }: { isLogWriting: boolean }) {
-  const { analysisActiveTab: activeTab, setAnalysisActiveTab: onTabChange } = useAppStore();
+  const { analysisActiveTab: activeTab, setAnalysisActiveTab: onTabChange } =
+    useAppStore();
   const { open: sidebarOpen } = useSidebar();
   const isActive = activeTab === "log";
 
@@ -635,19 +699,33 @@ function LogSidebarButton({ isLogWriting }: { isLogWriting: boolean }) {
     >
       <motion.div
         animate={isActive ? { scale: [0.8, 1.15, 1] } : { scale: 1 }}
-        transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 15 }}
+        transition={{
+          duration: 0.3,
+          type: "spring",
+          stiffness: 300,
+          damping: 15,
+        }}
         className="flex shrink-0 items-center justify-center"
       >
         <Terminal className="w-4 h-4 shrink-0 transition-all duration-300" />
       </motion.div>
-      <span className={cn(
-        "transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap text-left",
-        sidebarOpen ? "flex-1 opacity-100 max-w-[150px] ml-1" : "opacity-0 max-w-0 ml-0 pointer-events-none"
-      )}>
+      <span
+        className={cn(
+          "transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap text-left",
+          sidebarOpen
+            ? "flex-1 opacity-100 max-w-[150px] ml-1"
+            : "opacity-0 max-w-0 ml-0 pointer-events-none",
+        )}
+      >
         Log
       </span>
       {isLogWriting && (
-        <div className={cn("transition-all duration-300 flex items-center justify-center shrink-0", sidebarOpen ? "ml-auto w-5 h-5" : "absolute right-1 top-1")}>
+        <div
+          className={cn(
+            "transition-all duration-300 flex items-center justify-center shrink-0",
+            sidebarOpen ? "ml-auto w-5 h-5" : "absolute right-1 top-1",
+          )}
+        >
           {sidebarOpen ? (
             <svg
               fill="currentColor"
@@ -732,7 +810,8 @@ function SidebarUserButton({
   sidebarOpen: boolean;
 }) {
   const username = userProfile?.username || "Guest";
-  const displayName = userProfile?.display_name || userProfile?.email || username;
+  const displayName =
+    userProfile?.display_name || userProfile?.email || username;
   const emailSubtext = userProfile?.email || userProfile?.upn || "";
   const badgeText = username.startsWith("AT") ? "IDI" : "EXT";
 
@@ -742,37 +821,64 @@ function SidebarUserButton({
         <button
           type="button"
           className={cn(
-            "w-full flex items-center gap-3 rounded-xl p-2 text-sm font-medium transition-all duration-200 hover:bg-[#E6E4E1]/15 dark:hover:bg-white/10 hover:text-foreground text-left focus:outline-none",
-            !sidebarOpen && "justify-center px-0 h-12 w-12 mx-auto"
+            "group w-full flex items-center gap-3 rounded-xl p-2 text-sm font-medium transition-all duration-200 focus:outline-none select-none text-left",
+            "hover:bg-[#E6E4E1] hover:text-[#111110] dark:hover:bg-primary/10 dark:hover:text-primary",
+            sidebarOpen ? "h-14" : "h-12",
           )}
         >
           {/* Avatar Container */}
           <div className="relative shrink-0">
-            <div className={cn(
-              "rounded-full p-[2px] border-2 border-orange-500 flex items-center justify-center transition-all duration-300",
-              sidebarOpen ? "h-10 w-10" : "h-8 w-8"
-            )}>
-              <Avatar className="h-full w-full rounded-full bg-surface-3">
+            <div
+              className={cn(
+                "relative flex items-center justify-center rounded-full transition-all duration-300",
+                sidebarOpen ? "h-[42px] w-[42px]" : "h-9 w-9",
+              )}
+            >
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="avatar-ring-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#f97316" />
+                    <stop offset="50%" stopColor="#ef4444" />
+                    <stop offset="100%" stopColor="#fbbf24" />
+                  </linearGradient>
+                </defs>
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="48"
+                  fill="none"
+                  stroke="url(#avatar-ring-grad)"
+                  strokeWidth="4"
+                />
+              </svg>
+              <Avatar className={cn(
+                "rounded-full bg-surface-3 relative z-10 transition-all duration-300",
+                sidebarOpen ? "h-[34px] w-[34px]" : "h-[28px] w-[28px]"
+              )}>
                 {userProfile?.avatar_base64 ? (
-                  <AvatarImage 
-                    src={`data:image/jpeg;base64,${userProfile.avatar_base64}`} 
-                    alt={displayName} 
+                  <AvatarImage
+                    src={`data:image/jpeg;base64,${userProfile.avatar_base64}`}
+                    alt={displayName}
                     className="object-cover rounded-full"
                   />
                 ) : null}
-                <AvatarFallback className={cn(
-                  "bg-transparent flex items-center justify-center font-black text-foreground select-none",
-                  sidebarOpen ? "text-[11px]" : "text-[9px]"
-                )}>
+                <AvatarFallback
+                  className={cn(
+                    "bg-transparent flex items-center justify-center font-black text-foreground select-none",
+                    sidebarOpen ? "text-[11px]" : "text-[9px]",
+                  )}
+                >
                   {getInitials(displayName)}
                 </AvatarFallback>
               </Avatar>
             </div>
             {/* Overlay Badge */}
-            <div className={cn(
-              "absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white/20 select-none shadow-lg tracking-wider transition-all duration-300",
-              !sidebarOpen && "text-[7.5px] px-1 py-0 -bottom-1"
-            )}>
+            <div
+              className={cn(
+                "absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white font-black rounded-full border border-white/20 shadow-lg select-none flex items-center justify-center text-center pb-[1px] leading-none z-20 ring-[1.5px] ring-white dark:ring-background transition-all duration-300",
+                sidebarOpen ? "px-1.5 h-3.5 text-[10px] min-w-[28px]" : "px-1 h-3 text-[8px] min-w-[22px]",
+              )}
+            >
               {badgeText}
             </div>
           </div>
@@ -780,9 +886,16 @@ function SidebarUserButton({
           {/* Name & Chevron */}
           {sidebarOpen && (
             <div className="flex items-center flex-1 min-w-0 gap-2">
-              <span className="flex-1 truncate font-bold text-foreground text-xs uppercase tracking-wide">
-                {displayName}
-              </span>
+              <div className="flex flex-col min-w-0 flex-1 text-left gap-0.5">
+                <span className="truncate font-bold text-foreground text-xs leading-none">
+                  {displayName}
+                </span>
+                {emailSubtext && (
+                  <span className="truncate text-[10px] text-muted-foreground font-normal normal-case leading-none">
+                    {emailSubtext}
+                  </span>
+                )}
+              </div>
               <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             </div>
           )}
@@ -798,12 +911,29 @@ function SidebarUserButton({
         {/* User Header */}
         <div className="flex items-center gap-3 px-2 py-2 select-none">
           <div className="relative shrink-0">
-            <div className="h-10 w-10 rounded-full p-[2px] border-2 border-orange-500 flex items-center justify-center">
-              <Avatar className="h-full w-full rounded-full bg-surface-3">
+            <div className="relative flex items-center justify-center rounded-full h-[42px] w-[42px]">
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="avatar-ring-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#f97316" />
+                    <stop offset="50%" stopColor="#ef4444" />
+                    <stop offset="100%" stopColor="#fbbf24" />
+                  </linearGradient>
+                </defs>
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="48"
+                  fill="none"
+                  stroke="url(#avatar-ring-grad)"
+                  strokeWidth="4"
+                />
+              </svg>
+              <Avatar className="h-[34px] w-[34px] rounded-full bg-surface-3 relative z-10">
                 {userProfile?.avatar_base64 ? (
-                  <AvatarImage 
-                    src={`data:image/jpeg;base64,${userProfile.avatar_base64}`} 
-                    alt={displayName} 
+                  <AvatarImage
+                    src={`data:image/jpeg;base64,${userProfile.avatar_base64}`}
+                    alt={displayName}
                     className="object-cover rounded-full"
                   />
                 ) : null}
@@ -812,14 +942,19 @@ function SidebarUserButton({
                 </AvatarFallback>
               </Avatar>
             </div>
-            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white/20 select-none shadow-lg tracking-wider">
+            {/* Badge overlay (IDI / EXT) */}
+            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-black text-white px-1.5 h-3.5 text-[10px] min-w-[28px] rounded-full font-black border border-white/20 shadow-lg flex items-center justify-center text-center pb-[1px] leading-none z-20 ring-[1.5px] ring-white dark:ring-background">
               {badgeText}
             </div>
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-sm font-bold text-foreground truncate">{displayName}</span>
+            <span className="text-sm font-bold text-foreground truncate">
+              {displayName}
+            </span>
             {emailSubtext && emailSubtext !== displayName && (
-              <span className="text-[11px] text-muted-foreground truncate">{emailSubtext}</span>
+              <span className="text-[11px] text-muted-foreground truncate">
+                {emailSubtext}
+              </span>
             )}
           </div>
         </div>
@@ -830,26 +965,51 @@ function SidebarUserButton({
           <Settings className="w-4 h-4 text-muted-foreground" />
           <span className="flex-1">All settings</span>
         </DropdownMenuItem>
-        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
-          <ArrowUpCircle className="w-4 h-4 text-muted-foreground" />
-          <span className="flex-1">Upgrade plan</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
-          <Download className="w-4 h-4 text-muted-foreground" />
-          <span className="flex-1">Install apps</span>
-        </DropdownMenuItem>
-        
+
         <DropdownMenuSeparator className="my-1 border-t border-border/40" />
-        
-        {/* Theme Toggle inside Dropdown */}
-        <DropdownMenuItem 
-          onClick={toggleTheme}
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer"
-        >
-          {isDark ? <Sun className="w-4 h-4 text-muted-foreground" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
-          <span className="flex-1">Appearance</span>
-          <span className="text-xs text-muted-foreground capitalize">{isDark ? "Dark" : "Light"}</span>
-        </DropdownMenuItem>
+
+        {/* Theme Toggle Sub-menu inside Dropdown */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 data-[state=open]:bg-white/5 cursor-pointer text-foreground select-none">
+            {isDark ? (
+              <Moon className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <Sun className="w-4 h-4 text-muted-foreground" />
+            )}
+            <span className="flex-1 text-left">Appearance</span>
+            <span className="text-xs text-muted-foreground capitalize">
+              {isDark ? "Dark" : "Light"}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent className="bg-surface-2 border border-border text-foreground rounded-2xl shadow-xl p-1.5 min-w-[8rem] z-[101]">
+              <DropdownMenuItem
+                onClick={() => {
+                  if (!isDark) toggleTheme();
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm cursor-pointer hover:bg-white/5 text-foreground",
+                  isDark && "bg-white/5 font-semibold text-primary",
+                )}
+              >
+                <Moon className="w-3.5 h-3.5 text-muted-foreground" />
+                <span>Dark</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  if (isDark) toggleTheme();
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm cursor-pointer hover:bg-white/5 text-foreground",
+                  !isDark && "bg-white/5 font-semibold text-primary",
+                )}
+              >
+                <Sun className="w-3.5 h-3.5 text-muted-foreground" />
+                <span>Light</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
 
         <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
           <Globe className="w-4 h-4 text-muted-foreground" />
@@ -864,12 +1024,12 @@ function SidebarUserButton({
 
         <DropdownMenuSeparator className="my-1 border-t border-border/40" />
 
-        <DropdownMenuItem 
+        <DropdownMenuItem
           onClick={() => window.location.reload()}
           className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-red-500/10 text-red-500 hover:text-red-500 cursor-pointer"
         >
           <LogOut className="w-4 h-4 text-red-500" />
-          <span className="flex-1 font-semibold">Sign out</span>
+          <span className="flex-1 font-semibold">Exit</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -791,20 +791,6 @@ export function TopNav() {
                 <Save className="w-3.5 h-3.5 text-muted-foreground" />
               </Button>
             </div>
-
-            <Button
-              type="button"
-              onClick={toggleTheme}
-              variant="outline"
-              className="w-10 h-9 rounded-lg border border-border bg-surface-2 text-foreground hover:bg-accent transition-all shrink-0 hover-sun-spin"
-              title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {isDark ? (
-                <Sun className="w-3.5 h-3.5 text-muted-foreground" />
-              ) : (
-                <Moon className="w-3.5 h-3.5 text-muted-foreground" />
-              )}
-            </Button>
           </div>
         </div>
       </header>
