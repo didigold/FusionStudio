@@ -817,41 +817,71 @@ function SidebarUserButton({
   const emailSubtext = userProfile?.email || userProfile?.upn || "";
   const badgeText = username.startsWith("AT") ? "IDI" : "EXT";
 
-  const handleCheckUpdates = async () => {
-    const toastId = toast.loading("Checking for updates...");
+  const [updateInfo, setUpdateInfo] = useState<{
+    available: boolean;
+    version: string | null;
+    installerPath: string | null;
+  }>({
+    available: false,
+    version: null,
+    installerPath: null,
+  });
+
+  const checkUpdates = useCallback(async (isStartup = false) => {
+    if (isStartup && !navigator.onLine) {
+      return; // Skip background check if offline on startup
+    }
+
+    const toastId = toast.loading(isStartup ? "Checking for updates in background..." : "Checking for updates...");
     try {
       const res = await fetch("/api/system/check-update");
       const data = await res.json();
       
       if (data.update_available) {
         toast.dismiss(toastId);
+        setUpdateInfo({
+          available: true,
+          version: data.version,
+          installerPath: data.installer_path,
+        });
+        
         toast.info(`Version ${data.version} is available!`, {
           duration: 10000,
           action: {
-            label: "Update Now",
-            onClick: async () => {
-              toast.loading("Starting update process...", { id: toastId });
-              try {
-                await fetch("/api/system/apply-update", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ installer_path: data.installer_path })
-                });
-                // The backend will kill the app, so we might not reach here, but just in case:
-                toast.success("Update started. The application will close.");
-              } catch (err) {
-                toast.error("Failed to start update.");
-              }
-            }
-          }
+            label: "Install Now",
+            onClick: () => handleInstallUpdate(data.installer_path),
+          },
         });
       } else {
-        toast.success("You are on the latest version.", { id: toastId });
+        toast.success(isStartup ? "Application is up to date." : "You are on the latest version.", { id: toastId });
+        setUpdateInfo({
+          available: false,
+          version: null,
+          installerPath: null,
+        });
       }
     } catch (err) {
       toast.error("Failed to check for updates.", { id: toastId });
     }
+  }, []);
+
+  const handleInstallUpdate = async (installerPath: string) => {
+    const toastId = toast.loading("Starting update process...");
+    try {
+      await fetch("/api/system/apply-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ installer_path: installerPath })
+      });
+      toast.success("Update started. The application will close.", { id: toastId });
+    } catch (err) {
+      toast.error("Failed to start update.", { id: toastId });
+    }
   };
+
+  useEffect(() => {
+    checkUpdates(true);
+  }, [checkUpdates]);
 
   return (
     <DropdownMenu>
@@ -886,6 +916,9 @@ function SidebarUserButton({
                 {getInitials(displayName)}
               </AvatarFallback>
             </Avatar>
+            {updateInfo.available && (
+              <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#F39200] rounded-full ring-2 ring-background z-30 animate-pulse" />
+            )}
           </div>
 
           {/* Name & Chevron */}
@@ -1028,11 +1061,20 @@ function SidebarUserButton({
         </DropdownMenuItem>
 
         <DropdownMenuItem 
-          onClick={handleCheckUpdates}
+          onClick={() => {
+            if (updateInfo.available && updateInfo.installerPath) {
+              handleInstallUpdate(updateInfo.installerPath);
+            } else {
+              checkUpdates(false);
+            }
+          }}
           className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer"
         >
-          <RefreshCw className="w-4 h-4 text-muted-foreground" />
-          <span className="flex-1">Check for updates</span>
+          <RefreshCw className={cn("w-4 h-4 text-muted-foreground", updateInfo.available && "animate-spin")} />
+          <span className="flex-1">{updateInfo.available ? "Install update" : "Check for updates"}</span>
+          {updateInfo.available && (
+            <span className="w-2.5 h-2.5 bg-[#F39200] rounded-full animate-pulse shrink-0" />
+          )}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator className="my-1 border-t border-border/40" />
