@@ -55,7 +55,8 @@ app.include_router(classification.router, prefix="/api/classification")
 app.include_router(reporting.router, prefix="/api/reporting")
 app.include_router(om.router, prefix="/api/om")
 app.include_router(brain.router, prefix="/api/brain")
-
+from backend.routers import system
+app.include_router(system.router, prefix="/api/system")
 
 @app.get("/api/health")
 async def health_check():

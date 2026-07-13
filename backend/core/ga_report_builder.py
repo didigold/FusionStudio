@@ -3,6 +3,7 @@ Matplotlib-based Report Builder for FusionStudio.
 Generates professional A4 engineering reports with logos, graphs, tables.
 """
 import os
+import numpy as np
 from datetime import datetime
 from backend.core.utils import resource_path, shared_asset_path
 from backend.core.audio_analysis import find_first_valid_event

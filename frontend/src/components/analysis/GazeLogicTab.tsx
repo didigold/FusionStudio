@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { motion, useScroll, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { DataGrid } from "@mui/x-data-grid";
 import type { GridColDef } from "@mui/x-data-grid";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -67,6 +67,8 @@ import {
   Drama,
   ChevronDown,
   ChevronUp,
+  Cog,
+  Box,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
@@ -162,6 +164,7 @@ export function GazeLogicTab() {
     setProtocol,
     signalsConfig,
     setSignalsConfig,
+    updateSignalInCategory,
     passCriteria,
     setPassCriteria,
     unresponsiveCriteria,
@@ -217,15 +220,24 @@ export function GazeLogicTab() {
   }, [protocol]);
 
   // Auto-load channels when selected file or category changes and list is empty
+  // Use a ref to check signalsConfig without adding it as a dependency,
+  // preventing re-trigger cascades when autoload updates all categories at once.
+  const signalsConfigRef = useRef(signalsConfig);
+  signalsConfigRef.current = signalsConfig;
+
   useEffect(() => {
-    if (analysisSelectedFile && activeCategory) {
-      const currentList = signalsConfig[activeCategory] || [];
-      const onlySoundPressure = currentList.length === 0 || (currentList.length === 1 && currentList[0].name === "SoundPressure");
-      if (onlySoundPressure) {
-        autoLoadChannelsAndMerge(undefined, undefined, undefined, false, activeCategory);
+    const timer = setTimeout(() => {
+      if (analysisSelectedFile && activeCategory) {
+        const currentList = signalsConfigRef.current[activeCategory] || [];
+        const onlySoundPressure = currentList.length === 0 || (currentList.length === 1 && currentList[0].name === "SoundPressure");
+        if (onlySoundPressure) {
+          autoLoadChannelsAndMerge(undefined, undefined, undefined, false, activeCategory);
+        }
       }
-    }
-  }, [analysisSelectedFile, activeCategory, autoLoadChannelsAndMerge, signalsConfig]);
+    }, 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisSelectedFile, activeCategory, autoLoadChannelsAndMerge]);
 
   // Filter signals state
   const [filterQuery, setFilterQuery] = useState("");
@@ -806,44 +818,87 @@ export function GazeLogicTab() {
     reader.readAsText(file);
   };
 
-  const fetchSignalValues = async (filePath: string, signalName: string) => {
+  const fetchSignalValues = async (filePath: string, signalName: string, signal?: AbortSignal) => {
     const cacheKey = `${filePath}::${signalName}`;
-    if (fetchingValues.has(cacheKey)) return;
+    if (fetchingValues.has(cacheKey)) return null;
     fetchingValues.add(cacheKey);
     try {
       const res = await fetch("/api/analysis/signal_unique_values", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file_path: filePath, channel_name: signalName }),
+        signal,
       });
       const data = await res.json();
       if (data.values && Array.isArray(data.values) && data.values.length > 0) {
-        setSignalValuesCache((prev) => ({ ...prev, [cacheKey]: data.values }));
+        return { cacheKey, values: data.values };
       }
     } catch {
-      // Error is caught, will clean up in finally
+      // Aborted or failed — silently ignore
     } finally {
       fetchingValues.delete(cacheKey);
     }
+    return null;
   };
 
-  // Fetch unique signal values when files are loaded or configuration changes
+  // Fetch unique signal values when files are loaded or category changes
+  // Batches requests with concurrency limit to prevent UI lag
+  const fetchAbortRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     const activeFile = loadedFiles[activeCategory];
     if (!activeFile) return;
 
-    const categorySignals = signalsConfig[activeCategory] || [];
-    categorySignals.forEach((sig) => {
-      if (sig && sig.name !== "SoundPressure") {
-        const cacheKey = `${activeFile}::${sig.name}`;
-        if (!signalValuesCacheRef.current[cacheKey] && !fetchingValues.has(cacheKey)) {
-          fetchSignalValues(activeFile, sig.name);
+    const categorySignals = signalsConfigRef.current[activeCategory] || [];
+    // Only fetch unique values for signals that have an active operator,
+    // since the dropdown is only shown when operator !== "None".
+    // This reduces initial fetches from ~50-100 to typically 1-5.
+    const signalsToFetch = categorySignals.filter(
+      (sig) => sig && sig.name !== "SoundPressure" &&
+        sig.operator !== "None" &&
+        !signalValuesCacheRef.current[`${activeFile}::${sig.name}`] &&
+        !fetchingValues.has(`${activeFile}::${sig.name}`)
+    );
+
+    if (signalsToFetch.length === 0) return;
+
+    // Abort any previous batch in progress
+    fetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
+    // Debounce + batch fetch with concurrency limit
+    const timer = setTimeout(async () => {
+      const CONCURRENCY = 4;
+      const results: Record<string, (number | string)[]> = {};
+
+      for (let i = 0; i < signalsToFetch.length; i += CONCURRENCY) {
+        if (controller.signal.aborted) return;
+        const batch = signalsToFetch.slice(i, i + CONCURRENCY);
+        const settled = await Promise.allSettled(
+          batch.map((sig) => fetchSignalValues(activeFile, sig.name, controller.signal))
+        );
+        for (const result of settled) {
+          if (result.status === "fulfilled" && result.value) {
+            results[result.value.cacheKey] = result.value.values;
+          }
         }
       }
-    });
-  // signalValuesCache intentionally excluded — read via ref to break self-trigger loop
+
+      if (controller.signal.aborted) return;
+
+      // Single batch state update instead of one per signal
+      if (Object.keys(results).length > 0) {
+        setSignalValuesCache((prev) => ({ ...prev, ...results }));
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory, loadedFiles, signalsConfig]);
+  }, [activeCategory, loadedFiles]);
 
   const handleSelectFile = async (filePath: string) => {
     setFileSelectorOpen(false);
@@ -921,10 +976,6 @@ export function GazeLogicTab() {
         setLoadedFiles((prev) => ({ ...prev, [activeCategory]: filePath }));
         toast.dismiss(toastId);
         toast.success(`Loaded channels for ${activeCategory}.`);
-        // Background: fetch unique threshold values for all non-SoundPressure signals
-        rebuiltList
-          .filter((s) => s.name !== "SoundPressure")
-          .forEach((s) => fetchSignalValues(filePath, s.name));
       } else {
         toast.dismiss(toastId);
         toast.error("Failed to read channels from selected file.");
@@ -936,19 +987,28 @@ export function GazeLogicTab() {
     }
   };
 
-  // Update logic configuration for category signals (using unique name lookup for safe filtering update)
+  // Update logic configuration for category signals — delegates to atomic store action
   const updateSignalField = (
     category: string,
     name: string,
     field: keyof SignalConfig,
     value: any,
   ) => {
-    const list = [...(signalsConfig[category] || [])];
-    const index = list.findIndex((s) => s.name === name);
-    if (index !== -1) {
-      list[index] = { ...list[index], [field]: value };
+    updateSignalInCategory(category, name, field, value);
+
+    // On-demand fetch: when operator changes from "None" to something,
+    // fetch unique values for that signal so the threshold dropdown populates.
+    if (field === "operator" && value !== "None") {
+      const activeFile = loadedFiles[category];
+      const cacheKey = `${activeFile}::${name}`;
+      if (activeFile && !signalValuesCacheRef.current[cacheKey] && !fetchingValues.has(cacheKey)) {
+        fetchSignalValues(activeFile, name).then((result) => {
+          if (result) {
+            setSignalValuesCache((prev) => ({ ...prev, [result.cacheKey]: result.values }));
+          }
+        });
+      }
     }
-    setSignalsConfig({ ...signalsConfig, [category]: list });
   };
 
   // PASS Criteria Configuration Updates
@@ -1283,7 +1343,7 @@ export function GazeLogicTab() {
         }
 
         const cacheKey = `${loadedFiles[activeCategory] ?? ""}::${params.row.name}`;
-        const cachedVals = signalValuesCache[cacheKey] || [];
+        const cachedVals = signalValuesCacheRef.current[cacheKey] || [];
         if (cachedVals && cachedVals.length > 0) {
           const cleanCached = cachedVals.filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
           const currentVal = params.value !== null && params.value !== undefined && String(params.value).trim() !== "" ? params.value : 0.0;
@@ -1356,7 +1416,10 @@ export function GazeLogicTab() {
         </div>
       ),
     },
-  ], [checkedCount, activeCategory, loadedFiles, signalValuesCache, updateSignalField]);
+  // signalValuesCache is read via signalValuesCacheRef inside renderCell closures,
+  // so it does NOT need to be in this dep array. This prevents DataGrid column
+  // reconstruction (and full re-render) every time cached values arrive.
+  ], [checkedCount, activeCategory, loadedFiles, updateSignalField]);
 
   const rows = useMemo(() => {
     return sortedFilteredSignals.map(sig => ({
@@ -1374,6 +1437,35 @@ export function GazeLogicTab() {
     const timer = setTimeout(() => setIsMounting(false), 50);
     return () => clearTimeout(timer);
   }, []);
+
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    if (!tableContainerRef.current) return;
+    const scroller = tableContainerRef.current.querySelector('.MuiDataGrid-virtualScroller');
+    if (!scroller) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scroller;
+      if (scrollHeight > clientHeight) {
+        setScrollProgress(scrollTop / (scrollHeight - clientHeight));
+      } else {
+        setScrollProgress(0);
+      }
+    };
+
+    scroller.addEventListener('scroll', handleScroll);
+    handleScroll();
+    
+    const observer = new ResizeObserver(() => handleScroll());
+    observer.observe(scroller);
+
+    return () => {
+      scroller.removeEventListener('scroll', handleScroll);
+      observer.disconnect();
+    };
+  }, [rows, isMounting]);
+
 
   return (
     <div className="flex flex-col animate-in fade-in duration-500 max-w-full w-full h-full min-h-0 overflow-hidden bg-surface-2/40">
@@ -1395,8 +1487,6 @@ export function GazeLogicTab() {
         .gaze-table-container {
           scrollbar-width: none;
           -ms-overflow-style: none;
-          mask-image: linear-gradient(to bottom, black 0px, black 43px, transparent 43px, black 59px, black calc(100% - 16px), transparent 100%);
-          -webkit-mask-image: linear-gradient(to bottom, black 0px, black 43px, transparent 43px, black 59px, black calc(100% - 16px), transparent 100%);
         }
         .gaze-table-container::-webkit-scrollbar {
           display: none;
@@ -1852,8 +1942,8 @@ export function GazeLogicTab() {
                 </div>
               </div>
             ) : null}
-            {/* Custom Horizontal Scroll Indicator */}
-            {!isMounting && (
+            {/* Custom Horizontal Scroll Indicator — only visible when scrolled */}
+            {!isMounting && scrollProgress > 0 && (
               <div className="absolute top-[40px] left-0 right-0 h-0 z-30 w-full overflow-visible pointer-events-none">
                 <div
                   style={{

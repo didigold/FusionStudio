@@ -424,6 +424,7 @@ interface AppState {
   setProtocol: (p: 'Euro NCAP' | 'GSR ADDW') => void
   signalsConfig: Record<string, SignalConfig[]>
   setSignalsConfig: (c: Record<string, SignalConfig[]>) => void
+  updateSignalInCategory: (category: string, signalName: string, field: keyof SignalConfig, value: any) => void
   passCriteria: Record<string, PassConfig>
   setPassCriteria: (pc: Record<string, PassConfig>) => void
   unresponsiveCriteria: Record<string, UnresponsivePhase[]>
@@ -779,6 +780,17 @@ export const useAppStore = create<AppState>((set) => ({
   setProtocol: (p) => set({ protocol: p }),
   signalsConfig: DEFAULT_SIGNAL_LISTS,
   setSignalsConfig: (c) => set({ signalsConfig: c }),
+  updateSignalInCategory: (category, signalName, field, value) => set((state) => {
+    const list = state.signalsConfig[category]
+    if (!list) return state
+    const idx = list.findIndex(s => s.name === signalName)
+    if (idx === -1) return state
+    // Bail out if the value hasn't actually changed to avoid unnecessary re-renders
+    if (list[idx][field] === value) return state
+    const updated = [...list]
+    updated[idx] = { ...updated[idx], [field]: value }
+    return { signalsConfig: { ...state.signalsConfig, [category]: updated } }
+  }),
   passCriteria: DEFAULT_PASS_CRITERIA,
   setPassCriteria: (pc) => set({ passCriteria: pc }),
   unresponsiveCriteria: DEFAULT_UNRESPONSIVE_CRITERIA,

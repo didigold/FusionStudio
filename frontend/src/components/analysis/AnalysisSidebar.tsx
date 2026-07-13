@@ -23,12 +23,14 @@ import {
   LogOut,
   Settings,
   Download,
+  RefreshCw,
   HelpCircle,
   Globe,
   ArrowUpCircle,
   Sun,
   Moon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Spinner } from "@/components/ui/spinner";
 import { useAppStore } from "@/store/useAppStore";
 import {
@@ -815,6 +817,42 @@ function SidebarUserButton({
   const emailSubtext = userProfile?.email || userProfile?.upn || "";
   const badgeText = username.startsWith("AT") ? "IDI" : "EXT";
 
+  const handleCheckUpdates = async () => {
+    const toastId = toast.loading("Checking for updates...");
+    try {
+      const res = await fetch("/api/system/check-update");
+      const data = await res.json();
+      
+      if (data.update_available) {
+        toast.dismiss(toastId);
+        toast.info(`Version ${data.version} is available!`, {
+          duration: 10000,
+          action: {
+            label: "Update Now",
+            onClick: async () => {
+              toast.loading("Starting update process...", { id: toastId });
+              try {
+                await fetch("/api/system/apply-update", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ installer_path: data.installer_path })
+                });
+                // The backend will kill the app, so we might not reach here, but just in case:
+                toast.success("Update started. The application will close.");
+              } catch (err) {
+                toast.error("Failed to start update.");
+              }
+            }
+          }
+        });
+      } else {
+        toast.success("You are on the latest version.", { id: toastId });
+      }
+    } catch (err) {
+      toast.error("Failed to check for updates.", { id: toastId });
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -987,6 +1025,14 @@ function SidebarUserButton({
         <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
           <HelpCircle className="w-4 h-4 text-muted-foreground" />
           <span className="flex-1">Help</span>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem 
+          onClick={handleCheckUpdates}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer"
+        >
+          <RefreshCw className="w-4 h-4 text-muted-foreground" />
+          <span className="flex-1">Check for updates</span>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator className="my-1 border-t border-border/40" />

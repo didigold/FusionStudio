@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FolderOpen, Loader2, X, Save, Cog, Trash2, Sun, Moon, Clock, IdCardLanyard, ArrowRight, Folder, HardDrive, ChevronRight, Monitor, Download, FileText, Image, Music, Video, Home } from "lucide-react";
+import { FolderOpen, Loader2, X, Save, Cog, Trash2, Folder, HardDrive, ChevronRight, Monitor, Download, FileText, Image, Music, Video, Home } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAppStore } from "@/store/useAppStore";
 import { FolderBrowser } from "@/components/analysis/FolderBrowser";
-import { SplitText } from "@/components/ui/SplitText";
 import {
   Dialog,
   DialogContent,
@@ -81,18 +79,6 @@ const PLACEHOLDERS = [
   "Path to your next data workspace..."
 ];
 
-const renderStaticText = (text: string) => {
-  const words = text.split(' ');
-  return words.map((word, wIdx) => (
-    <span key={wIdx} className="inline-block whitespace-nowrap mr-[0.25em]">
-      {word.split('').map((char, cIdx) => (
-        <span key={cIdx} className="inline-block">
-          {char}
-        </span>
-      ))}
-    </span>
-  ));
-};
 
 export function TopNav() {
   const {
@@ -121,47 +107,66 @@ export function TopNav() {
 
   const [scanning, setScanning] = useState(false);
 
-
+  // Lightweight CSS placeholder cycling — no GSAP, no per-char state updates
   const [phraseIndex, setPhraseIndex] = useState(0);
-  const [placeholderStatus, setPlaceholderStatus] = useState<'entering' | 'waiting' | 'deleting' | 'idle'>('entering');
-  const [deletingText, setDeletingText] = useState("");
-
-  const handleEntranceComplete = () => {
-    setPlaceholderStatus('waiting');
-  };
+  const [placeholderPhase, setPlaceholderPhase] = useState<'typing' | 'visible' | 'erasing' | 'pause'>('typing');
+  const [displayText, setDisplayText] = useState("");
+  const rafRef = useRef<number>(0);
+  const phaseRef = useRef(placeholderPhase);
+  phaseRef.current = placeholderPhase;
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (placeholderStatus === 'waiting') {
-      timer = setTimeout(() => {
-        setDeletingText(PLACEHOLDERS[phraseIndex]);
-        setPlaceholderStatus('deleting');
-      }, 2000); // Stay for 2s after animation completes
-    } else if (placeholderStatus === 'idle') {
-      timer = setTimeout(() => {
+    const fullText = PLACEHOLDERS[phraseIndex];
+    let charIdx = 0;
+    let lastTime = 0;
+
+    if (placeholderPhase === 'typing') {
+      charIdx = 0;
+      const typeChar = (time: number) => {
+        if (phaseRef.current !== 'typing') return;
+        if (time - lastTime >= 35) {
+          lastTime = time;
+          charIdx++;
+          setDisplayText(fullText.slice(0, charIdx));
+          if (charIdx >= fullText.length) {
+            setPlaceholderPhase('visible');
+            return;
+          }
+        }
+        rafRef.current = requestAnimationFrame(typeChar);
+      };
+      rafRef.current = requestAnimationFrame(typeChar);
+    } else if (placeholderPhase === 'visible') {
+      const timer = setTimeout(() => setPlaceholderPhase('erasing'), 2000);
+      return () => clearTimeout(timer);
+    } else if (placeholderPhase === 'erasing') {
+      charIdx = fullText.length;
+      const eraseChar = (time: number) => {
+        if (phaseRef.current !== 'erasing') return;
+        if (time - lastTime >= 20) {
+          lastTime = time;
+          charIdx--;
+          setDisplayText(fullText.slice(0, charIdx));
+          if (charIdx <= 0) {
+            setPlaceholderPhase('pause');
+            return;
+          }
+        }
+        rafRef.current = requestAnimationFrame(eraseChar);
+      };
+      rafRef.current = requestAnimationFrame(eraseChar);
+    } else if (placeholderPhase === 'pause') {
+      const timer = setTimeout(() => {
         setPhraseIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
-        setPlaceholderStatus('entering');
-      }, 500); // 0.5s pause before starting next SplitText
+        setPlaceholderPhase('typing');
+      }, 400);
+      return () => clearTimeout(timer);
     }
-    return () => clearTimeout(timer);
-  }, [placeholderStatus, phraseIndex]);
 
-  useEffect(() => {
-    if (placeholderStatus !== 'deleting') return;
-
-    let currentText = PLACEHOLDERS[phraseIndex];
-    let interval = setInterval(() => {
-      if (currentText.length > 0) {
-        currentText = currentText.slice(0, -1);
-        setDeletingText(currentText);
-      } else {
-        clearInterval(interval);
-        setPlaceholderStatus('idle');
-      }
-    }, 25);
-
-    return () => clearInterval(interval);
-  }, [placeholderStatus, phraseIndex]);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [placeholderPhase, phraseIndex]);
 
 
 
@@ -458,7 +463,7 @@ export function TopNav() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-[1.5px] z-40 pointer-events-auto"
+              className="fixed inset-0 bg-black/60 z-40 pointer-events-auto"
               onMouseDown={() => {
                 setDropdownOpen(false);
                 setIsFocused(false);
@@ -521,45 +526,16 @@ export function TopNav() {
                     dropdownOpen ? "text-lg" : "text-base"
                   )}
                 />
-                {/* Custom animated placeholder */}
+                {/* Custom animated placeholder — CSS typewriter */}
                 {!localPath && (
                   <div className={cn(
-                    "absolute inset-y-0 left-2 right-2 flex items-center pointer-events-none text-muted-foreground/50 select-none z-0 transition-all duration-300",
+                    "absolute inset-y-0 left-2 right-2 flex items-center pointer-events-none text-muted-foreground/50 select-none z-0 transition-[font-size] duration-300",
                     dropdownOpen ? "text-lg" : "text-base"
                   )}>
-                    {placeholderStatus === 'entering' || placeholderStatus === 'waiting' ? (
-                      <SplitText
-                        text={PLACEHOLDERS[phraseIndex]}
-                        className={cn(
-                          "font-normal text-muted-foreground/50 transition-all duration-300",
-                          dropdownOpen ? "text-lg" : "text-base"
-                        )}
-                        delay={40}
-                        duration={0.5}
-                        ease="power2.out"
-                        splitType="chars"
-                        from={{ opacity: 0, y: 15 }}
-                        to={{ opacity: 1, y: 0 }}
-                        textAlign="left"
-                        onLetterAnimationComplete={handleEntranceComplete}
-                      />
-                    ) : placeholderStatus === 'deleting' ? (
-                      <div
-                        className={cn(
-                          "split-parent font-normal text-muted-foreground/50 transition-all duration-300",
-                          dropdownOpen ? "text-lg" : "text-base"
-                        )}
-                        style={{
-                          textAlign: 'left',
-                          overflow: 'hidden',
-                          display: 'inline-block',
-                          whiteSpace: 'normal',
-                          wordWrap: 'break-word',
-                        }}
-                      >
-                        {renderStaticText(deletingText)}
-                      </div>
-                    ) : null}
+                    <span className="font-normal truncate">
+                      {displayText}
+                      <span className="inline-block w-[1px] h-[1em] bg-muted-foreground/30 ml-[1px] align-middle animate-pulse" />
+                    </span>
                   </div>
                 )}
 

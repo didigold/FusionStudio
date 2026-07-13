@@ -150,7 +150,7 @@ export function TrackingTab() {
       `}</style>
 
         {/* Header - Aligned with Video Viewport */}
-        <div className="mx-auto w-full max-w-[1000px] flex items-center justify-between relative min-h-[48px]">
+        <div className="w-full flex items-center justify-between relative min-h-[48px]">
           <div className="flex items-center gap-3">
             <div className="flex flex-col">
               <span className="text-sm font-medium text-foreground truncate max-w-[250px]">
@@ -381,7 +381,7 @@ export function TrackingTab() {
       </div>
 
       {/* Main Video Viewport */}
-      <div className="mx-auto w-full max-w-[1000px] h-[600px] rounded-3xl bg-black border border-white/5 overflow-hidden relative group shadow-2xl shadow-black/50">
+      <div className="w-full flex-1 min-h-0 rounded-3xl bg-black border border-white/5 overflow-hidden relative group shadow-2xl shadow-black/50">
         {analysisChronosRunning ? (
           analysisChronosFrame ? (
             <>
