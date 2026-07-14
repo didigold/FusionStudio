@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 from backend.core.ml_engine import MLEngine
-from backend.core.utils import resource_path, user_data_path
+from backend.core.utils import user_data_path
 
 
 class AIAnalyzer:
