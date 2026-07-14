@@ -8,7 +8,6 @@ import numpy as np
 import openpyxl
 from openpyxl.utils import get_column_letter
 from copy import copy
-from asammdf import MDF
 
 class ExcelReportGenerator:
     def __init__(self, template_path, root_dir=None):
