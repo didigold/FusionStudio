@@ -671,11 +671,11 @@ class GAReportBuilder:
                 if not os.path.exists(cpath): continue
                 clf = cv2.CascadeClassifier(cpath)
                 dtc = clf.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
-                for f in dtc: faces.append(f)
+                faces.extend(dtc)
                 if 'profile' in cname:
                     dtcf = clf.detectMultiScale(cv2.flip(gray, 1), scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
                     _, w = gray.shape
-                    for (x, y, fw, fh) in dtcf: faces.append((w - x - fw, y, fw, fh))
+                    faces.extend([(w - x - fw, y, fw, fh) for (x, y, fw, fh) in dtcf])
             if not faces: return image_rgb
             out = image_rgb.copy()
             for (x, y, w, h) in faces:
