@@ -42,7 +42,6 @@ def calculate_ncap_metrics(file_path, signal_map, marks=None, thresholds=None):
             
             # 2. If no mark, try to detect T0 from audio signal if mapped
             if t0 is None and 'audio' in signal_map:
-                from .audio_analysis import obtain_peak_frequency
                 # Simple peak detection in a default window
                 # This is a bit slow for a full scan, but good for single file
                 # ... (integration logic)
