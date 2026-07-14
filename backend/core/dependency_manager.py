@@ -1,7 +1,7 @@
 import os
 import sys
 import subprocess
-import importlib.metadata
+from importlib.metadata import version, PackageNotFoundError
 import re
 from typing import List, Dict, Optional, Callable
 
@@ -79,9 +79,9 @@ class DependencyManager:
         # Normalize name (pip is case-insensitive and treats _ as -)
         norm_name = package_name.lower().replace('_', '-')
         try:
-            version = importlib.metadata.version(norm_name)
-            return True, version
-        except importlib.metadata.PackageNotFoundError:
+            pkg_version = version(norm_name)
+            return True, pkg_version
+        except PackageNotFoundError:
             return False, None
 
     def _check_version_match(self, current: str, spec: str) -> bool:
