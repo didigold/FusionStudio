@@ -674,7 +674,7 @@ export function AnalysisSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className={cn("p-2 shrink-0", !sidebarOpen && "px-1")}>
+      <SidebarFooter className="p-2 shrink-0">
         <SidebarUserButton
           userProfile={userProfile}
           toggleTheme={toggleTheme}
@@ -889,17 +889,16 @@ function SidebarUserButton({
         <button
           type="button"
           className={cn(
-            "group w-full flex items-center rounded-xl text-sm font-medium transition-all duration-200 focus:outline-none select-none",
+            "group w-full flex items-center text-sm font-medium transition-all duration-300 focus:outline-none select-none",
             "hover:bg-[#E6E4E1] hover:text-[#111110] dark:hover:bg-primary/10 dark:hover:text-primary",
-            sidebarOpen ? "h-14 p-2 gap-3 justify-start text-left" : "h-12 p-1.5 justify-center",
+            sidebarOpen
+              ? "h-10 pl-[2px] pr-2 gap-3 justify-start text-left rounded-xl"
+              : "h-10 justify-start pl-[2px] rounded-full",
           )}
         >
           {/* Avatar Container */}
           <div className="relative shrink-0">
-            <Avatar className={cn(
-              "rounded-full bg-surface-3 transition-all duration-300",
-              sidebarOpen ? "h-10 w-10" : "h-9 w-9"
-            )}>
+            <Avatar className="h-9 w-9 rounded-full bg-surface-3 transition-all duration-300">
               {userProfile?.avatar_base64 ? (
                 <AvatarImage
                   src={`data:image/jpeg;base64,${userProfile.avatar_base64}`}
@@ -908,10 +907,7 @@ function SidebarUserButton({
                 />
               ) : null}
               <AvatarFallback
-                className={cn(
-                  "bg-transparent flex items-center justify-center font-black text-foreground select-none",
-                  sidebarOpen ? "text-[12px]" : "text-[10px]",
-                )}
+                className="bg-transparent flex items-center justify-center font-black text-foreground select-none text-[10px]"
               >
                 {getInitials(displayName)}
               </AvatarFallback>
@@ -922,21 +918,26 @@ function SidebarUserButton({
           </div>
 
           {/* Name & Chevron */}
-          {sidebarOpen && (
-            <div className="flex items-center flex-1 min-w-0 gap-2">
-              <div className="flex flex-col min-w-0 flex-1 text-left gap-0.5">
-                <span className="truncate font-bold text-foreground text-xs leading-none">
-                  {displayName}
+          <div
+            className={cn(
+              "flex items-center flex-1 min-w-0 gap-2 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap",
+              sidebarOpen
+                ? "opacity-100 max-w-[150px] ml-0"
+                : "opacity-0 max-w-0 ml-0 pointer-events-none"
+            )}
+          >
+            <div className="flex flex-col min-w-0 flex-1 text-left gap-0.5">
+              <span className="truncate font-bold text-foreground text-xs leading-none">
+                {displayName}
+              </span>
+              {emailSubtext && (
+                <span className="truncate text-[10px] text-muted-foreground font-normal normal-case leading-none">
+                  {emailSubtext}
                 </span>
-                {emailSubtext && (
-                  <span className="truncate text-[10px] text-muted-foreground font-normal normal-case leading-none">
-                    {emailSubtext}
-                  </span>
-                )}
-              </div>
-              <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              )}
             </div>
-          )}
+            <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          </div>
         </button>
       </DropdownMenuTrigger>
 

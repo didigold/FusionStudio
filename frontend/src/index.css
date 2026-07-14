@@ -1,5 +1,90 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-Light.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-ExtraBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: italic;
+  font-weight: 300;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-LightItalic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-Italic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-MediumItalic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: italic;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-SemiBoldItalic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-BoldItalic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Sofia Sans';
+  font-style: italic;
+  font-weight: 800;
+  font-display: swap;
+  src: url('./assets/fonts/SofiaSans-ExtraBoldItalic.ttf') format('truetype');
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
