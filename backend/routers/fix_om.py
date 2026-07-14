@@ -1,5 +1,3 @@
-import os
-
 om_path = r"C:\Software\OSM\FusionStudio\backend\routers\om.py"
 
 with open(om_path, "r", encoding="utf-8") as f:
