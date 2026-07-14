@@ -1402,17 +1402,29 @@ async def open_file_in_os_viewer(req: OpenFileRequest):
     import os
     import sys
     import subprocess
+    import tempfile
     
-    if not os.path.exists(req.file_path):
+    # Security validation
+    resolved_path = os.path.abspath(req.file_path)
+    temp_dir = os.path.abspath(tempfile.gettempdir())
+
+    # Must be in temp directory and end with .png
+    if os.path.commonpath([temp_dir, resolved_path]) != temp_dir:
+        return {"status": "error", "message": "Access denied: File must be in the temporary directory"}
+
+    if not resolved_path.lower().endswith(".png"):
+        return {"status": "error", "message": "Access denied: Only .png files are allowed"}
+
+    if not os.path.exists(resolved_path):
         return {"status": "error", "message": f"File not found: {req.file_path}"}
         
     try:
         if os.name == 'nt':
-            os.startfile(req.file_path)
+            os.startfile(resolved_path)
         elif sys.platform == 'darwin':
-            subprocess.Popen(['open', req.file_path])
+            subprocess.Popen(['open', resolved_path])
         else:
-            subprocess.Popen(['xdg-open', req.file_path])
+            subprocess.Popen(['xdg-open', resolved_path])
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Failed to open file externally: {e}")
