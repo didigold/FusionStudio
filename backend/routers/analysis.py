@@ -886,7 +886,7 @@ async def save_marks(req: MarksRequest):
             marks_dict[key] = req.marks
         elif key in marks_dict:
             del marks_dict[key]
-        _save_marks_dict(req.source_dir, marks_dict, req.marks_type)
+        await asyncio.to_thread(_save_marks_dict, req.source_dir, marks_dict, req.marks_type)
         filename = "GA_marks.json" if req.marks_type == "GA" else "OM_marks.json"
         return {"status": "success", "path": os.path.join(req.source_dir, filename)}
     except Exception as e:
