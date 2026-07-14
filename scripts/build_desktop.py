@@ -1,7 +1,6 @@
 import os
 import subprocess
 import shutil
-import sys
 
 def run_command(command, cwd=None):
     print(f"Running: {command} in {cwd or '.'}")
