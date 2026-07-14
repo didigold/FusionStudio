@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from threading import Thread
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter
 from pydantic import BaseModel
 from asammdf import MDF
 import numpy as np
