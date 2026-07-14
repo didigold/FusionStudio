@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from asammdf import MDF
 import numpy as np
 
-from backend.core.utils import resource_path
 from backend.ws.manager import manager_reporting
 from backend.core.om_report_builder import OMReportBuilder
 from backend.routers.analysis import _load_marks_dict, _get_marks_key
