@@ -5,7 +5,7 @@ import time
 import shutil
 from datetime import datetime
 
-from backend.core.utils import clone_file_metadata, resource_path, IDIADA_ORANGE
+from backend.core.utils import clone_file_metadata, IDIADA_ORANGE
 
 
 class ParticipantScanner:
