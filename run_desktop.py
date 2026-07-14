@@ -86,21 +86,24 @@ if __name__ == "__main__":
     )
     
     def check_backend_ready():
-        import urllib.request
+        import http.client
         import time
         
         start_time = time.time()
         backend_url = f"http://127.0.0.1:{port}"
-        health_url = f"{backend_url}/api/health"
         
         # Poll health endpoint until backend is active
         backend_ready = False
         while not backend_ready:
             try:
-                with urllib.request.urlopen(health_url, timeout=1) as response:
-                    if response.status == 200:
-                        backend_ready = True
-                        break
+                conn = http.client.HTTPConnection("127.0.0.1", port, timeout=1)
+                conn.request("GET", "/api/health")
+                response = conn.getresponse()
+                if response.status == 200:
+                    backend_ready = True
+                conn.close()
+                if backend_ready:
+                    break
             except Exception:
                 pass
             time.sleep(0.1)
