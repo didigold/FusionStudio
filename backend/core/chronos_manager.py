@@ -1,5 +1,4 @@
 import re
-import os
 
 # --- Case Definitions (Ported from facetracker.py) ---
 OWL_Distractions = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 16, 17, 20, 21, 22, 23, 29, 30, 31, 32, 33] 
