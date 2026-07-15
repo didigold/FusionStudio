@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Mic,
   FileText,
@@ -29,6 +29,7 @@ import {
   ArrowUpCircle,
   Sun,
   Moon,
+  Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Spinner } from "@/components/ui/spinner";
@@ -46,7 +47,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme, COLOR_THEMES } from "@/hooks/useTheme";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -381,7 +382,7 @@ export function AnalysisSidebar() {
   } = useAppStore();
 
   const { open: sidebarOpen, toggleSidebar } = useSidebar();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, getThemeStyle } = useTheme();
 
   const [userProfile, setUserProfile] = useState<CorporateUser | null>(() => {
     try {
@@ -434,7 +435,7 @@ export function AnalysisSidebar() {
     fusionState !== "idle";
 
   return (
-    <Sidebar collapsible="icon" className="border-r-0 bg-background">
+    <Sidebar collapsible="icon" className="border-r-0 bg-background" style={getThemeStyle()}>
       {/* Persistent Sidebar Header */}
       <SidebarHeader className="h-[52px] flex items-center p-0 overflow-hidden shrink-0 relative w-full">
         <div className="flex items-center w-full px-[14px] h-full relative">
@@ -811,6 +812,7 @@ function SidebarUserButton({
   isDark: boolean;
   sidebarOpen: boolean;
 }) {
+  const { colorTheme, setColorTheme } = useTheme();
   const username = userProfile?.username || "Guest";
   const displayName =
     userProfile?.display_name || userProfile?.email || username;
@@ -827,18 +829,20 @@ function SidebarUserButton({
     installerPath: null,
   });
 
+  const didCheckRef = useRef(false);
+
   const checkUpdates = useCallback(async (isStartup = false) => {
     if (isStartup && !navigator.onLine) {
       return; // Skip background check if offline on startup
     }
 
-    const toastId = toast.loading(isStartup ? "Checking for updates in background..." : "Checking for updates...");
+    const toastId = !isStartup ? toast.loading("Checking for updates...") : null;
     try {
       const res = await fetch("/api/system/check-update");
       const data = await res.json();
       
       if (data.update_available) {
-        toast.dismiss(toastId);
+        if (toastId) toast.dismiss(toastId);
         setUpdateInfo({
           available: true,
           version: data.version,
@@ -853,7 +857,9 @@ function SidebarUserButton({
           },
         });
       } else {
-        toast.success(isStartup ? "Application is up to date." : "You are on the latest version.", { id: toastId });
+        if (toastId) {
+          toast.success("You are on the latest version.", { id: toastId });
+        }
         setUpdateInfo({
           available: false,
           version: null,
@@ -861,7 +867,9 @@ function SidebarUserButton({
         });
       }
     } catch (err) {
-      toast.error("Failed to check for updates.", { id: toastId });
+      if (toastId) {
+        toast.error("Failed to check for updates.", { id: toastId });
+      }
     }
   }, []);
 
@@ -880,7 +888,10 @@ function SidebarUserButton({
   };
 
   useEffect(() => {
-    checkUpdates(true);
+    if (!didCheckRef.current) {
+      didCheckRef.current = true;
+      checkUpdates(true);
+    }
   }, [checkUpdates]);
 
   return (
@@ -890,7 +901,7 @@ function SidebarUserButton({
           type="button"
           className={cn(
             "group w-full flex items-center text-sm font-medium transition-all duration-300 focus:outline-none select-none",
-            "hover:bg-[#E6E4E1] hover:text-[#111110] dark:hover:bg-primary/10 dark:hover:text-primary",
+            "hover:bg-[var(--sidebar-hover)] hover:text-foreground dark:hover:bg-[var(--sidebar-hover)] dark:hover:text-foreground",
             sidebarOpen
               ? "h-10 pl-[2px] pr-2 gap-3 justify-start text-left rounded-xl"
               : "h-10 justify-start pl-[2px] rounded-full",
@@ -1000,65 +1011,9 @@ function SidebarUserButton({
         <DropdownMenuSeparator className="my-1 border-t border-border/40" />
 
         {/* Items */}
-        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
-          <Settings className="w-4 h-4 text-muted-foreground" />
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground">
+          <Settings className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
           <span className="flex-1">All settings</span>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator className="my-1 border-t border-border/40" />
-
-        {/* Theme Toggle Sub-menu inside Dropdown */}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 data-[state=open]:bg-white/5 cursor-pointer text-foreground select-none">
-            {isDark ? (
-              <Moon className="w-4 h-4 text-muted-foreground" />
-            ) : (
-              <Sun className="w-4 h-4 text-muted-foreground" />
-            )}
-            <span className="flex-1 text-left">Appearance</span>
-            <span className="text-xs text-muted-foreground capitalize">
-              {isDark ? "Dark" : "Light"}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent className="bg-surface-2 border border-border text-foreground rounded-2xl shadow-xl p-1.5 min-w-[8rem] z-[101]">
-              <DropdownMenuItem
-                onClick={() => {
-                  if (!isDark) toggleTheme();
-                }}
-                className={cn(
-                  "flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm cursor-pointer hover:bg-white/5 text-foreground",
-                  isDark && "bg-white/5 font-semibold text-primary",
-                )}
-              >
-                <Moon className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>Dark</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  if (isDark) toggleTheme();
-                }}
-                className={cn(
-                  "flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm cursor-pointer hover:bg-white/5 text-foreground",
-                  !isDark && "bg-white/5 font-semibold text-primary",
-                )}
-              >
-                <Sun className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>Light</span>
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
-        </DropdownMenuSub>
-
-        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
-          <Globe className="w-4 h-4 text-muted-foreground" />
-          <span className="flex-1">Language</span>
-          <span className="text-xs text-muted-foreground">Default</span>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer">
-          <HelpCircle className="w-4 h-4 text-muted-foreground" />
-          <span className="flex-1">Help</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem 
@@ -1069,9 +1024,9 @@ function SidebarUserButton({
               checkUpdates(false);
             }
           }}
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-white/5 cursor-pointer"
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground"
         >
-          <RefreshCw className={cn("w-4 h-4 text-muted-foreground", updateInfo.available && "animate-spin")} />
+          <RefreshCw className={cn("w-[18px] h-[18px] text-muted-foreground shrink-0", updateInfo.available && "animate-spin")} />
           <span className="flex-1">{updateInfo.available ? "Install update" : "Check for updates"}</span>
           {updateInfo.available && (
             <span className="w-2.5 h-2.5 bg-[#F39200] rounded-full animate-pulse shrink-0" />
@@ -1080,11 +1035,113 @@ function SidebarUserButton({
 
         <DropdownMenuSeparator className="my-1 border-t border-border/40" />
 
+        {/* Theme Toggle Sub-menu inside Dropdown */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 data-[state=open]:bg-black/5 dark:data-[state=open]:bg-white/5 cursor-pointer text-foreground select-none">
+            {isDark ? (
+              <Moon className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+            ) : (
+              <Sun className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+            )}
+            <div className="flex flex-col flex-1 min-w-0 text-left leading-normal ml-0.5">
+              <span className="font-medium">Appearance</span>
+              <span className="text-[12px] text-muted-foreground capitalize">
+                {isDark ? "Dark" : "Light"}
+              </span>
+            </div>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent className="bg-surface-2 border border-border text-foreground rounded-2xl shadow-xl p-1.5 min-w-[8rem] z-[101]">
+              <DropdownMenuItem
+                onClick={() => {
+                  if (!isDark) toggleTheme();
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[15px] cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 text-foreground",
+                  isDark && "bg-black/5 dark:bg-white/5 font-semibold text-primary",
+                )}
+              >
+                <Moon className="w-4 h-4 text-muted-foreground" />
+                <span>Dark</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  if (isDark) toggleTheme();
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[15px] cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 text-foreground",
+                  !isDark && "bg-black/5 dark:bg-white/5 font-semibold text-primary",
+                )}
+              >
+                <Sun className="w-4 h-4 text-muted-foreground" />
+                <span>Light</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+
+        {/* Color Theme Sub-menu inside Dropdown */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 data-[state=open]:bg-black/5 dark:data-[state=open]:bg-white/5 cursor-pointer text-foreground select-none">
+            <Palette className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+            <div className="flex flex-col flex-1 min-w-0 text-left leading-normal ml-0.5">
+              <span className="font-medium">Color theme</span>
+              <span className="text-[12px] text-muted-foreground capitalize">
+                {COLOR_THEMES.find(t => t.id === colorTheme)?.name || "Default"}
+              </span>
+            </div>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent className="bg-surface-2 border border-border text-foreground rounded-2xl shadow-xl p-3 w-[176px] z-[101]">
+              <div className="grid grid-cols-3 gap-4 justify-items-center">
+                {COLOR_THEMES.map((themeOption) => (
+                  <button
+                    key={themeOption.id}
+                    onClick={() => setColorTheme(themeOption.id)}
+                    className={cn(
+                      "w-10 h-10 rounded-xl border-2 transition-all cursor-pointer focus:outline-none focus:ring-0 shrink-0 aspect-square",
+                      colorTheme === themeOption.id
+                        ? "scale-105 shadow-md ring-2 ring-primary/20 ring-offset-2 ring-offset-surface-2"
+                        : "border-border/60 hover:border-muted-foreground/55"
+                    )}
+                    title={themeOption.name}
+                    style={{
+                      backgroundColor: isDark ? themeOption.previewDark : themeOption.previewLight,
+                      borderColor: colorTheme === themeOption.id
+                        ? (isDark ? "#ffffff" : "#000000")
+                        : undefined
+                    }}
+                  />
+                ))}
+              </div>
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground">
+          <Globe className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+          <div className="flex flex-col flex-1 min-w-0 text-left leading-normal ml-0.5">
+            <span className="font-medium">Language</span>
+            <span className="text-[12px] text-muted-foreground">Default</span>
+          </div>
+          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0 ml-auto" />
+        </DropdownMenuItem>
+
+        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground">
+          <HelpCircle className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+          <div className="flex flex-col flex-1 min-w-0 text-left leading-normal ml-0.5">
+            <span className="font-medium">Help</span>
+          </div>
+          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0 ml-auto" />
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator className="my-1 border-t border-border/40" />
+
         <DropdownMenuItem
           onClick={() => window.location.reload()}
-          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-red-500/10 text-red-500 hover:text-red-500 cursor-pointer"
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-red-500/10 text-red-500 hover:text-red-500 cursor-pointer"
         >
-          <LogOut className="w-4 h-4 text-red-500" />
+          <LogOut className="w-[18px] h-[18px] text-red-500 shrink-0" />
           <span className="flex-1 font-semibold">Exit</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

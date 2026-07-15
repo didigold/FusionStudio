@@ -177,8 +177,8 @@ const sidebarMenuButtonVariants = cva(
   {
     variants: {
       variant: {
-        default: "text-muted-foreground hover:bg-[#E6E4E1] hover:text-[#111110] dark:hover:bg-primary/10 dark:hover:text-primary [&:active]:outline-none [&:active]:ring-0",
-        active: "bg-[#E6E4E1] text-[#111110] dark:bg-primary/10 dark:text-primary [&:active]:outline-none [&:active]:ring-0",
+        default: "text-muted-foreground hover:bg-[var(--sidebar-hover)] hover:text-foreground dark:hover:bg-[var(--sidebar-hover)] dark:hover:text-foreground [&:active]:outline-none [&:active]:ring-0",
+        active: "bg-[var(--sidebar-active)] text-foreground dark:bg-[var(--sidebar-active)] dark:text-foreground [&:active]:outline-none [&:active]:ring-0",
       },
       size: {
         default: "h-9",

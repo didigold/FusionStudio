@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useAnalysisWS } from '../hooks/useAnalysisWS'
+import { useTheme } from '../hooks/useTheme'
 import { useFuseWebSocket } from '../hooks/useFuseWebSocket'
 import { useClassifyWS } from '../hooks/useClassifyWS'
 import { 
@@ -328,6 +329,8 @@ export default function AnalysisTab() {
     analysisActiveTab: activeTab, setAnalysisActiveTab: setActiveTab,
   } = useAppStore()
 
+  const { getDefaultThemeStyle } = useTheme()
+
   useAnalysisWS()
   useFuseWebSocket()
   useClassifyWS()
@@ -428,7 +431,7 @@ export default function AnalysisTab() {
 
 
   return (
-    <div className="flex h-full gap-0 p-0 overflow-hidden">
+    <div className="flex h-full gap-0 p-0 overflow-hidden" style={getDefaultThemeStyle()}>
       {/* Main Analysis Panel (Recordings + Content) */}
       <div className="flex-1 bg-surface-2 border border-border/50 rounded-3xl flex overflow-hidden shadow-sm relative min-h-0">
         {/* Recordings panel — attached inside the main container */}

@@ -73,8 +73,8 @@ export function MisuseTimeTab() {
     analysisSourcePath,
   } = useAppStore();
 
-  const [cameraLeft, setCameraLeft] = useState<string>('');
-  const [cameraRight, setCameraRight] = useState<string>('');
+  const [cameraLeft, setCameraLeft] = useState<string | number>('');
+  const [cameraRight, setCameraRight] = useState<string | number>('');
   const [isSwapped, setIsSwapped] = useState(false);
 
   const [isHoveringVideo, setIsHoveringVideo] = useState(false);
@@ -215,13 +215,15 @@ export function MisuseTimeTab() {
   const videoFileNameLeft = useMemo(() => {
     if (!targetFile) return 'video.avi';
     const fileBase = targetFile.replace(/_tracking\.mf4$/i, '').replace(/\.mf4$/i, '').split(/[\\/]/).pop();
-    return `${fileBase}_${cameraLeft || 'None'}.avi`;
+    const suffix = typeof cameraLeft === 'number' ? `cam${cameraLeft}` : String(cameraLeft);
+    return `${fileBase}_${suffix || 'None'}.avi`;
   }, [targetFile, cameraLeft]);
 
   const videoFileNameRight = useMemo(() => {
     if (!targetFile) return 'video.avi';
     const fileBase = targetFile.replace(/_tracking\.mf4$/i, '').replace(/\.mf4$/i, '').split(/[\\/]/).pop();
-    return `${fileBase}_${cameraRight || 'None'}.avi`;
+    const suffix = typeof cameraRight === 'number' ? `cam${cameraRight}` : String(cameraRight);
+    return `${fileBase}_${suffix || 'None'}.avi`;
   }, [targetFile, cameraRight]);
 
   const isPlayingRef = useRef(false);
@@ -592,7 +594,8 @@ export function MisuseTimeTab() {
   useEffect(() => {
     if (targetFile && cameraLeft) {
       const baseName = targetFile.replace(/_tracking\.mf4$/i, '').replace(/\.mf4$/i, '');
-      const url = `/api/analysis/media?path=${encodeURIComponent(`${baseName}_${cameraLeft}.avi`)}`;
+      const suffix = typeof cameraLeft === 'number' ? `cam${cameraLeft}` : String(cameraLeft);
+      const url = `/api/analysis/media?path=${encodeURIComponent(`${baseName}_${suffix}.avi`)}`;
       
       setVideoUrlLeft(null);
       setVideoLoadingLeft(true);
@@ -635,7 +638,8 @@ export function MisuseTimeTab() {
   useEffect(() => {
     if (targetFile && cameraRight) {
       const baseName = targetFile.replace(/_tracking\.mf4$/i, '').replace(/\.mf4$/i, '');
-      const url = `/api/analysis/media?path=${encodeURIComponent(`${baseName}_${cameraRight}.avi`)}`;
+      const suffix = typeof cameraRight === 'number' ? `cam${cameraRight}` : String(cameraRight);
+      const url = `/api/analysis/media?path=${encodeURIComponent(`${baseName}_${suffix}.avi`)}`;
       
       setVideoUrlRight(null);
       setVideoLoadingRight(true);

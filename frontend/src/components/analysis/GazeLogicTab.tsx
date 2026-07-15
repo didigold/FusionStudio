@@ -1686,48 +1686,7 @@ export function GazeLogicTab() {
               </div>
             </div>
 
-            {/* Active Configuration Name Badge */}
-            <Badge
-              variant="outline"
-              className={cn(
-                "h-9 px-3 bg-surface-2/50 hover:bg-surface-2/70 text-sm font-semibold cursor-pointer select-none inline-flex items-center gap-1.5 justify-center border transition-colors group text-primary border-primary/20",
-              )}
-              onClick={() =>
-                document.getElementById("import-config-input")?.click()
-              }
-            >
-              <Cog className="w-3.5 h-3.5 shrink-0" />
-              <div className="relative flex items-center justify-center min-w-0">
-                <span
-                  className="pill-text transition-all duration-200 truncate has-clear"
-                >
-                  {importedConfigName || "Default"}
-                </span>
-                {importedConfigName ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setResetConfirmType("config");
-                    }}
-                    className="pill-clear-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
-                    title="Unmount configuration and revert to default"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      document.getElementById("import-config-input")?.click();
-                    }}
-                    className="pill-clear-btn pill-add-btn flex items-center justify-center text-muted-foreground hover:text-white transition-opacity duration-200"
-                    title="Import configuration"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </Badge>
+
 
             {/* Active Gauge Limits Badge */}
             <Badge

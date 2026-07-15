@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
 import AnalysisTab from './pages/AnalysisTab'
+import { useTheme } from './hooks/useTheme'
 
 import { TopNav } from './components/layout/TopNav'
 import { useSystemWebSocket } from './components/layout/SystemBadge'
@@ -11,6 +12,7 @@ import { AnalysisSidebar } from './components/analysis/AnalysisSidebar'
 
 export default function App() {
   useSystemWebSocket()
+  const { getThemeStyle } = useTheme()
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -20,6 +22,34 @@ export default function App() {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
+
+  // Load persistent settings from the backend on boot
+  useEffect(() => {
+    async function initSettings() {
+      try {
+        const res = await fetch('/api/system/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.theme) {
+            localStorage.setItem('fusionstudio-theme', data.theme);
+            const root = document.documentElement;
+            root.classList.remove('dark', 'light');
+            root.classList.add(data.theme);
+          }
+          if (data.color_theme) {
+            localStorage.setItem('fusionstudio-color-theme', data.color_theme);
+          }
+          if (data.recent_projects) {
+            localStorage.setItem('recent_projects', JSON.stringify(data.recent_projects));
+          }
+          window.dispatchEvent(new Event('system-settings-synced'));
+        }
+      } catch (err) {
+        console.error("Failed to load settings from backend on boot:", err);
+      }
+    }
+    initSettings();
+  }, []);
 
   // Global typing sound listener
   useEffect(() => {
@@ -66,7 +96,7 @@ export default function App() {
         <AnalysisSidebar />
 
         {/* Right side: TopNav + Content */}
-        <div className="flex flex-col flex-1 min-w-0 h-screen bg-background text-foreground overflow-hidden relative">
+        <div className="flex flex-col flex-1 min-w-0 h-screen bg-background text-foreground overflow-hidden relative" style={getThemeStyle()}>
           <TopNav />
           <Toaster />
 

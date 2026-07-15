@@ -176,6 +176,8 @@
   --surface-2: #222226;
   --surface-3: #2E2E34;
   --surface-ink: #0A0A0C;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-active: rgba(255, 255, 255, 0.08);
 }
 
 :root.light {
@@ -204,6 +206,8 @@
   --surface-2: #FFFFFF;
   --surface-3: #E8E5E1;
   --surface-ink: #FAFAF9;
+  --sidebar-hover: rgba(0, 0, 0, 0.05);
+  --sidebar-active: rgba(0, 0, 0, 0.08);
 }
 
 :root.dark {
@@ -232,6 +236,8 @@
   --surface-2: #222226;
   --surface-3: #2E2E34;
   --surface-ink: #0A0A0C;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-active: rgba(255, 255, 255, 0.08);
 }
 
 * {

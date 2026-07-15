@@ -34,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme, saveSystemSettings } from "@/hooks/useTheme";
 
 interface DirEntry {
   name: string
@@ -100,7 +100,7 @@ export function TopNav() {
     confirmPromptedPath,
   } = useAppStore();
 
-  const { toggleTheme, isDark } = useTheme();
+  const { toggleTheme, isDark, getThemeStyle } = useTheme();
 
 
 
@@ -281,7 +281,11 @@ export function TopNav() {
     loadRecent();
 
     window.addEventListener("storage", loadRecent);
-    return () => window.removeEventListener("storage", loadRecent);
+    window.addEventListener("system-settings-synced", loadRecent);
+    return () => {
+      window.removeEventListener("storage", loadRecent);
+      window.removeEventListener("system-settings-synced", loadRecent);
+    };
   }, []);
 
   const addToRecentProjects = (path: string) => {
@@ -302,6 +306,7 @@ export function TopNav() {
     list = list.slice(0, 5);
     localStorage.setItem("recent_projects", JSON.stringify(list));
     setRecentProjects(list);
+    saveSystemSettings({ recent_projects: list });
   };
 
   useEffect(() => {
@@ -454,7 +459,7 @@ export function TopNav() {
           animation-delay: 0.25s;
         }
       `}</style>
-      <header className="relative w-full h-[52px] bg-background flex items-center justify-between px-8 z-40 sticky top-0">
+      <header className="relative w-full h-[52px] bg-background flex items-center justify-between px-8 z-40 sticky top-0" style={getThemeStyle()}>
         {/* Backdrop overlay for focus shading */}
         <AnimatePresence>
           {dropdownOpen && (

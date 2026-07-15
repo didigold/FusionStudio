@@ -84,3 +84,56 @@ async def apply_update(payload: ApplyUpdatePayload):
         os._exit(0)
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+import json
+import sys
+from typing import List, Optional
+
+class SettingsPayload(BaseModel):
+    theme: Optional[str] = "dark"
+    color_theme: Optional[str] = "default"
+    recent_projects: Optional[List[str]] = []
+
+def get_settings_file_path():
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            dir_path = os.path.join(appdata, "FusionStudio")
+        else:
+            dir_path = os.path.expanduser("~/.fusionstudio")
+    elif sys.platform == "darwin":
+        dir_path = os.path.expanduser("~/Library/Application Support/FusionStudio")
+    else:
+        dir_path = os.path.expanduser("~/.config/fusionstudio")
+    os.makedirs(dir_path, exist_ok=True)
+    return os.path.join(dir_path, "app_settings.json")
+
+@router.get("/settings")
+async def get_settings():
+    path = get_settings_file_path()
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "theme": "dark",
+        "color_theme": "default",
+        "recent_projects": []
+    }
+
+@router.post("/settings")
+async def save_settings(payload: SettingsPayload):
+    path = get_settings_file_path()
+    try:
+        data = {
+            "theme": payload.theme,
+            "color_theme": payload.color_theme,
+            "recent_projects": payload.recent_projects
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
