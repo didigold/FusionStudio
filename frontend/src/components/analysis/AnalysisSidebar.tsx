@@ -15,7 +15,6 @@ import {
   Construction,
   ScanFace,
   Merge,
-  Brain,
   PanelLeftClose,
   PanelLeftOpen,
   IdCardLanyard,
@@ -667,7 +666,6 @@ export function AnalysisSidebar() {
             )}
           </AnimatePresence>
           <SidebarMenu>
-            <SidebarItem value="models" label="HuMind" icon={Brain} />
             <SidebarMenuItem>
               <LogSidebarButton isLogWriting={isLogWriting} />
             </SidebarMenuItem>

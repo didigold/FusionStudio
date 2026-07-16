@@ -16,7 +16,6 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import AnimatedList, { AnimatedItem } from "@/components/ui/AnimatedList"
 import { cn, getOmScenarioName } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -37,7 +36,7 @@ import { MetadataTab } from '@/components/analysis/MetadataTab'
 import ClassificationTab from './ClassificationTab'
 import ReportingTab from './ReportingTab'
 import FuseTab from './FuseTab'
-import BrainTab from './HuMindTab'
+
 
 // --- PROGRESS RING COMPONENT ---
 const ProgressRing = ({ value, max, title }: { value: number; max: number; title: string }) => {
@@ -747,18 +746,6 @@ export default function AnalysisTab() {
                 className="h-full w-full min-h-0 overflow-hidden flex flex-col"
               >
                 <ReportingTab />
-              </motion.div>
-            )}
-            {activeTab === 'models' && (
-              <motion.div
-                key="models"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="h-full w-full min-h-0 overflow-hidden flex flex-col"
-              >
-                <BrainTab />
               </motion.div>
             )}
             {activeTab === 'log' && (

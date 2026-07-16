@@ -6,7 +6,6 @@ Bug-hardened: guards for short signals, correct model paths.
 import os
 import numpy as np
 
-from backend.core.ml_engine import MLEngine
 from backend.core.utils import resource_path, user_data_path
 
 
@@ -16,12 +15,11 @@ class AIAnalyzer:
         self.on_progress = on_progress
         self.on_finished = on_finished
         self.on_error = on_error
-        self.ml_engine = MLEngine(user_data_path("models"))
 
     def analyze(self, tracking_mf4, video_path, model_path=None):
         try:
             if self.on_log:
-                self.on_log("Starting AI Analysis pipeline...")
+                self.on_log("Starting AI Analysis pipeline (Heuristic Fallback)...")
 
             if not os.path.exists(tracking_mf4):
                 raise Exception("Tracking file missing.")
@@ -41,43 +39,6 @@ class AIAnalyzer:
                 if self.on_log:
                     self.on_log("Signal too short for analysis (< 2 samples).")
                 return []
-
-            # Determine active model path
-            active_model = model_path
-            if not active_model:
-                from backend.core.multimodal_engine import MultimodalTrainer
-                temp_trainer = MultimodalTrainer(user_data_path("models"))
-                latest_pt = temp_trainer.find_latest_model()
-                if latest_pt:
-                    active_model = latest_pt
-                else:
-                    latest_pkl = self.ml_engine.find_latest_model()
-                    if latest_pkl:
-                        active_model = latest_pkl
-
-            # If we have a multimodal model, run joint inference
-            if active_model and active_model.endswith(".pt"):
-                multimodal_result = self._try_multimodal(t, h, v, tracking_mf4, video_path, active_model)
-                if multimodal_result is not None:
-                    return multimodal_result
-
-            # If we have a legacy MLP model, load it and run inference
-            if active_model and active_model.endswith(".pkl"):
-                if self.ml_engine.load_model(active_model):
-                    if self.on_log:
-                        self.on_log("AI Brain (MLP) is active. Using neural inference...")
-                    if self.on_progress:
-                        self.on_progress(0.3)
-                    ml_markers = self.ml_engine.predict_intervals(t, h, v)
-                    if ml_markers:
-                        if self.on_log:
-                            self.on_log(f"ML Brain detected {len(ml_markers) // 2} distraction intervals.")
-                        if self.on_progress:
-                            self.on_progress(1.0)
-                        return ml_markers
-                    else:
-                        if self.on_log:
-                            self.on_log("ML Brain found no events. Falling back to heuristic v3.0...")
 
             if self.on_progress:
                 self.on_progress(0.2)
@@ -105,81 +66,6 @@ class AIAnalyzer:
             if self.on_error:
                 self.on_error(str(e))
             return []
-
-    def _try_multimodal(self, timestamps, h_vals, v_vals, mf4_path, video_path, model_path=None):
-        try:
-            from backend.core.multimodal_engine import MultimodalTrainer
-            from backend.core.video_feature_extractor import VideoFeatureExtractor
-
-            trainer = MultimodalTrainer(user_data_path("models"))
-            if not model_path:
-                model_path = trainer.find_latest_model()
-            if model_path is None:
-                return None
-
-            if not model_path.endswith(".pt"):
-                return None
-
-            if not trainer.load_model(model_path):
-                return None
-
-            if not trainer.metadata.get("architecture") == "multimodal":
-                return None
-
-            if not video_path or not os.path.exists(video_path):
-                if self.on_log:
-                    self.on_log("Multimodal model requires video. Falling back...")
-                return None
-
-            if self.on_log:
-                self.on_log("Multimodal Brain active. Running joint inference...")
-            if self.on_progress:
-                self.on_progress(0.1)
-
-            extractor = VideoFeatureExtractor()
-            import pandas as pd
-            df = pd.DataFrame({
-                'h': h_vals, 'v': v_vals,
-                'h_d': np.gradient(h_vals), 'v_d': np.gradient(v_vals),
-                'speed': np.sqrt(np.gradient(h_vals) ** 2 + np.gradient(v_vals) ** 2),
-            })
-            dt = timestamps[1] - timestamps[0] if len(timestamps) > 1 else 1.0 / 30.0
-            fs = 1.0 / dt if dt > 0 else 30.0
-            win = max(int(0.5 * fs), 1)
-            df['h_var'] = df['h'].rolling(window=win).var().fillna(0)
-            df['v_var'] = df['v'].rolling(window=win).var().fillna(0)
-            signal_seq = df[['h', 'v', 'h_d', 'v_d', 'speed', 'h_var', 'v_var']].values.astype(np.float32)
-
-            case_key = os.path.splitext(os.path.basename(mf4_path))[0]
-            total_duration = timestamps[-1] - timestamps[0] if len(timestamps) > 1 else 10.0
-            video_embeddings = extractor.get_embeddings_for_interval(
-                video_path, timestamps[0], timestamps[-1], case_key
-            )
-            if video_embeddings is None:
-                if self.on_log:
-                    self.on_log("Could not extract video features. Falling back...")
-                return None
-
-            if self.on_progress:
-                self.on_progress(0.5)
-
-            results = trainer.predict_intervals(signal_seq, video_embeddings)
-
-            if results:
-                if self.on_log:
-                    self.on_log(f"Multimodal Brain detected {len(results) // 2} intervals.")
-                if self.on_progress:
-                    self.on_progress(1.0)
-                return results
-            else:
-                if self.on_log:
-                    self.on_log("Multimodal Brain found no events. Falling back...")
-                return None
-
-        except Exception as e:
-            if self.on_log:
-                self.on_log(f"Multimodal inference error: {e}")
-            return None
 
     def _find_event_windows(self, t, h, v):
         if len(t) < 2:
