@@ -16,7 +16,8 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 def find_first_valid_event(samples, timestamps, threshold, operator='>',
-                           min_cluster_duration=0.1, mask_start=6.0):
+                           min_cluster_duration=0.1, mask_start=6.0,
+                           require_repeating_or_long=False):
     """
     Clustering-based detection that eliminates single-spike false positives.
     
@@ -110,6 +111,10 @@ def find_first_valid_event(samples, timestamps, threshold, operator='>',
 
     if not valid_clusters:
         return None, None
+
+    if not require_repeating_or_long:
+        first_cl = valid_clusters[0]
+        return first_cl['start'], first_cl['duration']
 
     # 2. Group into chains separated by <= 2.5 seconds
     chains = []

@@ -678,7 +678,7 @@ class DSMProcessor:
                     self.log(f"  [SKIP] Invalid prefix for Behaviours: {file_name}")
                     continue
                 main_full = f"{main_prefix}{main_id}"
-                rep_key = (sheet_type, main_id, noisevar_id)
+                rep_key = (sheet_type, main_full, noisevar_id)
                 rep_counters[rep_key] = rep_counters.get(rep_key, 0) + 1
                 rel_rep = rep_counters[rep_key]
                 target_col = self.get_repetition_label(file_name, sheet_type, main_id, noisevar_id, manual_rep=rel_rep)
@@ -785,15 +785,15 @@ class DSMProcessor:
 
             # ---------- OCCLUSION ----------
             elif sheet_type == "OCCLUSION":
-                rep_key = (sheet_type, main_id, noisevar_id)
+                prefix = file_name[0].upper()
+                main_full = f"{prefix}{main_id}"
+                rep_key = (sheet_type, main_full, noisevar_id)
                 rep_counters[rep_key] = rep_counters.get(rep_key, 0) + 1
                 rel_rep = rep_counters[rep_key]
                 rep_label = self.get_repetition_label(file_name, sheet_type, main_id, noisevar_id, manual_rep=rel_rep)
                 if not rep_label:
                     self.log(f"  [SKIP] Repetition label could not be resolved for: {file_name}")
                     continue
-                prefix = file_name[0].upper()
-                main_full = f"{prefix}{main_id}"
                 occ_full = noisevar_id.upper() if noisevar_id else None
                 if not occ_full:
                     self.log(f"  [SKIP] No occlusion ID found for: {file_name}")

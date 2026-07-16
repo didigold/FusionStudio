@@ -142,6 +142,10 @@ export function MisuseLogicTab() {
     analysisAnalyst,
     analysisSourcePath,
     analysisAvailableCameras,
+    reportCameraLeft,
+    setReportCameraLeft,
+    reportCameraRight,
+    setReportCameraRight,
 
     // Store states
     protocol,
@@ -201,9 +205,7 @@ export function MisuseLogicTab() {
 
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
-  // Report Settings Camera state
-  const [reportCameraLeft, setReportCameraLeft] = useState<string>('');
-  const [reportCameraRight, setReportCameraRight] = useState<string>('');
+
 
   useEffect(() => {
     if (analysisAvailableCameras.length > 0) {
@@ -1741,7 +1743,6 @@ export function MisuseLogicTab() {
                             <SelectItem
                               key={idx}
                               value={cam.toString()}
-                              className="text-foreground hover:bg-secondary focus:bg-secondary"
                             >
                               Camera: {cam}
                             </SelectItem>
@@ -1763,7 +1764,6 @@ export function MisuseLogicTab() {
                             <SelectItem
                               key={idx}
                               value={cam.toString()}
-                              className="text-foreground hover:bg-secondary focus:bg-secondary"
                             >
                               Camera: {cam}
                             </SelectItem>

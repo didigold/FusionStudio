@@ -159,7 +159,8 @@ class OMReportBuilder:
                                 np.array(timestamps),
                                 float(threshold),
                                 ">=",
-                                mask_start=mask_t
+                                mask_start=mask_t,
+                                require_repeating_or_long=True
                             )[0]
                     except Exception:
                         pass

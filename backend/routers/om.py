@@ -343,7 +343,8 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
                         np.array(timestamps),
                         float(audio_thresh) if audio_thresh is not None else 0.0,
                         op,
-                        mask_start=eval_start
+                        mask_start=eval_start,
+                        require_repeating_or_long=True
                     )
             except Exception as e:
                 logger.error(f"Error calculating SoundPressure: {e}")
@@ -504,7 +505,8 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
                             np.array(timestamps),
                             float(audio_thresh) if audio_thresh is not None else 0.0,
                             op,
-                            mask_start=eval_start
+                            mask_start=eval_start,
+                            require_repeating_or_long=True
                         )
                         
                 except Exception as e:
@@ -519,7 +521,8 @@ def build_om_report_config(file_path: str, protocol: str, metadata: dict, catego
                         threshold_num,
                         operator,
                         min_cluster_duration=0.05,
-                        mask_start=eval_start
+                        mask_start=eval_start,
+                        require_repeating_or_long=True
                     )
                 except (ValueError, TypeError, Exception):
                     threshold_str = str(threshold)
@@ -934,7 +937,6 @@ class _OMReportingWorker:
                         break
                     
                     base_name = os.path.splitext(os.path.basename(file_path))[0]
-                    on_progress(f"Processing ({idx+1}/{total_files}): {base_name}...")
                     asyncio.run_coroutine_threadsafe(
                         manager_reporting.broadcast({
                             "type": "progress_update",

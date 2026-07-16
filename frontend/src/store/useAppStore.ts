@@ -286,6 +286,10 @@ interface AppState {
   setAnalysisExpandedAll: (v: boolean | null) => void
   analysisAvailableCameras: (number | string)[]
   setAnalysisAvailableCameras: (c: (number | string)[]) => void
+  reportCameraLeft: string
+  setReportCameraLeft: (c: string) => void
+  reportCameraRight: string
+  setReportCameraRight: (c: string) => void
   analysisSelectedCamera: number | string
   setAnalysisSelectedCamera: (c: number | string) => void
   analysisChannels: any[]
@@ -634,6 +638,10 @@ export const useAppStore = create<AppState>((set) => ({
   setAnalysisExpandedAll: (v) => set({ analysisExpandedAll: v }),
   analysisAvailableCameras: [],
   setAnalysisAvailableCameras: (c) => set({ analysisAvailableCameras: c }),
+  reportCameraLeft: '',
+  setReportCameraLeft: (c) => set({ reportCameraLeft: c }),
+  reportCameraRight: '',
+  setReportCameraRight: (c) => set({ reportCameraRight: c }),
   analysisSelectedCamera: 1,
   setAnalysisSelectedCamera: (c) => set({ analysisSelectedCamera: c }),
   analysisChannels: [],

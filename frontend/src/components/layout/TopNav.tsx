@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FolderOpen, Loader2, X, Save, Cog, Trash2, Folder, HardDrive, ChevronRight, Monitor, Download, FileText, Image, Music, Video, Home } from "lucide-react";
+import { FolderOpen, Loader2, X, Save, Import, Trash2, Folder, HardDrive, ChevronRight, Monitor, Download, FileText, Image, Music, Video, Home } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -728,7 +728,7 @@ export function TopNav() {
                 onClick={() =>
                   document.getElementById("global-import-config-input")?.click()
                 }
-                className="h-full flex items-center justify-center text-foreground hover:bg-[var(--sidebar-hover)] hover:text-foreground transition-colors shrink-0 outline-none select-none border-r border-border/40 hover-spin-fast group"
+                className="h-full flex items-center justify-center text-foreground hover:bg-[var(--sidebar-hover)] hover:text-foreground transition-colors shrink-0 outline-none select-none border-r border-border/40 hover-bounce-subtle group"
                 animate={{
                   width: hoveredBtn === "import" ? "160px" : "38px",
                 }}
@@ -739,7 +739,7 @@ export function TopNav() {
                 }}
               >
                 <div className="flex items-center justify-center gap-2 overflow-hidden px-2 whitespace-nowrap">
-                  <Cog className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+                  <Import className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
                   <AnimatePresence initial={false}>
                     {hoveredBtn === "import" && (
                       <motion.span

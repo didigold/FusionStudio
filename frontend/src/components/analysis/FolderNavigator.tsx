@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Folder, File, CheckSquare, LayoutGrid, Locate, LocateOff, FileChartColumnIncreasing, FolderRoot } from 'lucide-react';
+import { Folder, File, CheckSquare, LayoutGrid, Locate, LocateOff, FileChartColumnIncreasing, FolderRoot, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +122,12 @@ export function FolderNavigator({
       setCurrentPath([]);
     } else {
       setCurrentPath(prev => prev.slice(0, index + 1));
+    }
+  };
+
+  const goBack = () => {
+    if (currentPath.length > 0) {
+      setCurrentPath(prev => prev.slice(0, -1));
     }
   };
 
@@ -262,18 +268,15 @@ export function FolderNavigator({
   };
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
+    <div className="flex-1 overflow-hidden flex flex-col relative">
       <div className="p-4 border-b border-white/5 bg-surface-2/30 flex flex-col gap-4">
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-2">
               <LayoutGrid className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold tracking-tight text-foreground">Recordings</span>
+              <span className="text-sm font-bold tracking-tight text-foreground">
+                {currentPath.length > 0 ? `Recordings / ${currentPath[currentPath.length - 1]}` : "Recordings"}
+              </span>
            </div>
-        </div>
-        
-        {/* Breadcrumb Navigation */}
-        <div className="bg-background/40 p-2.5 rounded-xl border border-white/5 overflow-hidden">
-          {renderBreadcrumbs()}
         </div>
 
         {/* Radio Selection Group */}
@@ -406,6 +409,28 @@ export function FolderNavigator({
           </div>
         </div>
       </ScrollArea>
+
+      {/* Floating Back Button */}
+      <AnimatePresence>
+        {currentPath.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute bottom-[54px] left-1/2 -translate-x-1/2 z-20"
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goBack}
+              className="bg-popover/90 backdrop-blur-md border border-border text-foreground hover:bg-accent hover:text-foreground font-bold text-xs py-1.5 px-4 rounded-full shadow-lg flex items-center gap-1.5 transition-all active:scale-95"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between shrink-0">
          <div className="flex items-center gap-2">

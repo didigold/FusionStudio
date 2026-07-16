@@ -1219,7 +1219,6 @@ async def gaze_generate(req: GazeGenerateRequest):
                         break
                     
                     base_name = os.path.splitext(os.path.basename(file_path))[0]
-                    on_progress(f"Processing ({idx+1}/{total_files}): {base_name}...")
                     asyncio.run_coroutine_threadsafe(
                         manager_reporting.broadcast({
                             "type": "progress_update",

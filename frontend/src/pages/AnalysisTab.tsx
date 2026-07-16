@@ -544,7 +544,7 @@ export default function AnalysisTab() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="w-6 h-6 hover:bg-primary/10 hover:text-primary transition-colors"
+                            className="w-6 h-6 hover:bg-primary/10 hover:text-primary transition-colors border-0 border-transparent shadow-none"
                             onClick={toggleExpand}
                             title={isAllExpanded ? "Collapse All" : "Expand All"}
                           >
