@@ -534,38 +534,32 @@ export function MisuseTimeTab() {
     return idx !== -1 ? norm.substring(0, idx) : '';
   };
 
-  const scenarioCases = useMemo(() => {
-    if (!targetFile) return [];
-    const currentParent = getParentDir(targetFile);
-    return subjectCases.filter(c => getParentDir(c) === currentParent);
-  }, [targetFile, subjectCases]);
-
   const findCaseIndex = useCallback((file: string | null) => {
     if (!file) return -1;
     const norm = file.replace(/_tracking\.mf4$/i, '.mf4').replace(/\\/g, '/');
-    return scenarioCases.findIndex(c => c.replace(/\\/g, '/') === norm);
-  }, [scenarioCases]);
+    return subjectCases.findIndex(c => c.replace(/\\/g, '/') === norm);
+  }, [subjectCases]);
 
   const goToPrevCase = useCallback(() => {
     const idx = findCaseIndex(targetFile);
     if (idx > 0) {
-      setAnalysisSelectedFile(scenarioCases[idx - 1].replace(/_tracking\.mf4$/i, '.mf4'));
+      setAnalysisSelectedFile(subjectCases[idx - 1].replace(/_tracking\.mf4$/i, '.mf4'));
     }
-  }, [findCaseIndex, targetFile, scenarioCases, setAnalysisSelectedFile]);
+  }, [findCaseIndex, targetFile, subjectCases, setAnalysisSelectedFile]);
 
   const goToNextCase = useCallback(() => {
     const idx = findCaseIndex(targetFile);
-    if (idx < scenarioCases.length - 1) {
-      setAnalysisSelectedFile(scenarioCases[idx + 1].replace(/_tracking\.mf4$/i, '.mf4'));
+    if (idx < subjectCases.length - 1) {
+      setAnalysisSelectedFile(subjectCases[idx + 1].replace(/_tracking\.mf4$/i, '.mf4'));
     }
-  }, [findCaseIndex, targetFile, scenarioCases, setAnalysisSelectedFile]);
+  }, [findCaseIndex, targetFile, subjectCases, setAnalysisSelectedFile]);
 
   const currentCaseIdx = findCaseIndex(targetFile);
   const prevCaseName = currentCaseIdx > 0
-    ? getOmScenarioName(scenarioCases[currentCaseIdx - 1])
+    ? getOmScenarioName(subjectCases[currentCaseIdx - 1])
     : null;
-  const nextCaseName = currentCaseIdx < scenarioCases.length - 1
-    ? getOmScenarioName(scenarioCases[currentCaseIdx + 1])
+  const nextCaseName = currentCaseIdx < subjectCases.length - 1
+    ? getOmScenarioName(subjectCases[currentCaseIdx + 1])
     : null;
 
   const [confirmClearAll, setConfirmClearAll] = useState(false);
@@ -931,7 +925,7 @@ export function MisuseTimeTab() {
                                     <ArrowLeft className="w-3 h-3 text-muted-foreground" /> Previous
                                     <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">⇧+Tab</DropdownMenuShortcut>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-sm" disabled={currentCaseIdx >= scenarioCases.length - 1} onClick={goToNextCase} title={nextCaseName ?? ''}>
+                                <DropdownMenuItem className="text-sm" disabled={currentCaseIdx >= subjectCases.length - 1} onClick={goToNextCase} title={nextCaseName ?? ''}>
                                     <ArrowRight className="w-3 h-3 text-muted-foreground" /> Next
                                     <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Tab</DropdownMenuShortcut>
                                 </DropdownMenuItem>

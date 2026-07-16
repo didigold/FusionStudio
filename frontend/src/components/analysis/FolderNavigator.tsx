@@ -88,9 +88,8 @@ export function FolderNavigator({
       const normSelected = normalizePath(selectedPath);
       if (normSelected !== (lastNavigatedPath.current ? normalizePath(lastNavigatedPath.current) : null)) {
         const foundPath = findPathToNode(results, selectedPath);
-        if (foundPath && foundPath.length > 0) {
-          // Navigate to the parent folder so the case folder is visible as an item
-          setCurrentPath(foundPath.slice(0, -1));
+        if (foundPath) {
+          setCurrentPath(foundPath);
           lastNavigatedPath.current = selectedPath;
         }
       }
