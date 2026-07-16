@@ -146,6 +146,7 @@ export function MisuseLogicTab() {
     setReportCameraLeft,
     reportCameraRight,
     setReportCameraRight,
+    cameraFlips,
 
     // Store states
     protocol,
@@ -1042,7 +1043,8 @@ export function MisuseLogicTab() {
         source_dir: analysisSourcePath,
         report_camera_settings: {
           left: reportCameraLeft,
-          right: reportCameraRight
+          right: reportCameraRight,
+          flips: cameraFlips
         }
       });
 
@@ -1135,7 +1137,8 @@ export function MisuseLogicTab() {
         source_dir: analysisSourcePath,
         report_camera_settings: {
           left: reportCameraLeft,
-          right: reportCameraRight
+          right: reportCameraRight,
+          flips: cameraFlips
         }
       });
     } catch (err) {

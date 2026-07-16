@@ -290,6 +290,8 @@ interface AppState {
   setReportCameraLeft: (c: string) => void
   reportCameraRight: string
   setReportCameraRight: (c: string) => void
+  cameraFlips: Record<string, { horizontal: boolean; vertical: boolean }>
+  toggleCameraFlip: (camera: string, axis: 'horizontal' | 'vertical') => void
   analysisSelectedCamera: number | string
   setAnalysisSelectedCamera: (c: number | string) => void
   analysisChannels: any[]
@@ -642,6 +644,20 @@ export const useAppStore = create<AppState>((set) => ({
   setReportCameraLeft: (c) => set({ reportCameraLeft: c }),
   reportCameraRight: '',
   setReportCameraRight: (c) => set({ reportCameraRight: c }),
+  cameraFlips: {},
+  toggleCameraFlip: (camera: string, axis: 'horizontal' | 'vertical') => set((state) => {
+    const current = state.cameraFlips[camera] || { horizontal: false, vertical: false };
+    const next = {
+      ...current,
+      [axis]: !current[axis]
+    };
+    return {
+      cameraFlips: {
+        ...state.cameraFlips,
+        [camera]: next
+      }
+    };
+  }),
   analysisSelectedCamera: 1,
   setAnalysisSelectedCamera: (c) => set({ analysisSelectedCamera: c }),
   analysisChannels: [],

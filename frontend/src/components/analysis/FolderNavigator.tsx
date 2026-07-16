@@ -321,12 +321,6 @@ export function FolderNavigator({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <File className={cn("w-5 h-5 shrink-0", isSelected ? "text-primary" : "text-primary/60 group-hover:text-primary")} />
-                        <div onClick={(e) => { e.stopPropagation(); onToggleCheck(node.path); }}>
-                          <Checkbox 
-                            checked={isChecked} 
-                            className="w-4 h-4 border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
-                          />
-                        </div>
                         <div className="flex gap-1 items-center">
                           <Badge 
                             key={`marks-${node.has_marks}`}
@@ -344,6 +338,12 @@ export function FolderNavigator({
                           >
                             {node.has_report ? <FileChartColumnIncreasing className="w-3.5 h-3.5" /> : <File className="w-3.5 h-3.5" />}
                           </Badge>
+                        </div>
+                        <div onClick={(e) => { e.stopPropagation(); onToggleCheck(node.path); }}>
+                          <Checkbox 
+                            checked={isChecked} 
+                            className="w-4 h-4 border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary" 
+                          />
                         </div>
                       </div>
                       <span className={cn(

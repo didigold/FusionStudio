@@ -641,6 +641,24 @@ class OMReportBuilder:
                 
                 img = Image.fromarray(frame)
                 
+                # Check if the camera has been flipped
+                flips = self.config.get('report_camera_settings', {}).get('flips', {})
+                camera_key = None
+                if video_path:
+                    import os
+                    import re
+                    filename = os.path.basename(video_path)
+                    m = re.search(r'_(?:cam|CAM)_?([a-zA-Z0-9]+)\.avi$', filename, re.I)
+                    if m:
+                        camera_key = m.group(1)
+                
+                if camera_key and camera_key in flips:
+                    cfg = flips[camera_key]
+                    if cfg.get('horizontal'):
+                        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+                    if cfg.get('vertical'):
+                        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+                
                 # Target physical aspect ratio of the image area (which is the bottom 88% of the frame)
                 pos = ax.get_position()
                 W_in = pos.width * self.A4_WIDTH

@@ -18,7 +18,9 @@ import {
   Sparkles,
   MapPin,
   MousePointerClick,
-  ArrowLeftRight
+  ArrowLeftRight,
+  FlipHorizontal2,
+  FlipVertical2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -71,6 +73,8 @@ export function MisuseTimeTab() {
     setAnalysisSelectedCamera,
     analysisAvailableCameras,
     analysisSourcePath,
+    cameraFlips,
+    toggleCameraFlip,
   } = useAppStore();
 
   const [cameraLeft, setCameraLeft] = useState<string | number>('');
@@ -892,6 +896,14 @@ export function MisuseTimeTab() {
     return () => clearInterval(timer);
   }, [currentTime]);
 
+  const flipLeft = cameraLeft ? (cameraFlips[String(cameraLeft)] || { horizontal: false, vertical: false }) : { horizontal: false, vertical: false };
+  const scaleXLeft = flipLeft.horizontal ? -1 : 1;
+  const scaleYLeft = flipLeft.vertical ? -1 : 1;
+
+  const flipRight = cameraRight ? (cameraFlips[String(cameraRight)] || { horizontal: false, vertical: false }) : { horizontal: false, vertical: false };
+  const scaleXRight = flipRight.horizontal ? -1 : 1;
+  const scaleYRight = flipRight.vertical ? -1 : 1;
+
   return (
     <div className="flex flex-col animate-in fade-in duration-500 h-full overflow-hidden">
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
@@ -1047,7 +1059,11 @@ export function MisuseTimeTab() {
                                   muted
                                   loop
                                   playsInline
-                                  className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[60px] scale-125 pointer-events-none transition-opacity duration-500"
+                                  className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[60px] pointer-events-none transition-opacity duration-500"
+                                  style={{
+                                      transform: `scale(${1.25 * scaleXLeft}, ${1.25 * scaleYLeft})`,
+                                      transformOrigin: 'center center'
+                                  }}
                               />
                               )}
                               <video 
@@ -1055,7 +1071,7 @@ export function MisuseTimeTab() {
                                   src={videoUrlLeft} 
                                   className="w-full h-full object-contain relative z-10 transition-transform duration-200"
                                   style={{ 
-                                      transform: `translate(${videoPanLeft.x}px, ${videoPanLeft.y}px) scale(${videoZoomLeft})`, 
+                                      transform: `translate(${videoPanLeft.x}px, ${videoPanLeft.y}px) scale(${videoZoomLeft * scaleXLeft}, ${videoZoomLeft * scaleYLeft})`, 
                                       transformOrigin: 'center center' 
                                   }}
                                   onTimeUpdate={handleLeftTimeUpdate}
@@ -1127,7 +1143,7 @@ export function MisuseTimeTab() {
                                 </Button>
                             </DropdownMenuTrigger>
                             {targetFile && (
-                                <DropdownMenuContent align="end" className="w-40 bg-popover border-border text-popover-foreground p-1 shadow-md">
+                                <DropdownMenuContent align="end" className="w-48 bg-popover border-border text-popover-foreground p-1 shadow-md">
                                     {(analysisAvailableCameras.length > 0 ? analysisAvailableCameras : []).map(cam => (
                                         <DropdownMenuItem 
                                             key={cam} 
@@ -1141,6 +1157,33 @@ export function MisuseTimeTab() {
                                             {cameraLeft === cam && <span className="text-sm font-bold">✓</span>}
                                         </DropdownMenuItem>
                                     ))}
+                                    <DropdownMenuSeparator className="bg-border/50" />
+                                    <DropdownMenuItem
+                                        className="text-sm font-bold cursor-pointer rounded-lg px-2 py-1.5 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex items-center gap-2"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (cameraLeft) {
+                                                toggleCameraFlip(String(cameraLeft), 'horizontal');
+                                            }
+                                        }}
+                                    >
+                                        <FlipHorizontal2 className={cn("w-3.5 h-3.5", cameraLeft && cameraFlips[String(cameraLeft)]?.horizontal && "text-primary")} />
+                                        <span>Flip Horizontally</span>
+                                        {cameraLeft && cameraFlips[String(cameraLeft)]?.horizontal && <span className="text-xs font-normal text-muted-foreground ml-auto">On</span>}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="text-sm font-bold cursor-pointer rounded-lg px-2 py-1.5 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex items-center gap-2"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (cameraLeft) {
+                                                toggleCameraFlip(String(cameraLeft), 'vertical');
+                                            }
+                                        }}
+                                    >
+                                        <FlipVertical2 className={cn("w-3.5 h-3.5", cameraLeft && cameraFlips[String(cameraLeft)]?.vertical && "text-primary")} />
+                                        <span>Flip Vertically</span>
+                                        {cameraLeft && cameraFlips[String(cameraLeft)]?.vertical && <span className="text-xs font-normal text-muted-foreground ml-auto">On</span>}
+                                    </DropdownMenuItem>
                                 </DropdownMenuContent>
                             )}
                         </DropdownMenu>
@@ -1240,7 +1283,11 @@ export function MisuseTimeTab() {
                                   muted
                                   loop
                                   playsInline
-                                  className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[60px] scale-125 pointer-events-none transition-opacity duration-500"
+                                  className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[60px] pointer-events-none transition-opacity duration-500"
+                                  style={{
+                                      transform: `scale(${1.25 * scaleXRight}, ${1.25 * scaleYRight})`,
+                                      transformOrigin: 'center center'
+                                  }}
                               />
                               )}
                               <video 
@@ -1248,7 +1295,7 @@ export function MisuseTimeTab() {
                                   src={videoUrlRight} 
                                   className="w-full h-full object-contain relative z-10 transition-transform duration-200"
                                   style={{ 
-                                      transform: `translate(${videoPanRight.x}px, ${videoPanRight.y}px) scale(${videoZoomRight})`, 
+                                      transform: `translate(${videoPanRight.x}px, ${videoPanRight.y}px) scale(${videoZoomRight * scaleXRight}, ${videoZoomRight * scaleYRight})`, 
                                       transformOrigin: 'center center' 
                                   }}
                                   onTimeUpdate={handleRightTimeUpdate}
@@ -1321,7 +1368,7 @@ export function MisuseTimeTab() {
                                 </Button>
                             </DropdownMenuTrigger>
                             {targetFile && (
-                                <DropdownMenuContent align="end" className="w-40 bg-popover border-border text-popover-foreground p-1 shadow-md">
+                                <DropdownMenuContent align="end" className="w-48 bg-popover border-border text-popover-foreground p-1 shadow-md">
                                     {(analysisAvailableCameras.length > 0 ? analysisAvailableCameras : []).map(cam => (
                                         <DropdownMenuItem 
                                             key={cam} 
@@ -1335,6 +1382,33 @@ export function MisuseTimeTab() {
                                             {cameraRight === cam && <span className="text-sm font-bold">✓</span>}
                                         </DropdownMenuItem>
                                     ))}
+                                    <DropdownMenuSeparator className="bg-border/50" />
+                                    <DropdownMenuItem
+                                        className="text-sm font-bold cursor-pointer rounded-lg px-2 py-1.5 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex items-center gap-2"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (cameraRight) {
+                                                toggleCameraFlip(String(cameraRight), 'horizontal');
+                                            }
+                                        }}
+                                    >
+                                        <FlipHorizontal2 className={cn("w-3.5 h-3.5", cameraRight && cameraFlips[String(cameraRight)]?.horizontal && "text-primary")} />
+                                        <span>Flip Horizontally</span>
+                                        {cameraRight && cameraFlips[String(cameraRight)]?.horizontal && <span className="text-xs font-normal text-muted-foreground ml-auto">On</span>}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="text-sm font-bold cursor-pointer rounded-lg px-2 py-1.5 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex items-center gap-2"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            if (cameraRight) {
+                                                toggleCameraFlip(String(cameraRight), 'vertical');
+                                            }
+                                        }}
+                                    >
+                                        <FlipVertical2 className={cn("w-3.5 h-3.5", cameraRight && cameraFlips[String(cameraRight)]?.vertical && "text-primary")} />
+                                        <span>Flip Vertically</span>
+                                        {cameraRight && cameraFlips[String(cameraRight)]?.vertical && <span className="text-xs font-normal text-muted-foreground ml-auto">On</span>}
+                                    </DropdownMenuItem>
                                 </DropdownMenuContent>
                             )}
                         </DropdownMenu>
@@ -1618,7 +1692,7 @@ export function MisuseTimeTab() {
           <motion.div
             animate={isErrorShaking ? { x: [-8, 8, -6, 6, -3, 3, 0] } : {}}
             transition={{ duration: 0.4 }}
-            className={cn("flex flex-col rounded-2xl overflow-hidden shadow-2xl border text-white w-full",
+            className={cn("flex flex-col rounded-3xl overflow-hidden shadow-2xl border text-white w-full",
               (isInitialPhase && activeMarkerType === 'warning') ? "border-amber-500/20" : "border-red-500/20"
             )}
           >
