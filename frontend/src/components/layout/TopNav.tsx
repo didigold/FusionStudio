@@ -8,12 +8,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useAppStore } from "@/store/useAppStore";
 import { FolderBrowser } from "@/components/analysis/FolderBrowser";
 import {
@@ -100,7 +94,7 @@ export function TopNav() {
     confirmPromptedPath,
   } = useAppStore();
 
-  const { toggleTheme, isDark, getThemeStyle } = useTheme();
+  const { getThemeStyle } = useTheme();
 
 
 
@@ -359,14 +353,7 @@ export function TopNav() {
     }
   };
 
-  const handleFolderSelect = (path: string) => {
-    if (pendingConfig) {
-      confirmPromptedPath(path);
-    } else {
-      setAnalysisSourcePath(path);
-      triggerScanForPath(path);
-    }
-  };
+
 
   const handleClearPath = () => {
     setAnalysisSourcePath("");
@@ -741,9 +728,9 @@ export function TopNav() {
                 onClick={() =>
                   document.getElementById("global-import-config-input")?.click()
                 }
-                className="h-full flex items-center justify-center text-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 outline-none select-none border-r border-border/40 hover-spin-fast"
+                className="h-full flex items-center justify-center text-foreground hover:bg-[var(--sidebar-hover)] hover:text-foreground transition-colors shrink-0 outline-none select-none border-r border-border/40 hover-spin-fast group"
                 animate={{
-                  width: hoveredBtn === "import" ? "150px" : "38px",
+                  width: hoveredBtn === "import" ? "160px" : "38px",
                 }}
                 transition={{
                   type: "spring",
@@ -752,7 +739,7 @@ export function TopNav() {
                 }}
               >
                 <div className="flex items-center justify-center gap-2 overflow-hidden px-2 whitespace-nowrap">
-                  <Cog className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <Cog className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
                   <AnimatePresence initial={false}>
                     {hoveredBtn === "import" && (
                       <motion.span
@@ -760,7 +747,7 @@ export function TopNav() {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
                         transition={{ duration: 0.15 }}
-                        className="text-xs font-bold text-muted-foreground hover:text-foreground shrink-0"
+                        className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
                       >
                         Import settings
                       </motion.span>
@@ -791,9 +778,9 @@ export function TopNav() {
                 onMouseEnter={() => setHoveredBtn("save")}
                 onMouseLeave={() => setHoveredBtn(null)}
                 onClick={exportConfig}
-                className="h-full flex items-center justify-center text-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 outline-none select-none hover-bounce-subtle"
+                className="h-full flex items-center justify-center text-foreground hover:bg-[var(--sidebar-hover)] hover:text-foreground transition-colors shrink-0 outline-none select-none hover-bounce-subtle group"
                 animate={{
-                  width: hoveredBtn === "save" ? "135px" : "38px",
+                  width: hoveredBtn === "save" ? "145px" : "38px",
                 }}
                 transition={{
                   type: "spring",
@@ -802,7 +789,7 @@ export function TopNav() {
                 }}
               >
                 <div className="flex items-center justify-center gap-2 overflow-hidden px-2 whitespace-nowrap">
-                  <Save className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <Save className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
                   <AnimatePresence initial={false}>
                     {hoveredBtn === "save" && (
                       <motion.span
@@ -810,7 +797,7 @@ export function TopNav() {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -10 }}
                         transition={{ duration: 0.15 }}
-                        className="text-xs font-bold text-muted-foreground hover:text-foreground shrink-0"
+                        className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
                       >
                         Save settings
                       </motion.span>

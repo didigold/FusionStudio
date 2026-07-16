@@ -28,12 +28,27 @@ def find_inno_compiler():
             
     return None
 
+import re
+
+def get_app_version(project_root):
+    try:
+        config_path = os.path.join(project_root, "backend", "config", "version.py")
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                match = re.search(r'APP_VERSION\s*=\s*["\']([^"\']+)["\']', content)
+                if match:
+                    return match.group(1)
+    except Exception as e:
+        print(f"Warning: could not read version from version.py: {e}")
+    return "1.0"
+
 def build():
     # Get absolute path to project root
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     
-    # Current version of the application (keep in sync with updates)
-    app_version = "1.0"
+    # Current version of the application (dynamically loaded from version.py)
+    app_version = get_app_version(project_root)
     
     print("--- Cleaning Build Artifacts ---")
     for d in ["build", "dist"]:
@@ -120,6 +135,11 @@ def build():
         print("\n" + "="*50)
         print("--- Installer Compiled Successfully ---")
         print(f"Setup installer available at:\n{os.path.join(project_root, 'dist', 'FusionStudio_Setup.exe')}")
+        print("\n[PUBLISH INSTRUCTIONS]")
+        print("To publish this update on SharePoint so that the app's auto-updater detects it:")
+        print(f"1. Go to your SharePoint Tools directory.")
+        print(f"2. Create a folder named exactly: FusionStudio_{app_version}")
+        print(f"3. Copy 'FusionStudio_Setup.exe' into that new folder.")
         print("="*50)
     else:
         print("\n" + "="*50)
@@ -127,6 +147,9 @@ def build():
         print("[INFO] Inno Setup compiler (ISCC.exe) not found.")
         print("Standalone folder is compiled, but no setup installer was created.")
         print(f"Standalone application folder is available at:\n{os.path.join(project_root, 'dist', 'FusionStudio')}")
+        print("\n[PUBLISH INSTRUCTIONS]")
+        print("To make this a distributable version, install Inno Setup and rebuild, or compile manually.")
+        print("Once compiled, place the installer inside a folder named: FusionStudio_<Version> in the SharePoint Tools directory.")
         print("="*50)
 
 if __name__ == "__main__":
