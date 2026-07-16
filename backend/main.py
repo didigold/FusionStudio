@@ -49,6 +49,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from starlette.requests import Request
+from starlette.responses import Response
+
+@app.middleware("http")
+async def no_cache_html(request: Request, call_next):
+    response: Response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 app.include_router(fuse.router, prefix="/api/fuse")
 app.include_router(analysis.router, prefix="/api/analysis")
 app.include_router(classification.router, prefix="/api/classification")

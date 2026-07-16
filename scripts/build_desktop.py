@@ -156,6 +156,10 @@ def build():
         '--exclude-module=PySide6',
         '--exclude-module=PySide2',
         
+        # Exclude heavy ML libraries that are not used but get pulled by sklearn
+        '--exclude-module=torch',
+        '--exclude-module=jaxlib',
+        
         # Entrypoint script
         "run_desktop.py"
     ]

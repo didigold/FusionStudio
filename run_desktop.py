@@ -4,6 +4,7 @@ import socket
 import threading
 import uvicorn
 import webview
+from backend.config.version import APP_VERSION
 
 # Force UTF-8 environment encoding for stdout/stderr streams
 os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     
     # Create window (uses Edge Webview2 under the hood)
     window = webview.create_window(
-        title="FusionStudio",
+        title=f"FusionStudio v{APP_VERSION}",
         url=initial_url,
         width=1280,
         height=800,
@@ -131,6 +132,20 @@ if __name__ == "__main__":
 
     storage_path = os.path.abspath(storage_path)
     os.makedirs(storage_path, exist_ok=True)
+    
+    # Force clear the HTTP and Code cache to prevent loading old frontend bundles
+    # We DO NOT delete Local Storage or IndexedDB so user settings persist.
+    cache_dirs = [
+        os.path.join(storage_path, "EBWebView", "Default", "Cache"),
+        os.path.join(storage_path, "EBWebView", "Default", "Code Cache")
+    ]
+    import shutil
+    for cdir in cache_dirs:
+        if os.path.exists(cdir):
+            try:
+                shutil.rmtree(cdir, ignore_errors=True)
+            except Exception:
+                pass
 
     # Start webview loop (blocks until window is closed)
     # We must explicitly disable private_mode to enable disk-backed localStorage and cache.
