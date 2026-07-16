@@ -137,7 +137,7 @@ def build():
         print(f"Setup installer available at:\n{os.path.join(project_root, 'dist', 'FusionStudio_Setup.exe')}")
         print("\n[PUBLISH INSTRUCTIONS]")
         print("To publish this update on SharePoint so that the app's auto-updater detects it:")
-        print(f"1. Go to your SharePoint Tools directory.")
+        print(f"1. Go to your SharePoint 'Tools/FusionStudio' directory.")
         print(f"2. Create a folder named exactly: FusionStudio_{app_version}")
         print(f"3. Copy 'FusionStudio_Setup.exe' into that new folder.")
         print("="*50)
@@ -149,7 +149,7 @@ def build():
         print(f"Standalone application folder is available at:\n{os.path.join(project_root, 'dist', 'FusionStudio')}")
         print("\n[PUBLISH INSTRUCTIONS]")
         print("To make this a distributable version, install Inno Setup and rebuild, or compile manually.")
-        print("Once compiled, place the installer inside a folder named: FusionStudio_<Version> in the SharePoint Tools directory.")
+        print("Once compiled, place the installer inside a folder named: FusionStudio_<Version> in the 'SharePoint Tools/FusionStudio' directory.")
         print("="*50)
 
 if __name__ == "__main__":

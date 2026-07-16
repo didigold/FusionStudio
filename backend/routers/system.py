@@ -18,7 +18,8 @@ async def check_update():
         "IDIADA Group", 
         "Grp__ADASTesting_Electronic Chassis Control Systems - Documentos", 
         "Analysis", 
-        "Tools"
+        "Tools",
+        "FusionStudio"
     )
 
     update_available = False
