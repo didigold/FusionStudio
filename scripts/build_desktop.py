@@ -43,6 +43,31 @@ def get_app_version(project_root):
         print(f"Warning: could not read version from version.py: {e}")
     return "1.0"
 
+def bump_version(project_root, current_version):
+    """Increment the patch number in version.py for the next build.
+    
+    Format: X.YYY  ->  X.(YYY+1) zero-padded to 3 digits
+    Example: 1.024  ->  1.025
+    """
+    try:
+        parts = current_version.split(".")
+        major = parts[0]
+        patch = int(parts[1]) + 1
+        # Preserve zero-padding (3 digits: 001, 002 ... 023, 024 ...)
+        patch_str = str(patch).zfill(len(parts[1]))
+        next_version = f"{major}.{patch_str}"
+        
+        config_path = os.path.join(project_root, "backend", "config", "version.py")
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(f'APP_VERSION = "{next_version}"\n')
+        
+        print(f"  version.py updated: {current_version} -> {next_version}")
+        print(f"  Next build will compile version {next_version}.")
+        return next_version
+    except Exception as e:
+        print(f"Warning: could not auto-bump version: {e}")
+        return current_version
+
 def build():
     # Get absolute path to project root
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -50,14 +75,27 @@ def build():
     # Current version of the application (dynamically loaded from version.py)
     app_version = get_app_version(project_root)
     
+    print("="*50)
+    print(f"  FusionStudio Build Script")
+    print(f"  Building version: {app_version}")
+    print("="*50)
+    print("")
+    
     print("--- Cleaning Build Artifacts ---")
+    # Remove dist and build folders
     for d in ["build", "dist"]:
         path = os.path.join(project_root, d)
         if os.path.exists(path):
             shutil.rmtree(path, ignore_errors=True)
+    # Remove old spec file
     spec_path = os.path.join(project_root, "FusionStudio.spec")
     if os.path.exists(spec_path):
         os.remove(spec_path)
+    # Purge all __pycache__ dirs to ensure no stale Python bytecode is packaged
+    for root, dirs, files in os.walk(project_root):
+        for d in dirs:
+            if d == "__pycache__":
+                shutil.rmtree(os.path.join(root, d), ignore_errors=True)
     
     # 1. Build frontend
     print("--- Building Frontend ---")
@@ -141,6 +179,9 @@ def build():
         print(f"2. Create a folder named exactly: FusionStudio_{app_version}")
         print(f"3. Copy 'FusionStudio_Setup.exe' into that new folder.")
         print("="*50)
+        print("")
+        print("--- Auto-bumping version for next build ---")
+        bump_version(project_root, app_version)
     else:
         print("\n" + "="*50)
         print("--- Build Finished Successfully ---")
@@ -151,6 +192,9 @@ def build():
         print("To make this a distributable version, install Inno Setup and rebuild, or compile manually.")
         print("Once compiled, place the installer inside a folder named: FusionStudio_<Version> in the 'SharePoint Tools/FusionStudio' directory.")
         print("="*50)
+        print("")
+        print("--- Auto-bumping version for next build ---")
+        bump_version(project_root, app_version)
 
 if __name__ == "__main__":
     build()
