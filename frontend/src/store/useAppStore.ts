@@ -1164,7 +1164,10 @@ export const useAppStore = create<AppState>((set) => ({
           analysisTrack: typeof r.track === 'string' ? r.track : '',
           analysisEngineer: typeof r.engineer === 'string' ? r.engineer : '',
           analysisAnalyst: typeof r.analyst === 'string' ? r.analyst : '',
-          analysisEuroNcap: typeof r.ncap === 'boolean' ? r.ncap : false
+          analysisEuroNcap: typeof r.ncap === 'boolean' ? r.ncap : false,
+          reportCameraLeft: typeof r.camera_left === 'string' ? r.camera_left : '',
+          reportCameraRight: typeof r.camera_right === 'string' ? r.camera_right : '',
+          cameraFlips: r.camera_flips || {}
         }
       }
 
@@ -1247,6 +1250,16 @@ export const useAppStore = create<AppState>((set) => ({
       const validatedUnresponsiveCriteria = cleanUnresponsiveCriteria(parsed.unresponsive_criteria)
       const mergedUnresponsiveCriteria = { ...DEFAULT_UNRESPONSIVE_CRITERIA, ...validatedUnresponsiveCriteria }
 
+      const validatedMisuseCriteria: Record<string, MisusePhase[]> = {}
+      if (parsed.misuse_criteria && typeof parsed.misuse_criteria === 'object' && !Array.isArray(parsed.misuse_criteria)) {
+        for (const [catName, mc] of Object.entries(parsed.misuse_criteria)) {
+          if (Array.isArray(mc)) {
+            validatedMisuseCriteria[catName] = mc as MisusePhase[]
+          }
+        }
+      }
+      const mergedMisuseCriteria = { ...DEFAULT_MISUSE_CRITERIA, ...validatedMisuseCriteria }
+
       const validatedGaugeRules: Record<string, GaugeConfig> = {}
       if (parsed.gauge_rules && typeof parsed.gauge_rules === 'object' && !Array.isArray(parsed.gauge_rules)) {
         for (const [catName, gr] of Object.entries(parsed.gauge_rules)) {
@@ -1307,6 +1320,7 @@ export const useAppStore = create<AppState>((set) => ({
                 protocol: validatedProtocol,
                 passCriteria: mergedPassCriteria,
                 unresponsiveCriteria: mergedUnresponsiveCriteria,
+                misuseCriteria: mergedMisuseCriteria,
                 gaugeRules: mergedGaugeRules,
                 pendingConfig: parsed,
                 pendingConfigName: fileName,
@@ -1323,6 +1337,7 @@ export const useAppStore = create<AppState>((set) => ({
               protocol: validatedProtocol,
               passCriteria: mergedPassCriteria,
               unresponsiveCriteria: mergedUnresponsiveCriteria,
+              misuseCriteria: mergedMisuseCriteria,
               gaugeRules: mergedGaugeRules,
               pendingConfig: parsed,
               pendingConfigName: fileName,
@@ -1340,6 +1355,7 @@ export const useAppStore = create<AppState>((set) => ({
             protocol: validatedProtocol,
             passCriteria: mergedPassCriteria,
             unresponsiveCriteria: mergedUnresponsiveCriteria,
+            misuseCriteria: mergedMisuseCriteria,
             gaugeRules: mergedGaugeRules,
             pendingConfig: parsed,
             pendingConfigName: fileName,
@@ -1356,6 +1372,7 @@ export const useAppStore = create<AppState>((set) => ({
         protocol: validatedProtocol,
         passCriteria: mergedPassCriteria,
         unresponsiveCriteria: mergedUnresponsiveCriteria,
+        misuseCriteria: mergedMisuseCriteria,
         gaugeRules: mergedGaugeRules,
         gaugeRulesPath: validatedGaugeRulesPath,
         importedConfigName: fileName,
@@ -1457,7 +1474,10 @@ export const useAppStore = create<AppState>((set) => ({
               analysisTrack: typeof r.track === 'string' ? r.track : '',
               analysisEngineer: typeof r.engineer === 'string' ? r.engineer : '',
               analysisAnalyst: typeof r.analyst === 'string' ? r.analyst : '',
-              analysisEuroNcap: typeof r.ncap === 'boolean' ? r.ncap : false
+              analysisEuroNcap: typeof r.ncap === 'boolean' ? r.ncap : false,
+              reportCameraLeft: typeof r.camera_left === 'string' ? r.camera_left : '',
+              reportCameraRight: typeof r.camera_right === 'string' ? r.camera_right : '',
+              cameraFlips: r.camera_flips || {}
             }
           }
 
@@ -1475,6 +1495,7 @@ export const useAppStore = create<AppState>((set) => ({
             protocol: parsed.protocol || 'Euro NCAP',
             passCriteria: { ...DEFAULT_PASS_CRITERIA, ...(parsed.pass_criteria || {}) },
             unresponsiveCriteria: { ...DEFAULT_UNRESPONSIVE_CRITERIA, ...cleanUnresponsiveCriteria(parsed.unresponsive_criteria) },
+            misuseCriteria: { ...DEFAULT_MISUSE_CRITERIA, ...(parsed.misuse_criteria || {}) },
             gaugeRules: { ...DEFAULT_GAUGE_RULES, ...(parsed.gauge_rules || {}) },
             gaugeRulesPath: validatedGaugeRulesPath,
             importedConfigName: state.pendingConfigName || 'Imported Config',
@@ -1551,6 +1572,7 @@ export const useAppStore = create<AppState>((set) => ({
       categories: state.signalsConfig,
       pass_criteria: state.passCriteria,
       unresponsive_criteria: state.unresponsiveCriteria,
+      misuse_criteria: state.misuseCriteria,
       gauge_rules: state.gaugeRules,
       gauge_rules_path: state.gaugeRulesPath,
       report: {
@@ -1559,7 +1581,10 @@ export const useAppStore = create<AppState>((set) => ({
         track: state.analysisTrack,
         engineer: state.analysisEngineer,
         analyst: state.analysisAnalyst,
-        ncap: state.analysisEuroNcap
+        ncap: state.analysisEuroNcap,
+        camera_left: state.reportCameraLeft,
+        camera_right: state.reportCameraRight,
+        camera_flips: state.cameraFlips
       },
       micro: {
         min_freq: state.audioMinFreq,
@@ -1610,6 +1635,7 @@ export const useAppStore = create<AppState>((set) => ({
       signalsConfig: DEFAULT_SIGNAL_LISTS,
       passCriteria: DEFAULT_PASS_CRITERIA,
       unresponsiveCriteria: DEFAULT_UNRESPONSIVE_CRITERIA,
+      misuseCriteria: DEFAULT_MISUSE_CRITERIA,
       gaugeRules: DEFAULT_GAUGE_RULES,
       gaugeRulesPath: null,
       protocol: 'Euro NCAP',
