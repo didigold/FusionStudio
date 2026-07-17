@@ -107,6 +107,19 @@ class GAReportBuilder:
         self.signal_times = config.get('signal_times', {})
         self._ensure_all_signal_times()
         
+        # Calculate global max time across all signals to align X axes
+        self.max_time = 0.0
+        signals = config.get('signals', {})
+        for name, data in signals.items():
+            ts = data.get('timestamps', [])
+            if ts:
+                try:
+                    self.max_time = max(self.max_time, max(float(t) for t in ts))
+                except Exception:
+                    pass
+        if self.max_time <= 0.0:
+            self.max_time = 140.0
+        
         import matplotlib.pyplot as plt
         plt.rcParams['font.family'] = 'Calibri'
         plt.rcParams['font.sans-serif'] = ['Calibri', 'Arial', 'DejaVu Sans']
@@ -837,6 +850,8 @@ class GAReportBuilder:
              if self.config.get('show_thresholds', False) and is_nt and op and op != 'None' and 'Unresponsive' not in _category:
                  ax.axhline(y=tn, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
         ax.plot(tsn, sn, color=self.COLORS['primary'], linewidth=0.8)
+        if hasattr(self, 'max_time') and self.max_time > 0.0:
+            ax.set_xlim(0.0, self.max_time)
         if self.config.get('om_plot_show_marks'):
             marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if isinstance(t, (int, float))])
             if self.config.get('om_plot_show_shading'):

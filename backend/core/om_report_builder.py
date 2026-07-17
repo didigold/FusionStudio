@@ -107,9 +107,34 @@ class OMReportBuilder:
         self.signal_times = config.get('signal_times', {})
         self._ensure_all_signal_times()
         
+        # Calculate global max time across all signals to align X axes
+        self.max_time = 0.0
+        signals = config.get('signals', {})
+        for name, data in signals.items():
+            ts = data.get('timestamps', [])
+            if ts:
+                try:
+                    self.max_time = max(self.max_time, max(float(t) for t in ts))
+                except Exception:
+                    pass
+        if self.max_time <= 0.0:
+            self.max_time = 140.0
+        
         import matplotlib.pyplot as plt
-        plt.rcParams['font.family'] = 'Calibri'
-        plt.rcParams['font.sans-serif'] = ['Calibri', 'Arial', 'DejaVu Sans']
+        from matplotlib import font_manager
+        
+        # Load Sofia Sans fonts from assets if available
+        sofia_dir = resource_path('assets/fonts/SofiaSans')
+        if os.path.exists(sofia_dir):
+            try:
+                for f in os.listdir(sofia_dir):
+                    if f.endswith('.ttf'):
+                        font_manager.fontManager.addfont(os.path.join(sofia_dir, f))
+            except Exception as e:
+                print(f"Error loading Sofia Sans fonts: {e}")
+                
+        plt.rcParams['font.family'] = 'Sofia Sans'
+        plt.rcParams['font.sans-serif'] = ['Sofia Sans', 'Calibri', 'Arial', 'DejaVu Sans']
         
     def _ensure_all_signal_times(self):
         """Ensure signal_times is populated for all signals before any plotting begins."""
@@ -238,6 +263,72 @@ class OMReportBuilder:
         plt.close(self.fig)
         return os.path.abspath(output_path)
     
+    def _parse_path_info(self, path_str: str):
+        if not path_str:
+            return "Unknown", "Unknown", "Unknown"
+        import re
+        # Normalize separators
+        normalized = path_str.replace('\\', '/')
+        parts = [p.strip() for p in normalized.split('/') if p.strip()]
+        
+        driver = "Unknown"
+        scenario = "Unknown"
+        test_case = "Unknown"
+        
+        # Look for a part matching E\d+ or P\d+
+        driver_idx = -1
+        for idx, part in enumerate(parts):
+            if re.match(r'^[EP]\d+$', part, re.IGNORECASE):
+                driver = part
+                driver_idx = idx
+                break
+        
+        if driver == "Unknown":
+            # Check for starts with E or P followed by digits
+            for idx, part in enumerate(parts):
+                if re.match(r'^[EP]\d+', part, re.IGNORECASE):
+                    driver = part
+                    driver_idx = idx
+                    break
+                    
+        if driver_idx != -1:
+            # Scenario is the next folder
+            if driver_idx + 1 < len(parts) - 1:
+                scenario = parts[driver_idx + 1]
+                # Test Case is the folder after or filename if no other folder
+                remaining = parts[driver_idx + 2:]
+                if remaining:
+                    if len(remaining) > 1:
+                        test_case = remaining[0]
+                    else:
+                        test_case = os.path.splitext(remaining[-1])[0]
+            elif driver_idx + 1 == len(parts) - 1:
+                # Driver followed directly by filename
+                test_case = os.path.splitext(parts[driver_idx + 1])[0]
+        else:
+            # No driver folder found, parse from the end
+            if len(parts) >= 3:
+                driver = parts[-3]
+                scenario = parts[-2]
+                test_case = os.path.splitext(parts[-1])[0]
+            elif len(parts) == 2:
+                scenario = parts[-2]
+                test_case = os.path.splitext(parts[-1])[0]
+            elif len(parts) == 1:
+                test_case = os.path.splitext(parts[-1])[0]
+
+        # Clean names
+        scenario = re.sub(r'^[PE]\d+[-_]', '', scenario)  # Remove P01_ prefix
+        test_case = re.sub(r'^(CBR|OOP|OM|GA)_', '', test_case, flags=re.IGNORECASE)  # Remove CBR_ prefix
+        test_case = re.sub(r'_\d+$', '', test_case)  # Remove trailing numbers like _1, _2
+        
+        # Replace underscores with spaces and strip
+        driver = driver.replace('_', ' ').strip()
+        scenario = scenario.replace('_', ' ').strip()
+        test_case = test_case.replace('_', ' ').strip()
+        
+        return driver, scenario, test_case
+
     def _add_header(self):
         header_ax = self.fig.add_axes([self.MARGIN_X, 0.935, self.CONTENT_WIDTH, 0.05])
         header_ax.axis('off')
@@ -246,14 +337,32 @@ class OMReportBuilder:
         if os.path.exists(company_logo_path):
             self._add_logo(header_ax, company_logo_path, (0.0, 0.5), max_size=(0.045, 0.22))
         
-        # Use relative path if available, otherwise default protocol version
-        banner_text = self.config.get('relative_path')
-        if not banner_text:
-            banner_text = "euro-ncap-protocol-safe-driving-driver-engagement-v11"
-            
-        header_ax.text(0.5, 0.5, banner_text, 
-                      fontsize=9, color=self.COLORS['text_light'],
-                      ha='center', va='center', transform=header_ax.transAxes)
+        path_str = self.config.get('relative_path') or self.config.get('filename') or ""
+        driver, scenario, test_case = self._parse_path_info(path_str)
+        
+        header_ax.text(0.15, 0.76, f"Driver: {driver}", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='left', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.15, 0.48, f"Scenario: {scenario}", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='left', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.15, 0.20, f"Test Case: {test_case}", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='left', va='center', transform=header_ax.transAxes)
+        
+        vehicle = self.config.get('vehicle', '')
+        engineer = self.config.get('engineer', '')
+        track = self.config.get('track', '')
+        
+        header_ax.text(0.82, 0.76, f"Vehicle: {vehicle}" if vehicle else "", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='right', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.82, 0.48, f"Engineer: {engineer}" if engineer else "", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='right', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.82, 0.20, f"Track: {track}" if track else "", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='right', va='center', transform=header_ax.transAxes)
         
         oem_name = self.config.get('oem_name', '')
         if not oem_name:
@@ -278,7 +387,7 @@ class OMReportBuilder:
         title_ax.text(
             0.5, 0.5,
             "EURO NCAP - OCCUPANT MONITORING REPORT",
-            fontsize=14, fontweight='bold',
+            fontsize=15, fontweight='bold',
             color=self.COLORS['text'],
             ha='center', va='center',
             transform=title_ax.transAxes,
@@ -472,7 +581,7 @@ class OMReportBuilder:
             # Label — slightly bigger, bold white
             txt_r = R_TICKS_IN - 0.055
             ax.text(CX + txt_r * np.cos(a_rad), CY + txt_r * np.sin(a_rad),
-                    str(t), fontsize=8.5, color='#FFFFFF',
+                    str(t), fontsize=9.5, color='#FFFFFF',
                     ha='center', va='center', fontweight='bold', zorder=5)
 
         # 5. Glowing needle PNG — upscale 4× before rotating for sharpness
@@ -557,7 +666,7 @@ class OMReportBuilder:
 
         # 6. Value text centered on hub (above everything)
         from matplotlib.font_manager import FontProperties
-        font_path = resource_path('assets/Montserrat-ExtraBold.ttf')
+        font_path = resource_path('assets/fonts/SofiaSans/SofiaSans-ExtraBold.ttf')
         if os.path.exists(font_path):
             font_val = FontProperties(fname=font_path, size=21)
             font_unit = FontProperties(fname=font_path, size=12.5)
@@ -697,7 +806,7 @@ class OMReportBuilder:
                     extent[0] + 0.02,
                     extent[3] - 0.02,
                     f"T = {frame_time:.2f}s",
-                    fontsize=8,
+                    fontsize=9,
                     color=self.COLORS['text_white'],
                     ha='left',
                     va='top',
@@ -710,7 +819,7 @@ class OMReportBuilder:
         ax.text(
             0.5, 0.45,
             "No Video Frame",
-            fontsize=9,
+            fontsize=10,
             color=self.COLORS['text_light'],
             ha='center',
             va='center',
@@ -775,9 +884,10 @@ class OMReportBuilder:
             frame_ax.axis('off')
             self._draw_frame_with_header(frame_ax, "SIGNAL(S) ANALYSIS", header_height_ratio=0.08)
 
-            internal_padding_x = 0.04
-            available_plot_width = self.CONTENT_WIDTH - (2 * internal_padding_x)
-            plot_start_x = self.MARGIN_X + internal_padding_x
+            internal_padding_left = 0.05
+            internal_padding_right = 0.02
+            available_plot_width = self.CONTENT_WIDTH - internal_padding_left - internal_padding_right
+            plot_start_x = self.MARGIN_X + internal_padding_left
 
             if total_plots == 1:
                 n_rows = 1
@@ -804,7 +914,7 @@ class OMReportBuilder:
 
             plot_idx = 0
             for row_idx, n_cols in enumerate(rows_config):
-                plot_spacing = 0.06
+                plot_spacing = 0.03
                 row_width = available_plot_width - (n_cols - 1) * plot_spacing
                 col_width = row_width / n_cols
 
@@ -841,10 +951,10 @@ class OMReportBuilder:
     def _draw_driver_behaviour_plot(self, ax):
         import matplotlib.pyplot as plt
         ax.set_facecolor('white')
-        ax.set_title("Driver Behaviour", fontsize=8, fontweight='bold', color=self.COLORS['text'])
+        ax.set_title("Driver Behaviour", fontsize=9, fontweight='bold', color=self.COLORS['text'])
         marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if t is not None])
         if not marks:
-            ax.text(0.5, 0.5, "Post-Processing Required", ha='center', va='center', fontsize=8, color=self.COLORS['text_light'], style='italic')
+            ax.text(0.5, 0.5, "Post-Processing Required", ha='center', va='center', fontsize=9, color=self.COLORS['text_light'], style='italic')
         else:
             max_t = None
             for d in self.config.get('signals', {}).values():
@@ -860,7 +970,7 @@ class OMReportBuilder:
             ax.step(xs, ys, where='post', color=self.COLORS['primary'], linewidth=0.8)
             ax.set_ylim(-0.1, 1.1)
             ax.set_yticks([0, 1])
-            ax.set_yticklabels(['Troad', 'Taway'], fontsize=6, color=self.COLORS['text_light'])
+            ax.set_yticklabels(['Troad', 'Taway'], fontsize=7, color=self.COLORS['text_light'])
             psig = self.config.get('pass_signal_name')
             if psig:
                 pt = self.signal_times.get(psig)
@@ -880,7 +990,7 @@ class OMReportBuilder:
                     if _t is not None:
                         _clr = _phase_colors[_pi % len(_phase_colors)]
                         ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
-        ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
+        ax.set_xlabel("Time (s)", fontsize=7, color=self.COLORS['text_light'])
         ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
         ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
                        direction='in', color=self.COLORS['border_light'])
@@ -901,7 +1011,7 @@ class OMReportBuilder:
             try: tn, is_nt = float(thr), True
             except (ValueError, TypeError): is_nt = False
         ax.set_facecolor('white')
-        ax.set_title(dn, fontsize=8, fontweight='bold', color=self.COLORS['text'])
+        ax.set_title(dn, fontsize=9, fontweight='bold', color=self.COLORS['text'])
         if not ts or not smp:
             ax.text(0.5, 0.5, "No Data", ha='center', va='center'); ax.axis('off'); return
         vmap = None
@@ -926,7 +1036,7 @@ class OMReportBuilder:
                     b, a = signal.butter(4, [lo, hi], btype='band')
                     sn = signal.filtfilt(b, a, sn); suf = f" ({minf}-{maxf} Hz)"
                  except Exception: pass
-             ax.set_title(dn + suf, fontsize=8, fontweight='bold', color=self.COLORS['text'])
+             ax.set_title(dn + suf, fontsize=9, fontweight='bold', color=self.COLORS['text'])
              # Only draw horizontal threshold line for non-Unresponsive scenarios
              _category = self.config.get('target_category', '')
              if self.config.get('show_thresholds', False) and th > 0 and 'Unresponsive' not in _category:
@@ -937,6 +1047,8 @@ class OMReportBuilder:
              if self.config.get('show_thresholds', False) and is_nt and op and op != 'None' and 'Unresponsive' not in _category:
                  ax.axhline(y=tn, color=self.COLORS['fail'], linestyle='-', linewidth=0.6)
         ax.plot(tsn, sn, color=self.COLORS['primary'], linewidth=0.8)
+        if hasattr(self, 'max_time') and self.max_time > 0.0:
+            ax.set_xlim(0.0, self.max_time)
         if self.config.get('om_plot_show_marks'):
             marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if isinstance(t, (int, float))])
             if self.config.get('om_plot_show_shading'):
@@ -986,8 +1098,8 @@ class OMReportBuilder:
                 _dur = _sig_times.get(f'phase_{_pi}_duration')
                 if _t is not None and _dur is not None and _dur > 0:
                     ax.axvspan(_t, _t + _dur, color=self.COLORS.get('secondary', '#d93d04'), alpha=0.15)
-        ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
-        ax.set_ylabel(unt, fontsize=6, color=self.COLORS['text_light'])
+        ax.set_xlabel("Time (s)", fontsize=7, color=self.COLORS['text_light'])
+        ax.set_ylabel(unt, fontsize=7, color=self.COLORS['text_light'])
         if not is_ns and vmap:
             y_vals = list(vmap.values())
             raw_lbls = [(v.decode('utf-8') if isinstance(v, bytes) else str(v)) for v in vmap.keys()]
@@ -1005,9 +1117,9 @@ class OMReportBuilder:
             # Draw labels rotated 90° at two vertical offset levels to avoid overlap
             for i, (y, lbl) in enumerate(zip(y_vals, cleaned_lbls)):
                 # Alternate between two x columns: close and far from axis
-                x_offset = -0.02 - (0.07 * (i % 2))
+                x_offset = -0.015 - (0.035 * (i % 2))
                 ax.text(x_offset, y, lbl, transform=ax.get_yaxis_transform(),
-                        ha='center', va='center', fontsize=5, color=self.COLORS['text_light'],
+                        ha='center', va='center', fontsize=6, color=self.COLORS['text_light'],
                         rotation=90, rotation_mode='anchor')
         ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
                        direction='in', color=self.COLORS['border_light'])
@@ -1172,7 +1284,7 @@ class OMReportBuilder:
                     min_f = phase.get('min_freq', phase.get('frequency', 1000))
                     max_f = phase.get('max_freq', phase.get('frequency', 2000))
                     thresh = phase.get('threshold', 0.5)
-                    sig_desc = f"Audio ({min_f}-{max_f}Hz, ≥{thresh}dB)"
+                    sig_desc = f"Audio ({min_f}-{max_f}Hz, ≥{thresh})"
                 else:
                     raw_val = phase.get('value', 0)
                     val_str = str(raw_val) if raw_val is not None else ''
@@ -1251,8 +1363,8 @@ class OMReportBuilder:
                 t_color = (self.COLORS['primary'] if t is not None else self.COLORS['fail']) if enabled else '#C0C0C0'
                 
                 tax.plot([x, x], [0.48 + dy, 0.68 + dy], color=tick_color, lw=1.0)
-                tax.text(x, 0.74 + dy, milestones[i]['label'], fontsize=6.5, color=lbl_color, ha='center', va='bottom', fontweight='bold')
-                tax.text(x, 0.69 + dy, t_lbl, fontsize=6, color=t_color, ha='center', va='bottom', fontweight='semibold')
+                tax.text(x, 0.74 + dy, milestones[i]['label'], fontsize=7.5, color=lbl_color, ha='center', va='bottom', fontweight='bold')
+                tax.text(x, 0.69 + dy, t_lbl, fontsize=7, color=t_color, ha='center', va='bottom', fontweight='semibold')
                 
                 if i > 0:
                     y_offset = (0.38 + dy) - (0.08 * ((i - 1) % 2))
@@ -1261,7 +1373,7 @@ class OMReportBuilder:
                     
                     tax.annotate(milestones[i]['value'], xy=(x, 0.48 + dy), xytext=(x, y_offset),
                                  arrowprops=dict(arrowstyle="->", color=tick_color, lw=0.6, alpha=0.7),
-                                 fontsize=5, color=sig_lbl_color, ha='center', va='top', fontweight='bold',
+                                 fontsize=6, color=sig_lbl_color, ha='center', va='top', fontweight='bold',
                                  bbox=dict(facecolor=sig_bg_color, edgecolor='none', boxstyle='round,pad=0.2', alpha=1.0))
                     
                     # For misuse: show duration constraint evaluation under the badge
@@ -1278,10 +1390,10 @@ class OMReportBuilder:
                                 dur_ok, dur_lbl = _check_time_constraint(event_dur, duration_constraint, duration_unit)
                                 dur_stamp = "OK" if dur_ok else "FAIL"
                                 dur_color = self.COLORS['pass'] if dur_ok else self.COLORS['fail']
-                                tax.text(x, 0.32 + dy, dur_stamp, fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                                tax.text(x, 0.32 + dy, dur_stamp, fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
                                          bbox=dict(facecolor=dur_color, edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
                 else:
-                    tax.text(x, 0.38 + dy, milestones[i]['value'], fontsize=5, color=lbl_color, ha='center', va='top')
+                    tax.text(x, 0.38 + dy, milestones[i]['value'], fontsize=6, color=lbl_color, ha='center', va='top')
 
             for i in range(num_m - 1):
                 x_curr, x_next = x_coords[i], x_coords[i+1]
@@ -1345,17 +1457,17 @@ class OMReportBuilder:
                 
                 tax.annotate("", xy=(x_next, 0.46 + dy), xytext=(x_curr, 0.46 + dy),
                              arrowprops=dict(arrowstyle="<->", color=arrow_color, lw=0.7))
-                tax.text(mid_x, 0.48 + dy, limit_lbl, fontsize=5.5, color=text_color, ha='center', va='bottom', fontweight='semibold')
+                tax.text(mid_x, 0.48 + dy, limit_lbl, fontsize=6.5, color=text_color, ha='center', va='bottom', fontweight='semibold')
                 
                 if step_enabled:
                     if limit_lbl:
-                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=6.5, color=self.COLORS['primary'] if ok else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=7.5, color=self.COLORS['primary'] if ok else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
                         stamp_text = "OK" if ok else "FAIL"
                         stamp_color = self.COLORS['pass'] if ok else self.COLORS['fail']
-                        tax.text(mid_x, 0.58 + dy, stamp_text, fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
+                        tax.text(mid_x, 0.58 + dy, stamp_text, fontsize=6.5, color='white', ha='center', va='center', fontweight='bold',
                                  bbox=dict(facecolor=stamp_color, edgecolor='none', boxstyle='round,pad=0.22', alpha=1.0), zorder=10)
                     else:
-                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=6.5, color=self.COLORS['primary'], ha='center', va='top', fontweight='bold')
+                        tax.text(mid_x, 0.42 + dy, delta_lbl, fontsize=7.5, color=self.COLORS['primary'], ha='center', va='top', fontweight='bold')
 
             if not is_misuse:
                 if is_dtr:
@@ -1368,9 +1480,9 @@ class OMReportBuilder:
                         
                         tax.annotate("", xy=(x_coords[2], 0.22), xytext=(x_coords[0], 0.22),
                                      arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                        tax.text((x_coords[0] + x_coords[2])/2, 0.25, "6 - 8s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                        tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                        tax.text((x_coords[0] + x_coords[2])/2, 0.22, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.25, "6 - 8s", fontsize=6.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.17, lbl_m02, fontsize=7.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[2])/2, 0.22, "OK" if ok_m02 else "FAIL", fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
                                  bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
 
                     target_idx = 3 if num_m == 4 else 4
@@ -1388,9 +1500,9 @@ class OMReportBuilder:
                         
                         tax.annotate("", xy=(x_coords[target_idx], 0.10), xytext=(x_coords[0], 0.10),
                                      arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.13, target_limit_lbl, fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.05, lbl_end, fontsize=6.5, color=self.COLORS['primary'] if ok_end else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.10, "OK" if ok_end else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.13, target_limit_lbl, fontsize=6.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.05, lbl_end, fontsize=7.5, color=self.COLORS['primary'] if ok_end else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.10, "OK" if ok_end else "FAIL", fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
                                  bbox=dict(facecolor=self.COLORS['pass'] if ok_end else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
                 else:
                     target_idx = 2 if num_m > 2 else num_m - 1
@@ -1405,9 +1517,9 @@ class OMReportBuilder:
                         
                         tax.annotate("", xy=(x_coords[target_idx], 0.16), xytext=(x_coords[0], 0.16),
                                      arrowprops=dict(arrowstyle="<->", color=self.COLORS['text_light'], lw=0.7))
-                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.19, "≤ 12s", fontsize=5.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
-                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=6.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
-                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.16, "OK" if ok_m02 else "FAIL", fontsize=4.5, color='white', ha='center', va='center', fontweight='bold',
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.19, "≤ 12s", fontsize=6.5, color=self.COLORS['text_light'], ha='center', va='bottom', fontweight='semibold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.11, lbl_m02, fontsize=7.5, color=self.COLORS['primary'] if ok_m02 else self.COLORS['fail'], ha='center', va='top', fontweight='bold')
+                        tax.text((x_coords[0] + x_coords[target_idx])/2, 0.16, "OK" if ok_m02 else "FAIL", fontsize=5.5, color='white', ha='center', va='center', fontweight='bold',
                                  bbox=dict(facecolor=self.COLORS['pass'] if ok_m02 else self.COLORS['fail'], edgecolor='none', boxstyle='round,pad=0.15', alpha=1.0), zorder=10)
         except Exception as e:
             import traceback
@@ -1417,7 +1529,7 @@ class OMReportBuilder:
     def _add_footer(self):
         fax = self.fig.add_axes([self.MARGIN_X, 0.015, self.CONTENT_WIDTH, 0.04]); fax.axis('off')
         category = self.config.get('target_category', '')
-        test_date = self.config.get('test_date', datetime.now())
+        test_date = self.config.get('test_date') or datetime.now()
         if test_date.tzinfo is not None:
             offset = test_date.strftime('%z')
             if offset:
@@ -1429,11 +1541,43 @@ class OMReportBuilder:
         else:
             lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}"
         if self.config.get('filename'): lt += f" | File: {self.config.get('filename')}"
-        if self.config.get('vehicle'): lt += f" | Vehicle: {self.config.get('vehicle')}"
-        fax.text(0.0, 0.4, lt, fontsize=6, color=self.COLORS['text_light'], ha='left', va='center')
-        rt = f"Analyst: {self.config.get('analyst', '')} | Engineer: {self.config.get('engineer', '')}"
-        if self.config.get('track'): rt += f" | Track: {self.config.get('track', '')}"
-        fax.text(1.0, 0.4, rt, fontsize=6, color=self.COLORS['text_light'], ha='right', va='center')
+        if self.config.get('analyst'): lt += f" | Analyst: {self.config.get('analyst')}"
+        fax.text(0.0, 0.4, lt, fontsize=7, color=self.COLORS['text_light'], ha='left', va='center')
+        
+        try:
+            from backend.config.version import APP_VERSION
+            version_str = f"FusionStudio_{APP_VERSION}"
+        except Exception:
+            version_str = "FusionStudio_Unknown"
+            
+        logo_loaded = False
+        try:
+            from PIL import Image
+            import numpy as np
+            from matplotlib.offsetbox import HPacker, OffsetImage, TextArea, AnnotationBbox
+            
+            logo_path = resource_path('assets/icon.ico')
+            if os.path.exists(logo_path):
+                img = Image.open(logo_path).convert('RGBA')
+                img = img.resize((12, 12), Image.LANCZOS)
+                
+                imagebox = OffsetImage(np.array(img), zoom=1.0)
+                textbox = TextArea(version_str, textprops=dict(
+                    fontsize=7, 
+                    color=self.COLORS['text'], 
+                    fontweight='bold',
+                    fontfamily='Sofia Sans'
+                ))
+                packer = HPacker(children=[imagebox, textbox], align="center", pad=0, sep=4)
+                ab = AnnotationBbox(packer, (1.0, 0.4), xycoords='axes fraction', 
+                                    box_alignment=(1.0, 0.5), frameon=False)
+                fax.add_artist(ab)
+                logo_loaded = True
+        except Exception as e:
+            print(f"Error drawing app logo in footer: {e}")
+            
+        if not logo_loaded:
+            fax.text(1.0, 0.4, version_str, fontsize=7, color=self.COLORS['text'], ha='right', va='center', fontweight='bold')
 
     def _draw_frame_with_header(self, ax, title, header_height_ratio=0.15):
         import matplotlib.patches as patches
@@ -1455,6 +1599,10 @@ class OMReportBuilder:
         f = patches.PathPatch(rr_path, facecolor='white', edgecolor=self.COLORS['border'], linewidth=1.5, transform=ax.transAxes, clip_on=False)
         ax.add_patch(f)
         
+        # Target header height in inches for consistent visual banner size
+        target_header_height_in = 0.28
+        header_height_ratio = target_header_height_in / H_in
+        
         # Draw the header background rectangle
         hr = patches.Rectangle((0.0, 1.0 - header_height_ratio), 1.0, header_height_ratio, facecolor=self.COLORS['frame_header'], edgecolor='none', transform=ax.transAxes)
         # Clip the header background to the rounded rectangle shape
@@ -1466,7 +1614,7 @@ class OMReportBuilder:
         ax.add_patch(b)
         
         # Add the header title text
-        ax.text(0.5, 1.0 - header_height_ratio/2, title, fontsize=8, fontweight='bold', color=self.COLORS['primary'], ha='center', va='center', zorder=6, transform=ax.transAxes)
+        ax.text(0.5, 1.0 - header_height_ratio/2, title, fontsize=9, fontweight='bold', color=self.COLORS['primary'], ha='center', va='center', zorder=6, transform=ax.transAxes)
 
     def _add_logo(self, ax, image_path: str, position: tuple, max_size: tuple = (1.0, 1.0)):
         from PIL import Image

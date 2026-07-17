@@ -318,6 +318,11 @@ class FusionWorker:
                     mapa[f] = os.path.join(root, f)
         return mapa
 
+    def is_om_project(self, folder_path):
+        upper_path = folder_path.upper().replace('\\', '/')
+        return any(k in upper_path for k in ["/OM/", "OUT OF POSITION", "CORRECT SEATBELT ROUTING", "CORRECT BELT ROUTING", "STATURE DETECTION"])
+
+
     def buscar_videos(self, carpeta):
         mapa = []
         for root, _, files in os.walk(carpeta):
@@ -328,7 +333,44 @@ class FusionWorker:
                     mapa.append(os.path.join(root, f))
         return mapa
 
-    def get_names(self, tipo, num, test, ob):
+    def get_names(self, tipo, num, test, ob, is_om=False):
+        if is_om:
+            carpeta_tipo = "Occupant Monitoring"
+            
+            base_name = f"Unknown_OM_t{tipo}_n{num}"
+            if tipo == 11:
+                mapping = {
+                    1: "Change of Status Buckle Only",
+                    2: "Change of Status Completely Behind Back",
+                    3: "Change of Status Lap Belt Only",
+                    4: "Initial Phase Buckle Only",
+                    5: "Initial Phase Completely Behind Back",
+                    6: "Initial Phase Lap Belt Only"
+                }
+                if num in mapping:
+                    base_name = "CBR_" + mapping[num].replace(" ", "_")
+            elif tipo == 12:
+                mapping = {
+                    1: "15 minutes Warning Repetition Face on Facia",
+                    2: "15 minutes Warning Repetition Feet on Dashboard",
+                    3: "Change of Status Face on Facia 20cm",
+                    4: "Change of Status Face on Facia 25cm",
+                    5: "Change of Status Feet on Dashboard Inboard",
+                    6: "Change of Status Feet on Dashboard Center",
+                    7: "Change of Status Feet on Dashboard Outboard",
+                    8: "Initial Phase Face on Facia 20cm",
+                    9: "Initial Phase Face on Facia 25cm",
+                    10: "Initial Phase Feet on Dashboard Inboard",
+                    11: "Initial Phase Feet on Dashboard Center",
+                    12: "Initial Phase Feet on Dashboard Outboard"
+                }
+                if num in mapping:
+                    base_name = "OOP_" + mapping[num].replace(" ", "_")
+                
+            nombre = f"{base_name}_{test}.mf4"
+            return nombre, carpeta_tipo
+
+        # Legacy Gaze mapping
         carpeta_tipo = {1: "Custom", 2: "Distractions", 3: "Fatigue", 4: "Occlusions",
                         5: "Behaviour", 6: "Behaviour", 8: "ADDW low speed",
                         10: "ADDW high speed"}.get(tipo, "Unknown")
@@ -412,6 +454,7 @@ class FusionWorker:
         from asammdf import MDF
         generados = []
         mapa_satelites = self.buscar_satelites(ruta_origen)
+        is_om = self.is_om_project(ruta_origen)
         try:
             if progress_cb:
                 progress_cb(0.05)
@@ -420,12 +463,20 @@ class FusionWorker:
                     self._log(f"[{self._ts()}]       ⚠️ Skipped: Missing 'Distraction_type'. Likely a satellite.")
                     return []
 
+                master_start_dt = mdf.header.start_time.replace(tzinfo=None)
                 s_test = mdf.get("Distraction_test_number")
                 timestamps = s_test.timestamps
                 vals = s_test.samples
                 s_type = mdf.get("Distraction_type")
                 s_num = mdf.get("Distraction_number")
-                s_ob = mdf.get("Oclusion_or_Bahaviour")
+                
+                # Check both spelling variations of the DBC signal
+                if "Occlusion_or_Behaviour" in mdf:
+                    s_ob = mdf.get("Occlusion_or_Behaviour")
+                elif "Oclusion_or_Bahaviour" in mdf:
+                    s_ob = mdf.get("Oclusion_or_Bahaviour")
+                else:
+                    s_ob = None
 
             if progress_cb:
                 progress_cb(0.15)
@@ -440,16 +491,39 @@ class FusionWorker:
             inicios = inicios[:len(fines)]
 
             to_cut = []
+            sat_start_times = {}
             for i, (ini, fin) in enumerate(zip(inicios, fines)):
                 tipo = s_type.samples[ini]
                 num = s_num.samples[ini]
                 test = s_test.samples[ini]
-                ob = s_ob.samples[ini]
-                fname, folder = self.get_names(tipo, num, test, ob)
+                ob = s_ob.samples[ini] if s_ob is not None else 0
+                fname, folder = self.get_names(tipo, num, test, ob, is_om)
                 if fname not in mapa_satelites:
                     continue
-                path_temp = os.path.join(dir_temp, folder, fname)
                 ruta_sat = mapa_satelites[fname]
+                
+                # Check absolute time alignment to avoid merging from aborted/incorrect runs
+                if fname not in sat_start_times:
+                    try:
+                        with MDF(ruta_sat) as m_sat_temp:
+                            sat_start_times[fname] = m_sat_temp.header.start_time.replace(tzinfo=None)
+                    except Exception:
+                        sat_start_times[fname] = None
+                
+                sat_start_dt = sat_start_times[fname]
+                if sat_start_dt is not None:
+                    try:
+                        from datetime import timedelta
+                        t_start = timestamps[ini]
+                        trigger_start_abs = master_start_dt + timedelta(seconds=float(t_start))
+                        diff_seconds = abs((trigger_start_abs - sat_start_dt).total_seconds())
+                        if diff_seconds > 180.0:  # 3-minute threshold
+                            # Skip trigger segments from other runs (e.g. aborted runs)
+                            continue
+                    except Exception as e_sync:
+                        self._log(f"[{self._ts()}]       ⚠️ Sync check error for {fname}: {e_sync}")
+                
+                path_temp = os.path.join(dir_temp, folder, fname)
                 rel = os.path.relpath(ruta_sat, ruta_origen)
                 path_final = os.path.join(dir_final, rel)
 

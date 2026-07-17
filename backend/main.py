@@ -74,6 +74,19 @@ app.include_router(system.router, prefix="/api/system")
 async def health_check():
     return {"status": "ok", "service": "FusionStudio API"}
 
+
+from fastapi import WebSocket
+from backend.ws.manager import manager_system
+
+@app.websocket("/api/brain/ws/system")
+async def websocket_system(websocket: WebSocket):
+    await manager_system.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except Exception:
+        await manager_system.disconnect(websocket)
+
 import subprocess
 import json
 

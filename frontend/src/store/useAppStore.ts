@@ -510,19 +510,31 @@ export const useAppStore = create<AppState>((set) => ({
   signals: [],
   setSignals: (s) => set({ signals: s }),
   toggleSignal: (name) =>
-    set((s) => ({
-      signals: s.signals.map((sig) =>
+    set((s) => {
+      const updated = s.signals.map((sig) =>
         sig.name === name ? { ...sig, checked: !sig.checked } : sig
-      ),
-    })),
+      );
+      return {
+        signals: updated,
+        fuseSignalsCache: s.masterFile
+          ? { ...s.fuseSignalsCache, [s.masterFile]: updated }
+          : s.fuseSignalsCache,
+      };
+    }),
   setAllSignals: (checked) =>
-    set((s) => ({
-      signals: s.signals.map((sig) =>
+    set((s) => {
+      const updated = s.signals.map((sig) =>
         s.signalFilter && !sig.name.toLowerCase().includes(s.signalFilter.toLowerCase())
           ? sig
           : { ...sig, checked }
-      ),
-    })),
+      );
+      return {
+        signals: updated,
+        fuseSignalsCache: s.masterFile
+          ? { ...s.fuseSignalsCache, [s.masterFile]: updated }
+          : s.fuseSignalsCache,
+      };
+    }),
   masterFile: '',
   setMasterFile: (f) => set({ masterFile: f }),
 
