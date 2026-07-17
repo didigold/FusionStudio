@@ -1546,29 +1546,50 @@ class OMReportBuilder:
         
         try:
             from backend.config.version import APP_VERSION
-            version_str = f"FusionStudio_{APP_VERSION}"
+            version_str1 = "FusionStudio™"
+            version_str2 = f"build_{APP_VERSION}"
         except Exception:
-            version_str = "FusionStudio_Unknown"
+            version_str1 = "FusionStudio™"
+            version_str2 = "build_Unknown"
             
         logo_loaded = False
         try:
             from PIL import Image
             import numpy as np
-            from matplotlib.offsetbox import HPacker, OffsetImage, TextArea, AnnotationBbox
+            from matplotlib.offsetbox import HPacker, VPacker, OffsetImage, TextArea, AnnotationBbox
             
-            logo_path = resource_path('assets/icon.ico')
+            logo_path = resource_path('assets/apple-touch-icon.png')
             if os.path.exists(logo_path):
                 img = Image.open(logo_path).convert('RGBA')
-                img = img.resize((12, 12), Image.LANCZOS)
+                # Keep it at a clean 32x32 size for high res, zoom down to size
+                img = img.resize((32, 32), Image.LANCZOS)
                 
-                imagebox = OffsetImage(np.array(img), zoom=1.0)
-                textbox = TextArea(version_str, textprops=dict(
+                # Shift circle down by padding the top with transparent pixels
+                img_np = np.array(img)
+                padded_np = np.zeros((img_np.shape[0] + 4, img_np.shape[1], 4), dtype=img_np.dtype)
+                padded_np[4:, :, :] = img_np
+                
+                imagebox = OffsetImage(padded_np, zoom=0.25)
+                textbox1 = TextArea(version_str1, textprops=dict(
                     fontsize=7, 
                     color=self.COLORS['text'], 
                     fontweight='bold',
-                    fontfamily='Sofia Sans'
+                    fontfamily='Sofia Sans',
+                    ha='right',
+                    va='center'
                 ))
-                packer = HPacker(children=[imagebox, textbox], align="center", pad=0, sep=4)
+                row1 = HPacker(children=[imagebox, textbox1], align="center", pad=0, sep=4)
+                
+                textbox2 = TextArea(version_str2, textprops=dict(
+                    fontsize=6, 
+                    color=self.COLORS['text_light'], 
+                    fontweight='normal',
+                    fontfamily='Sofia Sans',
+                    ha='right',
+                    va='center'
+                ))
+                
+                packer = VPacker(children=[row1, textbox2], align="right", pad=0, sep=2)
                 ab = AnnotationBbox(packer, (1.0, 0.4), xycoords='axes fraction', 
                                     box_alignment=(1.0, 0.5), frameon=False)
                 fax.add_artist(ab)
@@ -1577,7 +1598,7 @@ class OMReportBuilder:
             print(f"Error drawing app logo in footer: {e}")
             
         if not logo_loaded:
-            fax.text(1.0, 0.4, version_str, fontsize=7, color=self.COLORS['text'], ha='right', va='center', fontweight='bold')
+            fax.text(1.0, 0.4, f"{version_str1}\n{version_str2}", fontsize=7, color=self.COLORS['text'], ha='right', va='center', fontweight='bold')
 
     def _draw_frame_with_header(self, ax, title, header_height_ratio=0.15):
         import matplotlib.patches as patches

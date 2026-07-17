@@ -6,6 +6,18 @@ import uvicorn
 import webview
 from backend.config.version import APP_VERSION
 
+# Enable High DPI support to ensure the app scales correctly on >100% resolution displays
+if sys.platform == "win32":
+    try:
+        import ctypes
+        # 2 = Process_Per_Monitor_DPI_Aware
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 # Force UTF-8 environment encoding for stdout/stderr streams
 os.environ["PYTHONIOENCODING"] = "utf-8"
 

@@ -927,26 +927,29 @@ function SidebarUserButton({
           </div>
 
           {/* Name & Chevron */}
-          <div
-            className={cn(
-              "flex items-center flex-1 min-w-0 gap-2 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap",
-              sidebarOpen
-                ? "opacity-100 max-w-[150px] ml-0"
-                : "opacity-0 max-w-0 ml-0 pointer-events-none"
+          <AnimatePresence>
+            {sidebarOpen && (
+              <motion.div
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "auto" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.15, ease: "easeInOut" }}
+                className="flex items-center flex-1 min-w-0 gap-2 overflow-hidden whitespace-nowrap"
+              >
+                <div className="flex flex-col min-w-0 flex-1 text-left gap-0.5">
+                  <span className="truncate font-bold text-foreground text-xs leading-none">
+                    {displayName}
+                  </span>
+                  {emailSubtext && (
+                    <span className="truncate text-[10px] text-muted-foreground font-normal normal-case leading-none">
+                      {emailSubtext}
+                    </span>
+                  )}
+                </div>
+                <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              </motion.div>
             )}
-          >
-            <div className="flex flex-col min-w-0 flex-1 text-left gap-0.5">
-              <span className="truncate font-bold text-foreground text-xs leading-none">
-                {displayName}
-              </span>
-              {emailSubtext && (
-                <span className="truncate text-[10px] text-muted-foreground font-normal normal-case leading-none">
-                  {emailSubtext}
-                </span>
-              )}
-            </div>
-            <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          </div>
+          </AnimatePresence>
         </button>
       </DropdownMenuTrigger>
 
