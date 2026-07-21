@@ -558,24 +558,25 @@ export function TopNav() {
               </div>
             </div>
 
-            {/* Dropdown Panel */}
-            <AnimatePresence>
-              {dropdownOpen && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ 
-                    height: { type: "spring", stiffness: 350, damping: 25 },
-                    opacity: { duration: 0.15 }
-                  }}
-                  className={cn(
-                    "absolute left-0 top-full w-full bg-surface-2/95 backdrop-blur-md border-x border-b border-t-0 rounded-b-xl shadow-2xl z-[100] text-foreground flex flex-col overflow-hidden origin-top",
-                    dropdownOpen ? "border-orange-500" : "border-border"
-                  )}
-                >
-                  <div className="flex flex-col w-full" style={{ maxHeight: '450px' }}>
-                    {/* Recent Projects Section */}
+            {/* Dropdown Panel — clipped by a wrapper that matches bar's bottom border-radius during collapse */}
+            <div
+              className="absolute left-0 top-full w-full overflow-hidden transition-[border-radius] duration-300"
+              style={{ borderRadius: dropdownOpen ? "0 0 12px 12px" : "0 0 8px 8px" }}
+            >
+              <AnimatePresence>
+                {dropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ 
+                      height: { type: "spring", stiffness: 350, damping: 25 },
+                      opacity: { duration: 0.15 }
+                    }}
+                    className="w-full bg-surface-2/95 backdrop-blur-md border-x border-b border-t-0 border-orange-500 rounded-b-xl shadow-2xl text-foreground flex flex-col overflow-hidden origin-top"
+                  >
+                    <div className="flex flex-col w-full" style={{ maxHeight: '450px' }}>
+                      {/* Recent Projects Section */}
                   <div className="shrink-0 flex flex-col">
                     <div className="px-4 py-2.5 text-sm font-bold text-foreground/80 select-none bg-surface-3/5">
                       Recent Projects
@@ -713,6 +714,7 @@ export function TopNav() {
               </motion.div>
               )}
             </AnimatePresence>
+          </div>
           </div>
         </div>
 

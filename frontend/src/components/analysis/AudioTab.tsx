@@ -44,7 +44,8 @@ function EditableCounter({
 
   const handleBlur = () => {
     setIsEditing(false);
-    let parsed = parseFloat(tempValue);
+    let normalized = tempValue.replace(',', '.');
+    let parsed = parseFloat(normalized);
     if (isNaN(parsed)) {
       parsed = value;
     }
@@ -64,14 +65,14 @@ function EditableCounter({
     <div className="relative w-28 h-12 flex items-center justify-center rounded-xl hover:bg-white/5 transition-colors">
       <input
         ref={inputRef}
-        type="number"
+        type="text"
+        inputMode={isDecimal ? "decimal" : "numeric"}
         value={isEditing ? tempValue : (isDecimal ? value.toFixed(3) : value.toString())}
         placeholder={isDecimal ? "0.000" : "0"}
         onChange={(e) => setTempValue(e.target.value)}
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        step={isDecimal ? 0.001 : 1}
         className={`w-full h-full text-center transition-all duration-150 tracking-tighter tabular-nums focus:outline-none rounded-xl font-[800] ${
           isEditing 
             ? 'bg-surface-3/80 text-foreground border border-primary/50 ring-2 ring-primary/20 opacity-100 z-10 shadow-inner' 
