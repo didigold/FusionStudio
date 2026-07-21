@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,16 +16,19 @@ function EditableCounter({
   onChange, 
   min, 
   max, 
-  isDecimal = false 
+  isDecimal = false,
+  label = "Value"
 }: { 
   value: number, 
   onChange: (v: number) => void, 
   min: number, 
   max: number, 
-  isDecimal?: boolean 
+  isDecimal?: boolean,
+  label?: string
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(isDecimal ? value.toFixed(3) : value.toString());
+  const [isShaking, setIsShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,6 +36,45 @@ function EditableCounter({
       setTempValue(isDecimal ? value.toFixed(3) : value.toString());
     }
   }, [value, isEditing, isDecimal]);
+
+  const getErrorMessage = (parsed: number) => {
+    if (isNaN(parsed)) return "Please enter a valid numeric value.";
+    if (label.toLowerCase().includes("minimum")) {
+      if (parsed >= max + 1) {
+        return `Minimum frequency (${parsed} Hz) cannot be greater than or equal to maximum frequency (${max + 1} Hz).`;
+      }
+      if (parsed < min) {
+        return `Minimum frequency must be at least ${min} Hz.`;
+      }
+    }
+    if (label.toLowerCase().includes("maximum")) {
+      if (parsed <= min - 1) {
+        return `Maximum frequency (${parsed} Hz) cannot be less than or equal to minimum frequency (${min - 1} Hz).`;
+      }
+      if (parsed > max) {
+        return `Maximum frequency cannot exceed ${max} Hz.`;
+      }
+    }
+    if (parsed < min || parsed > max) {
+      return `${label} must be between ${min} and ${max}.`;
+    }
+    return null;
+  };
+
+  const playErrorAndNotify = (errMsg: string) => {
+    setIsShaking(true);
+    setTimeout(() => setIsShaking(false), 450);
+
+    try {
+      const audio = new Audio('/sounds/caution.wav');
+      audio.volume = 0.5;
+      audio.play().catch(() => {});
+    } catch {}
+
+    toast.error("Invalid Value", {
+      description: errMsg,
+    });
+  };
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsEditing(true);
@@ -43,26 +86,56 @@ function EditableCounter({
   };
 
   const handleBlur = () => {
-    setIsEditing(false);
+    if (!isEditing) return;
     let normalized = tempValue.replace(',', '.');
     let parsed = parseFloat(normalized);
-    if (isNaN(parsed)) {
-      parsed = value;
+    const errMsg = getErrorMessage(parsed);
+
+    if (errMsg) {
+      playErrorAndNotify(errMsg);
+      setTempValue(isDecimal ? value.toFixed(3) : value.toString());
+      setIsEditing(false);
+      return;
     }
-    parsed = Math.max(min, Math.min(max, parsed));
+
     const finalVal = isDecimal ? Number(parsed.toFixed(3)) : Math.round(parsed);
     onChange(finalVal);
     setTempValue(isDecimal ? finalVal.toFixed(3) : finalVal.toString());
+    setIsEditing(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === 'Escape') {
+    if (e.key === 'Enter') {
+      let normalized = tempValue.replace(',', '.');
+      let parsed = parseFloat(normalized);
+      const errMsg = getErrorMessage(parsed);
+
+      if (errMsg) {
+        playErrorAndNotify(errMsg);
+        setTimeout(() => {
+          inputRef.current?.select();
+        }, 0);
+        return;
+      }
+
+      const finalVal = isDecimal ? Number(parsed.toFixed(3)) : Math.round(parsed);
+      onChange(finalVal);
+      setTempValue(isDecimal ? finalVal.toFixed(3) : finalVal.toString());
+      setIsEditing(false);
+      inputRef.current?.blur();
+    } else if (e.key === 'Escape') {
+      setTempValue(isDecimal ? value.toFixed(3) : value.toString());
+      setIsEditing(false);
       inputRef.current?.blur();
     }
   };
 
   return (
-    <div className="relative w-28 h-12 flex items-center justify-center rounded-xl hover:bg-white/5 transition-colors">
+    <motion.div 
+      animate={{ x: isShaking ? [-10, 10, -8, 8, -4, 4, 0] : 0 }}
+      transition={{ duration: 0.4 }}
+      className="relative w-28 h-12 flex items-center justify-center rounded-xl hover:bg-white/5 transition-colors"
+    >
       <input
         ref={inputRef}
         type="text"
@@ -75,7 +148,7 @@ function EditableCounter({
         onKeyDown={handleKeyDown}
         className={`w-full h-full text-center transition-all duration-150 tracking-tighter tabular-nums focus:outline-none rounded-xl font-[800] ${
           isEditing 
-            ? 'bg-surface-3/80 text-foreground border border-primary/50 ring-2 ring-primary/20 opacity-100 z-10 shadow-inner' 
+            ? `${isShaking ? 'border-red-500 ring-2 ring-red-500/30' : 'border-primary/50 ring-2 ring-primary/20'} bg-surface-3/80 text-foreground border opacity-100 z-10 shadow-inner` 
             : 'opacity-0 absolute inset-0 cursor-text z-10'
         }`}
         style={{ fontSize: 36, fontWeight: 800 }}
@@ -97,7 +170,7 @@ function EditableCounter({
           />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -291,7 +364,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               >
                 <Minus className="w-4 h-4" />
               </Button>
-              <EditableCounter value={minFreq} onChange={setMinFreq} min={1} max={maxFreq - 1} />
+              <EditableCounter label="Minimum frequency" value={minFreq} onChange={setMinFreq} min={1} max={maxFreq - 1} />
               <Button
                 variant="outline"
                 size="icon"
@@ -321,7 +394,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               >
                 <Minus className="w-4 h-4" />
               </Button>
-              <EditableCounter value={maxFreq} onChange={setMaxFreq} min={minFreq + 1} max={24000} />
+              <EditableCounter label="Maximum frequency" value={maxFreq} onChange={setMaxFreq} min={minFreq + 1} max={24000} />
               <Button
                 variant="outline"
                 size="icon"
@@ -351,7 +424,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               >
                 <Minus className="w-4 h-4" />
               </Button>
-              <EditableCounter value={threshold} onChange={setThreshold} min={0.001} max={5} isDecimal />
+              <EditableCounter label="Threshold" value={threshold} onChange={setThreshold} min={0.001} max={5} isDecimal />
               <Button
                 variant="outline"
                 size="icon"
