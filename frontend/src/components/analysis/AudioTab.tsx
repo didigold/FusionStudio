@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +24,23 @@ function EditableCounter({
   isDecimal?: boolean 
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [tempValue, setTempValue] = useState(value.toString());
+  const [tempValue, setTempValue] = useState(isDecimal ? value.toFixed(3) : value.toString());
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setTempValue(isDecimal ? value.toFixed(3) : value.toString());
+    }
+  }, [value, isEditing, isDecimal]);
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    setIsEditing(true);
+    setTempValue(isDecimal ? value.toFixed(3) : value.toString());
+    const inputEl = e.target;
+    setTimeout(() => {
+      inputEl.select();
+    }, 0);
+  };
 
   const handleBlur = () => {
     setIsEditing(false);
@@ -33,48 +49,53 @@ function EditableCounter({
       parsed = value;
     }
     parsed = Math.max(min, Math.min(max, parsed));
-    onChange(isDecimal ? Number(parsed.toFixed(3)) : Math.round(parsed));
+    const finalVal = isDecimal ? Number(parsed.toFixed(3)) : Math.round(parsed);
+    onChange(finalVal);
+    setTempValue(isDecimal ? finalVal.toFixed(3) : finalVal.toString());
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.currentTarget.blur();
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      inputRef.current?.blur();
     }
   };
 
-  if (isEditing) {
-    return (
+  return (
+    <div className="relative w-28 h-12 flex items-center justify-center rounded-xl hover:bg-white/5 transition-colors">
       <input
+        ref={inputRef}
         type="number"
-        value={tempValue}
+        value={isEditing ? tempValue : (isDecimal ? value.toFixed(3) : value.toString())}
         placeholder={isDecimal ? "0.000" : "0"}
         onChange={(e) => setTempValue(e.target.value)}
+        onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        autoFocus
         step={isDecimal ? 0.001 : 1}
-        className="w-24 h-12 text-center bg-transparent text-foreground border-b border-white/20 font-bold tracking-tighter tabular-nums focus:outline-none focus:border-primary"
-        style={{ fontSize: 36, appearance: 'textfield' }}
+        className={`w-full h-full text-center transition-all duration-150 tracking-tighter tabular-nums focus:outline-none rounded-xl font-[800] ${
+          isEditing 
+            ? 'bg-surface-3/80 text-foreground border border-primary/50 ring-2 ring-primary/20 opacity-100 z-10 shadow-inner' 
+            : 'opacity-0 absolute inset-0 cursor-text z-10'
+        }`}
+        style={{ fontSize: 36, fontWeight: 800 }}
       />
-    );
-  }
-
-  return (
-    <div 
-      className="w-24 h-12 flex items-center justify-center cursor-text hover:bg-white/5 rounded-lg transition-colors overflow-visible font-bold" 
-      onClick={() => { setTempValue(value.toFixed(isDecimal ? 3 : 0)); setIsEditing(true); }}
-    >
-      <Counter
-        value={value}
-        fontSize={36}
-        padding={0}
-        gap={1}
-        textColor="currentColor"
-        fontWeight={800}
-        gradientFrom="transparent"
-        gradientTo="transparent"
-        places={isDecimal ? [1, ".", 0.1, 0.01, 0.001] : undefined}
-      />
+      {!isEditing && (
+        <div 
+          className="absolute inset-0 flex items-center justify-center cursor-text rounded-xl overflow-visible pointer-events-none"
+        >
+          <Counter
+            value={value}
+            fontSize={36}
+            padding={0}
+            gap={1}
+            textColor="currentColor"
+            fontWeight={800}
+            gradientFrom="transparent"
+            gradientTo="transparent"
+            places={isDecimal ? [1, ".", 0.1, 0.01, 0.001] : undefined}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -262,6 +283,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
+                tabIndex={-1}
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={minFreq <= 1}
                 {...minMinusHandlers}
@@ -272,6 +294,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
+                tabIndex={-1}
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={minFreq >= maxFreq - 1}
                 {...minPlusHandlers}
@@ -290,6 +313,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
+                tabIndex={-1}
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={maxFreq <= minFreq + 1}
                 {...maxMinusHandlers}
@@ -300,6 +324,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
+                tabIndex={-1}
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={maxFreq >= 24000}
                 {...maxPlusHandlers}
@@ -318,6 +343,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
+                tabIndex={-1}
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={threshold <= 0.001}
                 {...thresholdMinusHandlers}
@@ -328,6 +354,7 @@ export function AudioTab({ selectedFile }: AudioTabProps) {
               <Button
                 variant="outline"
                 size="icon"
+                tabIndex={-1}
                 className="h-10 w-10 rounded-full shrink-0 border-white/5 bg-surface-3/30"
                 disabled={threshold >= 5}
                 {...thresholdPlusHandlers}
