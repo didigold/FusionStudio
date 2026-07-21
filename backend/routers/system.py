@@ -5,6 +5,7 @@ import sys
 import subprocess
 import tempfile
 import winreg
+import asyncio
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Optional
@@ -50,13 +51,16 @@ class SettingsPayload(BaseModel):
     color_theme: Optional[str] = "default"
     recent_projects: Optional[List[str]] = []
 
+def _read_settings(path: str):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 @router.get("/settings")
 async def get_settings():
     path = get_settings_file_path()
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
+            return await asyncio.to_thread(_read_settings, path)
         except Exception:
             pass
     return {
@@ -64,6 +68,10 @@ async def get_settings():
         "color_theme": "default",
         "recent_projects": []
     }
+
+def _write_settings(path: str, data: dict):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 @router.post("/settings")
 async def save_settings(payload: SettingsPayload):
@@ -74,8 +82,7 @@ async def save_settings(payload: SettingsPayload):
             "color_theme": payload.color_theme,
             "recent_projects": payload.recent_projects
         }
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        await asyncio.to_thread(_write_settings, path, data)
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
