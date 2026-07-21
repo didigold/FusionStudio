@@ -85,72 +85,169 @@ async def save_settings(payload: SettingsPayload):
 # Update check
 # ─────────────────────────────────────────────────────────────────────────────
 
-def find_sharepoint_tools_dir() -> str:
+# Relative path expected inside the SharePoint document library
+_TOOLS_RELATIVE_PATH = os.path.join("Analysis", "Tools", "FusionStudio")
+
+
+def _collect_onedrive_mount_points() -> list[tuple[str, str]]:
     """
-    Dynamically searches for the SharePoint/OneDrive synced folder path for FusionStudio.
-    Checks the sync engines registry keys first, which resolves custom mount points 
-    (e.g., custom drive letters, differing organization/tenant folders) on any coworker's PC.
-    Falls back to common default home directory structures if registry lookup fails.
+    Collects all OneDrive/SharePoint synced folder mount points from the Windows
+    registry using three independent sources, ordered by reliability.
+
+    Returns a list of (mount_point, source_label) tuples, deduplicated by
+    normalized path so downstream code doesn't test the same folder twice.
+
+    Sources:
+        1. SyncEngines/Providers/OneDrive — the MountPoint value in each subkey.
+           Present on most machines but not every subkey has it.
+        2. OneDrive/Accounts/Business*/Tenants — each tenant subkey has value
+           names that ARE the mount-point paths.  Very stable across corporate PCs.
+        3. OneDrive/Accounts/Business*/ScopeIdToMountPointPathCache — similar to
+           the Tenants approach; scope-id values map to mount paths.
     """
-    # 1. Try to find the mount point in SyncEngines Registry (highly reliable on Windows)
+    results: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def _add(path: str, source: str):
+        norm = os.path.normcase(os.path.normpath(path))
+        if norm not in seen:
+            seen.add(norm)
+            results.append((path, source))
+
+    # ── Strategy 1: SyncEngines registry ────────────────────────────────────
     try:
         key_path = r"Software\SyncEngines\Providers\OneDrive"
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
-            info = winreg.QueryInfoKey(key)
-            for i in range(info[0]):
+            for i in range(winreg.QueryInfoKey(key)[0]):
                 subkey_name = winreg.EnumKey(key, i)
-                with winreg.OpenKey(key, subkey_name) as subkey:
-                    try:
+                try:
+                    with winreg.OpenKey(key, subkey_name) as subkey:
                         mount_point, _ = winreg.QueryValueEx(subkey, "MountPoint")
-                        if mount_point and os.path.exists(mount_point):
-                            # Try the specific relative path we expect inside the document library
-                            target = os.path.join(mount_point, "Analysis", "Tools", "FusionStudio")
-                            if os.path.exists(target):
-                                return target
-                    except (FileNotFoundError, OSError):
-                        pass
+                        if mount_point:
+                            _add(mount_point, f"SyncEngines/{subkey_name}")
+                except (FileNotFoundError, OSError):
+                    pass
     except Exception:
         pass
 
-    # 2. Fallbacks: check common default home path options
-    user_home = os.path.expanduser('~')
-    tenants = ["IDIADA Group", "Applus IDIADA", "IDIADA"]
-    for tenant in tenants:
-        path = os.path.join(
-            user_home,
-            tenant,
-            "Grp__ADASTesting_Electronic Chassis Control Systems - Documentos",
-            "Analysis",
-            "Tools",
-            "FusionStudio"
-        )
-        if os.path.exists(path):
-            return path
+    # ── Strategy 2: OneDrive Accounts Tenants ───────────────────────────────
+    # Each Business account can have multiple tenants, and each tenant key
+    # stores mount paths as *value names* (the value data is an opaque int).
+    try:
+        accounts_path = r"Software\Microsoft\OneDrive\Accounts"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, accounts_path) as accounts_key:
+            for i in range(winreg.QueryInfoKey(accounts_key)[0]):
+                account_name = winreg.EnumKey(accounts_key, i)
+                if not account_name.lower().startswith("business"):
+                    continue
+                tenants_path = f"{accounts_path}\\{account_name}\\Tenants"
+                try:
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, tenants_path) as tenants_key:
+                        for j in range(winreg.QueryInfoKey(tenants_key)[0]):
+                            tenant_name = winreg.EnumKey(tenants_key, j)
+                            try:
+                                with winreg.OpenKey(tenants_key, tenant_name) as tenant_key:
+                                    num_values = winreg.QueryInfoKey(tenant_key)[1]
+                                    for v in range(num_values):
+                                        val_name, _, _ = winreg.EnumValue(tenant_key, v)
+                                        if val_name and os.sep in val_name:
+                                            _add(val_name, f"Tenants/{tenant_name}")
+                            except (FileNotFoundError, OSError):
+                                pass
+                except (FileNotFoundError, OSError):
+                    pass
+    except Exception:
+        pass
 
-    # Ultimate default fallback
-    return os.path.join(
-        user_home,
-        "IDIADA Group",
+    # ── Strategy 3: ScopeIdToMountPointPathCache ────────────────────────────
+    try:
+        accounts_path = r"Software\Microsoft\OneDrive\Accounts"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, accounts_path) as accounts_key:
+            for i in range(winreg.QueryInfoKey(accounts_key)[0]):
+                account_name = winreg.EnumKey(accounts_key, i)
+                if not account_name.lower().startswith("business"):
+                    continue
+                cache_path = f"{accounts_path}\\{account_name}\\ScopeIdToMountPointPathCache"
+                try:
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, cache_path) as cache_key:
+                        num_values = winreg.QueryInfoKey(cache_key)[1]
+                        for v in range(num_values):
+                            _, val_data, _ = winreg.EnumValue(cache_key, v)
+                            if val_data and isinstance(val_data, str) and os.sep in val_data:
+                                _add(val_data, f"ScopeCache/{account_name}")
+                except (FileNotFoundError, OSError):
+                    pass
+    except Exception:
+        pass
+
+    return results
+
+
+def find_sharepoint_tools_dir() -> tuple[str | None, list[str]]:
+    """
+    Dynamically searches for the SharePoint/OneDrive synced folder path that
+    contains the FusionStudio update directory.
+
+    Uses three registry strategies to discover OneDrive mount points, then
+    falls back to common default home directory structures.
+
+    Returns:
+        (resolved_path or None, debug_log)
+        debug_log contains human-readable diagnostic messages for remote
+        troubleshooting when the update check fails on a coworker's PC.
+    """
+    debug_log: list[str] = []
+
+    # ── Registry-based discovery ────────────────────────────────────────────
+    mount_points = _collect_onedrive_mount_points()
+    debug_log.append(f"Registry mount points found: {len(mount_points)}")
+
+    for mount_point, source in mount_points:
+        target = os.path.join(mount_point, _TOOLS_RELATIVE_PATH)
+        exists = os.path.exists(target)
+        debug_log.append(f"  [{source}] {target} -> {'EXISTS' if exists else 'NOT FOUND'}")
+        if exists:
+            return target, debug_log
+
+    # ── Fallback: common default home paths ─────────────────────────────────
+    user_home = os.path.expanduser("~")
+    # The synced folder name under ~ depends on the Azure AD tenant display
+    # name, which can vary across organizations and language settings.
+    tenants = ["IDIADA Group", "Applus IDIADA", "IDIADA"]
+    # The SharePoint document library name may be localized (e.g. Catalan,
+    # Spanish, English).  We try the known variants.
+    library_names = [
         "Grp__ADASTesting_Electronic Chassis Control Systems - Documentos",
-        "Analysis",
-        "Tools",
-        "FusionStudio"
-    )
+        "Grp__ADASTesting_Electronic Chassis Control Systems - Documents",
+        "Grp__ADASTesting_Electronic Chassis Control Systems - Documents compartits",
+    ]
+    debug_log.append(f"Trying home-dir fallbacks under {user_home}")
+    for tenant in tenants:
+        for library in library_names:
+            path = os.path.join(user_home, tenant, library, _TOOLS_RELATIVE_PATH)
+            exists = os.path.exists(path)
+            debug_log.append(f"  [{tenant}/{library[:30]}...] -> {'EXISTS' if exists else 'NOT FOUND'}")
+            if exists:
+                return path, debug_log
+
+    debug_log.append("All strategies exhausted — no FusionStudio tools directory found.")
+    return None, debug_log
 
 
 @router.get("/check-update")
 async def check_update():
-    tools_dir = find_sharepoint_tools_dir()
+    tools_dir, debug_log = find_sharepoint_tools_dir()
 
     update_available = False
     latest_version = APP_VERSION
     installer_path = None
 
-    if not os.path.exists(tools_dir):
+    if tools_dir is None or not os.path.exists(tools_dir):
         return {
             "update_available": False,
             "version": APP_VERSION,
-            "error": f"Tools directory not found: {tools_dir}"
+            "error": f"Tools directory not found",
+            "debug_log": debug_log,
         }
 
     max_version_float = 0.0
@@ -187,7 +284,27 @@ async def check_update():
     return {
         "update_available": update_available,
         "version": latest_version,
-        "installer_path": installer_path
+        "installer_path": installer_path,
+        "debug_log": debug_log,
+    }
+
+
+@router.get("/debug-update-paths")
+async def debug_update_paths():
+    """
+    Diagnostic endpoint that returns all registry-discovered OneDrive mount
+    points and the full resolution log.  Ask a coworker to open this URL in
+    their browser to troubleshoot update-discovery failures.
+    """
+    mount_points = _collect_onedrive_mount_points()
+    tools_dir, debug_log = find_sharepoint_tools_dir()
+    return {
+        "resolved_tools_dir": tools_dir,
+        "mount_points": [{"path": p, "source": s} for p, s in mount_points],
+        "debug_log": debug_log,
+        "current_version": APP_VERSION,
+        "user_home": os.path.expanduser("~"),
+        "hostname": os.environ.get("COMPUTERNAME", "unknown"),
     }
 
 

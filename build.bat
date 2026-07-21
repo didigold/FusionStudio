@@ -5,7 +5,7 @@ echo Starting FusionStudio Packaging process...
 echo ==================================================
 echo.
 
-python scripts/build_desktop.py
+python scripts/build/build_desktop.py
 
 if %errorlevel% neq 0 (
     echo.

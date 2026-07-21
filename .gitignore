@@ -250,6 +250,7 @@ desktop.ini
 scratch/
 tmp/
 temp/
+scripts/debug/
 *.log
 
 # VS Code specific
