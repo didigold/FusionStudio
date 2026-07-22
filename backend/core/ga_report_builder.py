@@ -73,6 +73,62 @@ def _get_bottom_rounded_rect_path(x1, y1, x2, y2, rx, ry):
     ]
     return mpath.Path(verts, codes)
 
+# NCAP case codes (second element of the tuples from classification.py)
+NCAP_CASE_CODES = {
+    "D1":   "LD_NDT_OW_DSW",
+    "D2":   "LD_NDT_OW_PSW",
+    "D3":   "LD_NDT_OW_PAF",
+    "D4":   "LD_NDT_OW_PFA",
+    "D5":   "LD_NDT_OW_IIS",
+    "D6":   "LD_NDT_LI_IIS",
+    "D7":   "LD_NDT_LI_GLB",
+    "D8":   "LD_NDT_BL_PAF",
+    "D9":   "LD_NDT_BL_RPA",
+    "D10":  "LD_DRT_OW_RVM",
+    "D11":  "LD_DRT_OW_PSM",
+    "D12":  "LD_DRT_OW_DSM",
+    "D13":  "LD_DRT_LI_ICL",
+    "D14":  "LD_DRT_LI_DSM",
+    "D15":  "LD_DRT_LI_RVM",
+    "D16":  "SD_NDT_OW_IIS",
+    "D17":  "SD_NDT_OW_PAF",
+    "D18":  "SD_NDT_LI_PAF",
+    "D19":  "SD_NDT_LI_IIS",
+    "D20":  "SD_DRT_OW_RVM",
+    "D21":  "SD_DRT_OW_PSM",
+    "D22":  "SD_DRT_OW_DSM",
+    "D23":  "SD_DRT_OW_PSW",
+    "D24":  "SD_DRT_LI_ICL",
+    "D25":  "SD_DRT_LI_DSM",
+    "D26":  "SD_DRT_LI_RVM",
+    "D27":  "SD_DRT_LI_PSW",
+    "D28":  "SD_AFR_LI_COMB",
+    "D29":  "PU_PUB_OW_DKD",
+    "D30":  "PU_PUB_OW_DKP",
+    "D31":  "PU_PUB_OW_DLA",
+    "D32":  "PU_PUB_OW_PDD",
+    "D33":  "PU_PUB_OW_DCP",
+    "D34":  "PU_PUB_LI_DKD",
+    "D35":  "PU_PUB_LI_DKP",
+    "D36":  "PU_PUB_LI_DLA",
+    "D37":  "PU_PUB_LI_PHC",
+    "D38":  "PU_PUB_LI_DCP",
+    "D39":  "PU_PUA_LI_PDD",
+    "D40":  "PU_PUA_LI_PHS",
+    "D41":  "PU_PUA_LI_PHW",
+    "D42":  "PU_PUA_LI_PHI",
+    "F1":   "FAT_MSL",
+    "F2":   "FAT_SLE",
+    "F3":   "FAT_DRO",
+    "F4":   "UR_SPD",
+    "F5":   "UR_SPD",
+}
+
+OCCLUSION_CODES = {
+    4: "CG", 5: "SU", 6: "SH", 7: "LH", 8: "BL",
+    9: "FM", 10: "HA", 11: "FR", 12: "EM",
+}
+
 class GAReportBuilder:
     """
     Generates professional A4 technical reports using matplotlib.
@@ -355,17 +411,42 @@ class GAReportBuilder:
         return "Unknown"
 
     def _get_scenario_label(self):
-        """Extract a compact scenario label from target_category."""
+        """Return the official NCAP case code based on filename (e.g. D4 -> LD_NDT_OW_PFA)."""
+        filename = str(self.config.get('filename', ''))
+        base = re.sub(r'_tracking$', '', os.path.splitext(filename)[0], flags=re.IGNORECASE)
+        
+        # Match patterns like D4, D4_O9_01, F1_02, D4_01
+        match = re.match(r'^([DF])(\d+)(?:_O(\d+))?(?:_\d+)?$', base, re.IGNORECASE)
+        if match:
+            prefix, num_str, occ_str = match.groups()
+            case_key = f"{prefix.upper()}{num_str}"
+            code = NCAP_CASE_CODES.get(case_key)
+            if code:
+                if occ_str:
+                    occ_code = OCCLUSION_CODES.get(int(occ_str))
+                    if occ_code:
+                        parts = code.split('_')
+                        if len(parts) > 1:
+                            parts.insert(-1, occ_code)
+                            code = '_'.join(parts)
+                        else:
+                            code = f"{code}_{occ_code}"
+                return code
+        
+        # O-only case (e.g. O9_01 without base case)
+        occ_match = re.match(r'^O(\d+)(?:_\d+)?$', base, re.IGNORECASE)
+        if occ_match:
+            occ_code = OCCLUSION_CODES.get(int(occ_match.group(1)))
+            if occ_code:
+                return occ_code
+        
+        # Fallback to target_category
         category = str(self.config.get('target_category', ''))
         if not category:
             return "Unknown"
-        
-        # Extract parenthetical suffix (e.g. "Long Distraction (NDT)" -> "NDT")
-        match = re.search(r'\(([^)]+)\)', category)
-        if match:
-            return match.group(1).strip()
-        
-        # Clean common prefixes for cleaner display
+        cat_match = re.search(r'\(([^)]+)\)', category)
+        if cat_match:
+            return cat_match.group(1).strip()
         cleaned = re.sub(r'^(Unresponsive driver)\s*[-—]', '', category).strip()
         return cleaned
 
