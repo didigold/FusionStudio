@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from backend.config.version import APP_VERSION
 
+from fastapi.responses import FileResponse
+
 router = APIRouter()
 
 # ─── Inno Setup App ID (must match installer_script.iss) ───────────────────
@@ -49,6 +51,10 @@ class SettingsPayload(BaseModel):
     theme: Optional[str] = "dark"
     color_theme: Optional[str] = "default"
     recent_projects: Optional[List[str]] = []
+    sound_enabled: Optional[bool] = True
+    sound_typing: Optional[str] = "/sounds/type_01.wav"
+    sound_notification: Optional[str] = "/sounds/notification.wav"
+    sound_ui: Optional[str] = "/sounds/tap_01.wav"
 
 @router.get("/settings")
 async def get_settings():
@@ -56,13 +62,30 @@ async def get_settings():
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                defaults = {
+                    "theme": "dark",
+                    "color_theme": "default",
+                    "recent_projects": [],
+                    "sound_enabled": True,
+                    "sound_typing": "/sounds/type_01.wav",
+                    "sound_notification": "/sounds/notification.wav",
+                    "sound_ui": "/sounds/tap_01.wav"
+                }
+                for k, v in defaults.items():
+                    if k not in data:
+                        data[k] = v
+                return data
         except Exception:
             pass
     return {
         "theme": "dark",
         "color_theme": "default",
-        "recent_projects": []
+        "recent_projects": [],
+        "sound_enabled": True,
+        "sound_typing": "/sounds/type_01.wav",
+        "sound_notification": "/sounds/notification.wav",
+        "sound_ui": "/sounds/tap_01.wav"
     }
 
 @router.post("/settings")
@@ -70,15 +93,69 @@ async def save_settings(payload: SettingsPayload):
     path = get_settings_file_path()
     try:
         data = {
-            "theme": payload.theme,
-            "color_theme": payload.color_theme,
-            "recent_projects": payload.recent_projects
+            "theme": payload.theme or "dark",
+            "color_theme": payload.color_theme or "default",
+            "recent_projects": payload.recent_projects or [],
+            "sound_enabled": payload.sound_enabled if payload.sound_enabled is not None else True,
+            "sound_typing": payload.sound_typing or "/sounds/type_01.wav",
+            "sound_notification": payload.sound_notification or "/sounds/notification.wav",
+            "sound_ui": payload.sound_ui or "/sounds/tap_01.wav"
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+def resolve_manual_pdf_path() -> str:
+    # 1. Primary explicit SharePoint path
+    sp_path = r"C:\Users\AT017769\IDIADA Group\Grp__ADASTesting_Electronic Chassis Control Systems - Documentos\Analysis\Tools\FusionStudio\FusionStudio_Manual.pdf"
+    if os.path.exists(sp_path):
+        return sp_path
+
+    # 2. Dynamic SharePoint tools discovery
+    tools_dir, _ = find_sharepoint_tools_dir()
+    if tools_dir:
+        manual_in_sp = os.path.join(tools_dir, "FusionStudio_Manual.pdf")
+        if os.path.exists(manual_in_sp):
+            return manual_in_sp
+
+    # 3. Bundled asset path (works in PyInstaller frozen build sys._MEIPASS or source tree)
+    if hasattr(sys, '_MEIPASS'):
+        bundled_path = os.path.join(sys._MEIPASS, "backend", "assets", "docs", "FusionStudio_Manual.pdf")
+    else:
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        bundled_path = os.path.join(root_dir, "backend", "assets", "docs", "FusionStudio_Manual.pdf")
+
+    if os.path.exists(bundled_path):
+        return bundled_path
+
+    return sp_path
+
+@router.post("/open-manual")
+async def open_manual():
+    pdf_path = resolve_manual_pdf_path()
+    if not os.path.exists(pdf_path):
+        return {"success": False, "error": f"Manual PDF file not found: {pdf_path}"}
+    
+    try:
+        if sys.platform == "win32":
+            os.startfile(pdf_path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", pdf_path])
+        else:
+            subprocess.Popen(["xdg-open", pdf_path])
+        return {"success": True, "path": pdf_path}
+    except Exception as e:
+        return {"success": False, "error": str(e), "path": pdf_path}
+
+@router.get("/manual.pdf")
+async def get_manual_pdf():
+    pdf_path = resolve_manual_pdf_path()
+    if os.path.exists(pdf_path):
+        return FileResponse(pdf_path, media_type="application/pdf", filename="FusionStudio_Manual.pdf")
+    return {"error": "Manual PDF file not found"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

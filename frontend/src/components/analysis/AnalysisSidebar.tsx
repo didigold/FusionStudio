@@ -17,15 +17,12 @@ import {
   Merge,
   PanelLeftClose,
   PanelLeftOpen,
-  IdCardLanyard,
   ChevronsUpDown,
   LogOut,
   Settings,
-  Download,
   RefreshCw,
   HelpCircle,
   Globe,
-  ArrowUpCircle,
   Sun,
   Moon,
   Palette,
@@ -47,6 +44,8 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { useTheme, COLOR_THEMES } from "@/hooks/useTheme";
+import { SettingsModal } from "@/components/settings/SettingsModal";
+import { useRipple } from "@/components/ui/Ripple";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -816,6 +815,8 @@ function SidebarUserButton({
     userProfile?.display_name || userProfile?.email || username;
   const emailSubtext = userProfile?.email || userProfile?.upn || "";
   const badgeText = username.startsWith("AT") ? "IDI" : "EXT";
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { addRipple, renderRipples } = useRipple();
 
   const [updateInfo, setUpdateInfo] = useState<{
     available: boolean;
@@ -893,18 +894,21 @@ function SidebarUserButton({
   }, [checkUpdates]);
 
   return (
-    <DropdownMenu>
+    <>
+      <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          onClick={addRipple}
           className={cn(
-            "group w-full flex items-center text-sm font-medium transition-all duration-300 focus:outline-none select-none",
+            "relative overflow-hidden group w-full flex items-center text-sm font-medium transition-all duration-300 focus:outline-none select-none active:scale-[0.98]",
             "hover:bg-[var(--sidebar-hover)] hover:text-foreground dark:hover:bg-[var(--sidebar-hover)] dark:hover:text-foreground",
             sidebarOpen
               ? "h-10 pl-[2px] pr-2 gap-3 justify-start text-left rounded-xl"
               : "h-10 justify-start pl-[2px] rounded-full",
           )}
         >
+          {renderRipples()}
           {/* Avatar Container */}
           <div className="relative shrink-0">
             <Avatar className="h-9 w-9 rounded-full bg-surface-3 transition-all duration-300">
@@ -1012,9 +1016,12 @@ function SidebarUserButton({
         <DropdownMenuSeparator className="my-1 border-t border-border/40" />
 
         {/* Items */}
-        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground">
+        <DropdownMenuItem 
+          onClick={() => setIsSettingsOpen(true)}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground"
+        >
           <Settings className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
-          <span className="flex-1">All settings</span>
+          <span className="flex-1">Settings</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem 
@@ -1128,7 +1135,23 @@ function SidebarUserButton({
           <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0 ml-auto" />
         </DropdownMenuItem>
 
-        <DropdownMenuItem className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground">
+        <DropdownMenuItem 
+          onClick={async () => {
+            toast.info("Opening FusionStudio Manual PDF...");
+            try {
+              const res = await fetch("/api/system/open-manual", { method: "POST" });
+              const data = await res.json();
+              if (data.success) {
+                toast.success("Manual PDF opened successfully!");
+              } else {
+                toast.error(data.error || "Failed to open manual PDF");
+              }
+            } catch {
+              toast.error("Failed to call backend manual endpoint");
+            }
+          }}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[15px] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-foreground"
+        >
           <HelpCircle className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
           <div className="flex flex-col flex-1 min-w-0 text-left leading-normal ml-0.5">
             <span className="font-medium">Help</span>
@@ -1147,5 +1170,8 @@ function SidebarUserButton({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    <SettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+    </>
   );
 }

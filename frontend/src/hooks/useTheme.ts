@@ -389,17 +389,30 @@ export async function saveSystemSettings(settings: {
   theme?: string;
   color_theme?: string;
   recent_projects?: string[];
+  sound_enabled?: boolean;
+  sound_typing?: string;
+  sound_notification?: string;
+  sound_ui?: string;
 }) {
   try {
     const recentStr = localStorage.getItem("recent_projects")
     const recent = recentStr ? JSON.parse(recentStr) : []
     const theme = localStorage.getItem(STORAGE_KEY) || "dark"
     const color_theme = localStorage.getItem(COLOR_THEME_STORAGE_KEY) || "default"
+    const sound_enabled_str = localStorage.getItem("fusionstudio-sound-enabled")
+    const sound_enabled = sound_enabled_str !== null ? sound_enabled_str === "true" : true
+    const sound_typing = localStorage.getItem("fusionstudio-sound-typing") || "/sounds/type_01.wav"
+    const sound_notification = localStorage.getItem("fusionstudio-sound-notification") || "/sounds/notification.wav"
+    const sound_ui = localStorage.getItem("fusionstudio-sound-ui") || "/sounds/tap_01.wav"
 
     const payload = {
       theme: settings.theme !== undefined ? settings.theme : theme,
       color_theme: settings.color_theme !== undefined ? settings.color_theme : color_theme,
-      recent_projects: settings.recent_projects !== undefined ? settings.recent_projects : recent
+      recent_projects: settings.recent_projects !== undefined ? settings.recent_projects : recent,
+      sound_enabled: settings.sound_enabled !== undefined ? settings.sound_enabled : sound_enabled,
+      sound_typing: settings.sound_typing !== undefined ? settings.sound_typing : sound_typing,
+      sound_notification: settings.sound_notification !== undefined ? settings.sound_notification : sound_notification,
+      sound_ui: settings.sound_ui !== undefined ? settings.sound_ui : sound_ui,
     }
 
     await fetch('/api/system/settings', {

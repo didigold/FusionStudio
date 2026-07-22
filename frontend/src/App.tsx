@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
 import AnalysisTab from './pages/AnalysisTab'
 import { useTheme } from './hooks/useTheme'
+import { useSound, initSoundSettingsFromBackend } from './hooks/useSound'
 
 import { TopNav } from './components/layout/TopNav'
 import { useSystemWebSocket } from './components/layout/SystemBadge'
@@ -13,6 +14,7 @@ import { AnalysisSidebar } from './components/analysis/AnalysisSidebar'
 export default function App() {
   useSystemWebSocket()
   const { getThemeStyle } = useTheme()
+  const { playTypingSound, playNotificationSound } = useSound()
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -42,6 +44,7 @@ export default function App() {
           if (data.recent_projects) {
             localStorage.setItem('recent_projects', JSON.stringify(data.recent_projects));
           }
+          initSoundSettingsFromBackend(data);
           window.dispatchEvent(new Event('system-settings-synced'));
         }
       } catch (err) {
@@ -58,13 +61,13 @@ export default function App() {
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
         const isPrintable = e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter';
         if (isPrintable && !e.ctrlKey && !e.altKey && !e.metaKey) {
-          new Audio('/sounds/type_01.wav').play().catch(() => {});
+          playTypingSound();
         }
       }
     };
     window.addEventListener('keydown', playTypeSound, true);
     return () => window.removeEventListener('keydown', playTypeSound, true);
-  }, []);
+  }, [playTypingSound]);
 
   // Global notification sound listener
   useEffect(() => {
@@ -82,12 +85,12 @@ export default function App() {
         if (toastAdded) break;
       }
       if (toastAdded) {
-        new Audio('/sounds/notification.wav').play().catch(() => {});
+        playNotificationSound();
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, []);
+  }, [playNotificationSound]);
 
   return (
     <BrowserRouter>
