@@ -1,11 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Folder, File, CheckSquare, LayoutGrid, Locate, LocateOff, FileChartColumnIncreasing, FolderRoot, ArrowLeft } from 'lucide-react';
+import { Folder, File, CheckSquare, CheckCircle2, Circle, Smile, Locate, LocateOff, FileChartColumnIncreasing, FolderRoot, ArrowLeft, ChevronDown, RefreshCw, LayoutGrid } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   Breadcrumb,
@@ -24,6 +22,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAppStore } from '@/store/useAppStore';
+import { toast } from 'sonner';
 
 interface FolderNavigatorProps {
   results: any[];
@@ -50,6 +50,19 @@ const getAllFilesUnderNode = (node: any): string[] => {
   return files
 }
 
+const getAllFileNodes = (nodes: any[]): any[] => {
+  let list: any[] = [];
+  for (const n of nodes) {
+    if (n.type === 'file') {
+      list.push(n);
+    }
+    if (n.children) {
+      list = list.concat(getAllFileNodes(n.children));
+    }
+  }
+  return list;
+};
+
 const findPathToNode = (nodes: any[], targetPath: string, currentPath: string[] = []): string[] | null => {
   const normTarget = normalizePath(targetPath);
   for (const node of nodes) {
@@ -75,13 +88,80 @@ export function FolderNavigator({
   checkedFilesSet,
   onToggleCheck,
   onToggleFolder,
-  selectionType,
+  selectionType: _selectionType,
   onSelectionChange,
   totalMF4Count,
 }: FolderNavigatorProps) {
-  // We track the path of folder names to navigate down the tree
+  const {
+    analysisSourcePath,
+    setAnalysisResults,
+    setAnalysisAvailableCameras,
+    addLog,
+  } = useAppStore();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const lastNavigatedPath = useRef<string | null>(null);
+
+  const allFileNodes = useMemo(() => getAllFileNodes(results), [results]);
+  const allFilesList = useMemo(() => allFileNodes.map(n => n.path), [allFileNodes]);
+
+  const masterCheckState = useMemo(() => {
+    if (allFilesList.length === 0) return false;
+    const checkedCount = allFilesList.filter(f => checkedFilesSet.has(f)).length;
+    if (checkedCount === allFilesList.length) return true;
+    if (checkedCount > 0) return "indeterminate";
+    return false;
+  }, [allFilesList, checkedFilesSet]);
+
+  const handleMasterCheckboxClick = () => {
+    if (masterCheckState === true) {
+      onSelectionChange('none');
+    } else {
+      onSelectionChange('all');
+    }
+  };
+
+  const selectFilter = (type: string) => {
+    onSelectionChange(type);
+    let matchedFiles: string[] = [];
+    if (type === 'all') {
+      matchedFiles = allFilesList;
+    } else if (type === 'none') {
+      matchedFiles = [];
+    } else if (type === 'tracking_pending') {
+      matchedFiles = allFileNodes.filter(n => !n.has_tracking).map(n => n.path);
+    } else if (type === 'marks_pending') {
+      matchedFiles = allFileNodes.filter(n => !n.has_marks).map(n => n.path);
+    } else if (type === 'report_pending') {
+      matchedFiles = allFileNodes.filter(n => !n.has_report).map(n => n.path);
+    }
+    useAppStore.setState({ analysisCheckedFiles: matchedFiles });
+  };
+
+  const handleRefresh = async () => {
+    if (!analysisSourcePath || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const res = await fetch('/api/analysis/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_dir: analysisSourcePath }),
+      });
+      const data = await res.json();
+      if (data.results) {
+        setAnalysisResults(data.results);
+        setAnalysisAvailableCameras(data.available_cameras || []);
+        toast.success(`Refreshed ${data.results.length} participants`);
+        addLog(`Recordings refreshed: ${data.results.length} participants found.`);
+      }
+    } catch (err) {
+      toast.error('Failed to refresh recordings');
+      addLog(`Error refreshing recordings: ${err}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedPath && results.length > 0) {
@@ -257,8 +337,23 @@ export function FolderNavigator({
     );
   };
 
+  // Cache getAllFilesUnderNode per folder — avoids 3× redundant tree walks per folder per render
+  const folderFilesCache = useMemo(() => {
+    const cache = new Map<string, string[]>()
+    const buildCache = (nodes: any[]) => {
+      for (const node of nodes) {
+        if (node.type !== 'file') {
+          cache.set(node.name, getAllFilesUnderNode(node))
+        }
+        if (node.children) buildCache(node.children)
+      }
+    }
+    buildCache(currentNodeContent)
+    return cache
+  }, [currentNodeContent])
+
   const getFolderCheckboxState = (node: any) => {
-    const nestedFiles = getAllFilesUnderNode(node);
+    const nestedFiles = folderFilesCache.get(node.name) || getAllFilesUnderNode(node);
     if (nestedFiles.length === 0) return false;
     const checkedNestedCount = nestedFiles.filter(f => checkedFilesSet.has(f)).length;
     const isAllChecked = checkedNestedCount === nestedFiles.length;
@@ -268,34 +363,74 @@ export function FolderNavigator({
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col relative">
-      <div className="p-4 border-b border-white/5 bg-surface-2/30 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-           <div className="flex items-center gap-2">
-              <LayoutGrid className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold tracking-tight text-foreground">
-                {currentPath.length > 0 ? `Recordings / ${currentPath[currentPath.length - 1]}` : "Recordings"}
-              </span>
-           </div>
+      <div className="p-3 border-b border-white/5 bg-surface-2/30 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <LayoutGrid className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm font-bold tracking-tight text-foreground truncate">
+              {currentPath.length > 0 ? `Recordings / ${currentPath[currentPath.length - 1]}` : "Recordings"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Gmail style master checkbox + dropdown */}
+            <div className="flex items-center bg-transparent border-0 p-0">
+              <div className="flex items-center px-1 cursor-pointer" onClick={handleMasterCheckboxClick}>
+                <Checkbox
+                  checked={masterCheckState}
+                  className="w-4 h-4 border-white/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                />
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" className="h-6 w-5 p-0 hover:bg-white/10 rounded border-0 shadow-none">
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => selectFilter('all')} className="text-sm font-medium gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
+                    <span>All</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => selectFilter('none')} className="text-sm font-medium gap-2">
+                    <Circle className="w-4 h-4 text-muted-foreground" />
+                    <span>None</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => selectFilter('tracking_pending')} className="text-sm font-medium gap-2">
+                    <Smile className="w-4 h-4 text-muted-foreground" />
+                    <span>Tracking Pending</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => selectFilter('marks_pending')} className="text-sm font-medium gap-2">
+                    <Locate className="w-4 h-4 text-muted-foreground" />
+                    <span>Marks Pending</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => selectFilter('report_pending')} className="text-sm font-medium gap-2">
+                    <FileChartColumnIncreasing className="w-4 h-4 text-muted-foreground" />
+                    <span>Report Pending</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Refresh button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={isRefreshing || !analysisSourcePath}
+              title="Refresh recordings"
+              className="w-7 h-7 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all border-0 shadow-none"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin text-primary")} />
+            </Button>
+          </div>
         </div>
 
-        {/* Radio Selection Group */}
-        <RadioGroup 
-          value={selectionType} 
-          onValueChange={onSelectionChange}
-          className="flex gap-x-3 gap-y-2"
-        >
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'none', label: 'None' },
-          ].map((item) => (
-            <div key={item.id} className="flex items-center space-x-1.5">
-              <RadioGroupItem value={item.id} id={`r-${item.id}`} className="w-3 h-3 border-white/20" />
-              <Label htmlFor={`r-${item.id}`} className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors">
-                {item.label}
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
+        {currentPath.length > 0 && (
+          <div className="w-full overflow-hidden px-0.5 pt-1 border-t border-white/5">
+            {renderBreadcrumbs()}
+          </div>
+        )}
       </div>
 
       <ScrollArea className="flex-1 bg-background/30 scroll-fade-mask relative">
@@ -357,9 +492,10 @@ export function FolderNavigator({
                 } else {
                   // Folder Node
                   const folderCheckState = getFolderCheckboxState(node);
-                  const totalFiles = getAllFilesUnderNode(node).length;
+                  const cachedFiles = folderFilesCache.get(node.name);
+                  const totalFiles = cachedFiles ? cachedFiles.length : getAllFilesUnderNode(node).length;
                   const normalizedSelected = selectedPath ? normalizePath(selectedPath) : null;
-                  const containsSelected = normalizedSelected && getAllFilesUnderNode(node)
+                  const containsSelected = normalizedSelected && (cachedFiles || getAllFilesUnderNode(node))
                     .map(f => normalizePath(f))
                     .includes(normalizedSelected);
                   return (

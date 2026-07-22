@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, CSSProperties } from 'react'
+import { useState, useEffect, useCallback, type CSSProperties } from 'react'
 
 type Theme = 'dark' | 'light'
 

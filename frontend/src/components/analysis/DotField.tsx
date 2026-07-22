@@ -1,4 +1,4 @@
-import { useEffect, useRef, memo, HTMLAttributes } from "react";
+import { useEffect, useRef, memo, type HTMLAttributes } from "react";
 import "./DotField.css";
 
 const TWO_PI = Math.PI * 2;
@@ -109,7 +109,7 @@ const DotField = memo(
       }
 
       function doResize() {
-        if (!canvas) return;
+        if (!canvas || !ctx) return;
         const parent = canvas.parentElement;
         if (!parent) return;
         const rect = parent.getBoundingClientRect();
@@ -185,6 +185,7 @@ const DotField = memo(
       let frameCount = 0;
 
       function tick() {
+        if (!ctx) return;
         frameCount++;
         const dots = dotsRef.current;
         const m = mouseRef.current;

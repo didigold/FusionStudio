@@ -1,4 +1,4 @@
-import { useRef, ReactNode, MouseEvent } from "react";
+import { useRef, type ReactNode, type MouseEvent } from "react";
 import "./SpotlightCard.css";
 
 interface SpotlightCardProps {

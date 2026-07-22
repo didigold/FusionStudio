@@ -87,7 +87,7 @@ export function TrackingTab() {
     try {
       const res = await analysisApi.runChronos(
         analysisCheckedFiles,
-        analysisSelectedCamera,
+        Number(analysisSelectedCamera) || 0,
         analysisSourcePath,
         analysisGamificationFilter
       );

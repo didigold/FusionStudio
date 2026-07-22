@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, memo, useCallback } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { useAnalysisWS } from '../hooks/useAnalysisWS'
 import { useTheme } from '../hooks/useTheme'
@@ -12,16 +12,23 @@ import {
   FileChartColumnIncreasing,
   FileSearch,
   CheckSquare,
+  CheckCircle2,
+  Circle,
   LayoutGrid,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
-import AnimatedList, { AnimatedItem } from "@/components/ui/AnimatedList"
+import AnimatedList from "@/components/ui/AnimatedList"
 import { cn, getOmScenarioName } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from 'framer-motion'
 
 import { AudioTab } from '@/components/analysis/AudioTab'
@@ -77,12 +84,7 @@ const ProgressRing = ({ value, max, title }: { value: number; max: number; title
   )
 }
 
-interface FileFolderRipple {
-  key: number
-  x: number
-  y: number
-  size: number
-}
+
 
 const getAllFilesUnderNode = (node: any): string[] => {
   let files: string[] = []
@@ -118,7 +120,6 @@ const RecordingNode = memo(function RecordingNode({
   expandedAll: boolean | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const [ripples, setRipples] = useState<FileFolderRipple[]>([])
   
   // Sync expansion with global toggle
   useEffect(() => {
@@ -126,27 +127,6 @@ const RecordingNode = memo(function RecordingNode({
       setIsExpanded(expandedAll)
     }
   }, [expandedAll, node.type])
-
-  const createRipple = (event: React.MouseEvent<HTMLDivElement>) => {
-    const container = event.currentTarget
-    const rect = container.getBoundingClientRect()
-    const size = Math.max(rect.width, rect.height)
-    const x = event.clientX - rect.left - size / 2
-    const y = event.clientY - rect.top - size / 2
-
-    const newRipple: FileFolderRipple = {
-      key: Date.now() + Math.random(),
-      x,
-      y,
-      size,
-    }
-
-    setRipples((prev) => [...prev, newRipple])
-  }
-
-  const handleAnimationEnd = (key: number) => {
-    setRipples((prev) => prev.filter((ripple) => ripple.key !== key))
-  }
 
   const hasChildren = node.children && node.children.length > 0
   // O(1) lookup using Set instead of O(N) array.includes()
@@ -175,14 +155,11 @@ const RecordingNode = memo(function RecordingNode({
           e.dataTransfer.setData("text/plain", node.path)
         }}
         className={cn(
-          "flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-all mb-0.5 relative overflow-hidden",
+          "flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-colors mb-0.5 relative overflow-hidden active:scale-[0.98] active:transition-transform",
           selectedPath === node.path ? "bg-primary/20 ring-1 ring-primary/30" : "text-foreground/80"
         )}
         style={{ paddingLeft: `${(level * 12) + 8}px` }}
-        onClick={(e) => {
-          createRipple(e)
-          onSelect(node.path)
-        }}
+        onClick={() => onSelect(node.path)}
       >
         <div className="flex items-center gap-2 overflow-hidden flex-1 relative z-10">
           <div onClick={(e) => { e.stopPropagation(); onToggleCheck(node.path); }}>
@@ -221,19 +198,7 @@ const RecordingNode = memo(function RecordingNode({
           </Badge>
         </div>
 
-        {ripples.map((ripple) => (
-          <span
-            key={ripple.key}
-            className="absolute rounded-full bg-white/20 pointer-events-none animate-ripple"
-            style={{
-              width: ripple.size,
-              height: ripple.size,
-              left: ripple.x,
-              top: ripple.y,
-            }}
-            onAnimationEnd={() => handleAnimationEnd(ripple.key)}
-          />
-        ))}
+
       </div>
     )
   }
@@ -241,11 +206,8 @@ const RecordingNode = memo(function RecordingNode({
   return (
     <div className="flex flex-col">
       <div 
-        onClick={(e) => {
-          createRipple(e)
-          setIsExpanded(!isExpanded)
-        }}
-        className="flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-all mb-0.5 relative overflow-hidden"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between p-1.5 hover:bg-surface-3 rounded-lg cursor-pointer group transition-colors mb-0.5 relative overflow-hidden active:scale-[0.98] active:transition-transform"
         style={{ paddingLeft: `${(level * 12) + 8}px` }}
       >
         <div className="flex items-center gap-2 overflow-hidden relative z-10 flex-1">
@@ -276,24 +238,12 @@ const RecordingNode = memo(function RecordingNode({
            </div>
         )}
 
-        {ripples.map((ripple) => (
-          <span
-            key={ripple.key}
-            className="absolute rounded-full bg-white/20 pointer-events-none animate-ripple"
-            style={{
-              width: ripple.size,
-              height: ripple.size,
-              left: ripple.x,
-              top: ripple.y,
-            }}
-            onAnimationEnd={() => handleAnimationEnd(ripple.key)}
-          />
-        ))}
+
       </div>
       {hasChildren && (
         <div 
           className={cn(
-            "grid transition-all duration-200 ease-in-out",
+            "grid transition-[grid-template-rows,opacity] duration-200 ease-in-out",
             isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
           )}
         >
@@ -347,8 +297,17 @@ export default function AnalysisTab() {
     setAnalysisSelectedFile(filePath)
   }, [setAnalysisSelectedFile])
 
-  // O(1) lookup set — rebuilt only when the array reference changes
-  const checkedFilesSet = useMemo(() => new Set(analysisCheckedFiles), [analysisCheckedFiles])
+  // Stable Set reference — only creates a new Set when contents actually change
+  const checkedFilesSetRef = useRef(new Set<string>())
+  const checkedFilesSet = useMemo(() => {
+    const next = new Set(analysisCheckedFiles)
+    const prev = checkedFilesSetRef.current
+    if (next.size === prev.size && analysisCheckedFiles.every(f => prev.has(f))) {
+      return prev  // Same contents — keep old reference to avoid invalidating memo'd children
+    }
+    checkedFilesSetRef.current = next
+    return next
+  }, [analysisCheckedFiles])
 
   const totalMF4Count = useMemo(() => 
     analysisResults.reduce((acc, res) => acc + (res.tracking_stats?.[1] || 0), 0), 
@@ -370,11 +329,12 @@ export default function AnalysisTab() {
   const toggleFolder = useCallback((node: any) => {
     const files = getAllFilesUnderNode(node)
     const allChecked = files.every(f => checkedFilesSet.has(f))
+    const fileSet = new Set(files)
     let nextChecked: string[]
     if (allChecked) {
-      nextChecked = analysisCheckedFiles.filter(f => !files.includes(f))
+      nextChecked = analysisCheckedFiles.filter(f => !fileSet.has(f))
     } else {
-      const toAdd = files.filter(f => !analysisCheckedFiles.includes(f))
+      const toAdd = files.filter(f => !checkedFilesSet.has(f))
       nextChecked = [...analysisCheckedFiles, ...toAdd]
     }
     useAppStore.setState({ analysisCheckedFiles: nextChecked })
@@ -533,50 +493,176 @@ export default function AnalysisTab() {
                 />
               ) : (
                 <div className="flex-1 overflow-hidden flex flex-col">
-                  <div className="p-4 border-b border-white/5 bg-surface-2/30">
-                    <div className="flex items-center justify-between mb-4">
-                       <div className="flex items-center gap-2">
-                          <LayoutGrid className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-bold tracking-tight text-foreground">Recordings</span>
-                       </div>
-                       <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="w-6 h-6 hover:bg-primary/10 hover:text-primary transition-colors border-0 border-transparent shadow-none"
-                            onClick={toggleExpand}
-                            title={isAllExpanded ? "Collapse All" : "Expand All"}
-                          >
-                            {isAllExpanded ? <ListChevronsDownUp className="w-3.5 h-3.5" /> : <ListChevronsUpDown className="w-3.5 h-3.5" />}
-                          </Button>
-                       </div>
+                  <div className="p-3 border-b border-white/5 bg-surface-2/30 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <LayoutGrid className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-sm font-bold tracking-tight text-foreground truncate">Recordings</span>
                     </div>
 
-                    {/* Radio Selection Group */}
-                    <RadioGroup 
-                      value={selectionType} 
-                      onValueChange={handleSelectionChange}
-                      className="flex gap-x-3 gap-y-2"
-                    >
-                      {[
-                        { id: 'all', label: 'All' },
-                        { id: 'none', label: 'None' },
-                      ].map((item) => (
-                        <div key={item.id} className="flex items-center space-x-1.5">
-                          <RadioGroupItem value={item.id} id={`r-${item.id}`} className="w-3 h-3 border-white/20" />
-                          <Label htmlFor={`r-${item.id}`} className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-primary transition-colors">
-                            {item.label}
-                          </Label>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Gmail style master checkbox + dropdown */}
+                      <div className="flex items-center bg-transparent border-0 p-0">
+                        <div 
+                          className="flex items-center px-1 cursor-pointer" 
+                          onClick={() => {
+                            const allFiles: string[] = []
+                            const collect = (nodes: any[]) => {
+                              for (const n of nodes) {
+                                if (n.type === 'file') allFiles.push(n.path)
+                                if (n.children) collect(n.children)
+                              }
+                            }
+                            collect(analysisResults)
+                            const allChecked = allFiles.length > 0 && allFiles.every(f => checkedFilesSet.has(f))
+                            if (allChecked) {
+                              handleSelectionChange('none')
+                            } else {
+                              handleSelectionChange('all')
+                            }
+                          }}
+                        >
+                          <Checkbox
+                            checked={
+                              (() => {
+                                const allFiles: string[] = []
+                                const collect = (nodes: any[]) => {
+                                  for (const n of nodes) {
+                                    if (n.type === 'file') allFiles.push(n.path)
+                                    if (n.children) collect(n.children)
+                                  }
+                                }
+                                collect(analysisResults)
+                                if (allFiles.length === 0) return false
+                                const checkedCount = allFiles.filter(f => checkedFilesSet.has(f)).length
+                                if (checkedCount === allFiles.length) return true
+                                if (checkedCount > 0) return "indeterminate"
+                                return false
+                              })()
+                            }
+                            className="w-4 h-4 border-white/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                          />
                         </div>
-                      ))}
-                    </RadioGroup>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon-sm" className="h-6 w-5 p-0 hover:bg-white/10 rounded border-0 shadow-none">
+                              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem 
+                              onClick={() => handleSelectionChange('all')} 
+                              className="text-sm font-medium gap-2"
+                            >
+                              <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
+                              <span>All</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleSelectionChange('none')} 
+                              className="text-sm font-medium gap-2"
+                            >
+                              <Circle className="w-4 h-4 text-muted-foreground" />
+                              <span>None</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                const allNodes: any[] = []
+                                const collect = (nodes: any[]) => {
+                                  for (const n of nodes) {
+                                    if (n.type === 'file') allNodes.push(n)
+                                    if (n.children) collect(n.children)
+                                  }
+                                }
+                                collect(analysisResults)
+                                const matched = allNodes.filter(n => !n.has_tracking).map(n => n.path)
+                                useAppStore.setState({ analysisCheckedFiles: matched })
+                              }} 
+                              className="text-sm font-medium gap-2"
+                            >
+                              <Smile className="w-4 h-4 text-muted-foreground" />
+                              <span>Tracking Pending</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                const allNodes: any[] = []
+                                const collect = (nodes: any[]) => {
+                                  for (const n of nodes) {
+                                    if (n.type === 'file') allNodes.push(n)
+                                    if (n.children) collect(n.children)
+                                  }
+                                }
+                                collect(analysisResults)
+                                const matched = allNodes.filter(n => !n.has_marks).map(n => n.path)
+                                useAppStore.setState({ analysisCheckedFiles: matched })
+                              }} 
+                              className="text-sm font-medium gap-2"
+                            >
+                              <Locate className="w-4 h-4 text-muted-foreground" />
+                              <span>Marks Pending</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                const allNodes: any[] = []
+                                const collect = (nodes: any[]) => {
+                                  for (const n of nodes) {
+                                    if (n.type === 'file') allNodes.push(n)
+                                    if (n.children) collect(n.children)
+                                  }
+                                }
+                                collect(analysisResults)
+                                const matched = allNodes.filter(n => !n.has_report).map(n => n.path)
+                                useAppStore.setState({ analysisCheckedFiles: matched })
+                              }} 
+                              className="text-sm font-medium gap-2"
+                            >
+                              <FileChartColumnIncreasing className="w-4 h-4 text-muted-foreground" />
+                              <span>Report Pending</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={async () => {
+                          if (!analysisSourcePath) return
+                          try {
+                            const res = await fetch('/api/analysis/scan', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ source_dir: analysisSourcePath }),
+                            })
+                            const data = await res.json()
+                            if (data.results) {
+                              useAppStore.getState().setAnalysisResults(data.results)
+                              useAppStore.getState().setAnalysisAvailableCameras(data.available_cameras || [])
+                            }
+                          } catch (err) {
+                            console.error("Failed to refresh scan", err)
+                          }
+                        }}
+                        title="Refresh recordings"
+                        className="w-7 h-7 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all border-0 shadow-none"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="w-7 h-7 hover:bg-white/10 hover:text-primary transition-colors rounded-lg text-muted-foreground border-0 shadow-none"
+                        onClick={toggleExpand}
+                        title={isAllExpanded ? "Collapse All" : "Expand All"}
+                      >
+                        {isAllExpanded ? <ListChevronsDownUp className="w-3.5 h-3.5" /> : <ListChevronsUpDown className="w-3.5 h-3.5" />}
+                      </Button>
+                    </div>
                   </div>
 
                   <AnimatedList className="flex-1 bg-background/30 relative">
                     <div className={cn("flex flex-col gap-0.5 p-2", analysisResults.length === 0 && "h-full min-h-[350px] justify-center items-center")}>
                       {analysisResults.map((res, i) => (
-                        <AnimatedItem key={i} index={i} delay={0.05}>
                           <RecordingNode 
+                            key={res.name || i}
                             node={res} 
                             selectedPath={analysisSelectedFile} 
                             onSelect={selectFile} 
@@ -585,7 +671,6 @@ export default function AnalysisTab() {
                             onToggleFolder={toggleFolder}
                             expandedAll={analysisExpandedAll}
                           />
-                        </AnimatedItem>
                       ))}
                       {analysisResults.length === 0 && (
                         <div className="flex flex-col items-center justify-center gap-4 select-none w-full relative">
@@ -608,16 +693,16 @@ export default function AnalysisTab() {
                     </div>
                   </AnimatedList>
 
-                  <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                        <CheckSquare className="w-3.5 h-3.5 text-primary" />
-                        <span className="text-sm font-bold text-primary tracking-tight">
-                          {analysisCheckedFiles.length} selected
-                        </span>
-                     </div>
-                     <span className="text-xs font-medium text-muted-foreground tracking-tight opacity-50">
-                        Total: {totalMF4Count} MF4
-                     </span>
+                  <div className="p-3 border-t border-white/5 bg-surface-2/30 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                      <CheckSquare className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-sm font-bold text-primary tracking-tight">
+                        {checkedFilesSet.size} selected
+                      </span>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground tracking-tight opacity-50">
+                      Total: {totalMF4Count} MF4
+                    </span>
                   </div>
                 </div>
               )}
