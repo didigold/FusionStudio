@@ -9,6 +9,7 @@ from fastapi import APIRouter, WebSocket
 from pydantic import BaseModel
 
 from backend.core.utils import resource_path
+from backend.core.ga_marks import flatten_middle_marks, normalize_periods
 from backend.ws.manager import manager_reporting
 
 logger = logging.getLogger("fusionstudio.reporting")
@@ -269,11 +270,14 @@ def _resolve_gsr_image_path(filename: str) -> str | None:
     return None
 
 
-def build_report_config(file_path: str, protocol: str, metadata: dict, category_configs: dict, gauge_rules: dict, driver_marks: list, micro: dict = None, show_thresholds: bool = False) -> dict:
+def build_report_config(file_path: str, protocol: str, metadata: dict, category_configs: dict, gauge_rules: dict, driver_marks: list, micro: dict = None, show_thresholds: bool = False, driver_periods: list = None) -> dict:
     import re
     import numpy as np
     from asammdf import MDF
     from backend.core.audio_analysis import find_first_valid_event
+
+    if driver_periods is None:
+        driver_periods = normalize_periods(driver_marks)
 
     basename = os.path.splitext(os.path.basename(file_path))[0]
     target_category = None
@@ -1021,6 +1025,7 @@ def build_report_config(file_path: str, protocol: str, metadata: dict, category_
         },
         'gauge_rules': normalized_gauge_rules,
         'driver_marks': driver_marks,
+        'driver_periods': driver_periods,
         'unresponsive_phases': unresponsive_phases
     }
 
@@ -1141,9 +1146,10 @@ async def gaze_preview(req: GazePreviewRequest):
                 if mk.lower().endswith(filename) or mk.lower().endswith(filename.replace(".mf4", "_tracking.mf4")):
                     driver_marks = mv
                     break
-        if not isinstance(driver_marks, list):
-            driver_marks = []
-            
+        # GA marks may be a legacy flat list or a v2 structured dict
+        driver_periods = normalize_periods(driver_marks)
+        driver_marks = flatten_middle_marks(driver_periods)
+
         config = build_report_config(
             file_path=req.file_path,
             protocol=req.protocol,
@@ -1151,6 +1157,7 @@ async def gaze_preview(req: GazePreviewRequest):
             category_configs=req.category_configs,
             gauge_rules=req.gauge_rules,
             driver_marks=driver_marks,
+            driver_periods=driver_periods,
             micro=req.micro,
             show_thresholds=True
         )
@@ -1262,9 +1269,10 @@ async def gaze_generate(req: GazeGenerateRequest):
                                 if mk.lower().endswith(filename) or mk.lower().endswith(filename.replace(".mf4", "_tracking.mf4")):
                                     driver_marks = mv
                                     break
-                        if not isinstance(driver_marks, list):
-                            driver_marks = []
-                            
+                        # GA marks may be a legacy flat list or a v2 structured dict
+                        driver_periods = normalize_periods(driver_marks)
+                        driver_marks = flatten_middle_marks(driver_periods)
+
                         config = build_report_config(
                             file_path=file_path,
                             protocol=req.protocol,
@@ -1272,6 +1280,7 @@ async def gaze_generate(req: GazeGenerateRequest):
                             category_configs=req.category_configs,
                             gauge_rules=req.gauge_rules,
                             driver_marks=driver_marks,
+                            driver_periods=driver_periods,
                             micro=req.micro,
                             show_thresholds=False
                         )

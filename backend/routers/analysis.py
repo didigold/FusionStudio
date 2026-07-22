@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from backend.ws.manager import manager_analysis
 from backend.core.audio_analysis import obtain_peak_frequency, find_first_valid_event
+from backend.core.ga_marks import normalize_periods, to_storage
 from backend.core.logic_engine import calculate_ncap_metrics
 from backend.core.chronos_worker import ChronosWorker
 from backend.core.chronos_manager import ChronosManager
@@ -84,7 +85,7 @@ class BrowseRequest(BaseModel):
 class MarksRequest(BaseModel):
     file_path: str
     source_dir: str = ""
-    marks: list[float]
+    marks: list[float] | dict | None = None
     marks_type: str = "OM"
 
 
@@ -882,8 +883,12 @@ async def save_marks(req: MarksRequest):
     try:
         marks_dict = _load_marks_dict(req.source_dir, req.marks_type)
         key = _get_marks_key(req.file_path)
-        if req.marks:
-            marks_dict[key] = req.marks
+        payload = req.marks
+        if req.marks_type == "GA" and isinstance(payload, dict):
+            # Canonicalize GA v2 payloads before persisting
+            payload = to_storage(normalize_periods(payload))
+        if payload:
+            marks_dict[key] = payload
         elif key in marks_dict:
             del marks_dict[key]
         await asyncio.to_thread(_save_marks_dict, req.source_dir, marks_dict, req.marks_type)
@@ -900,7 +905,11 @@ async def load_marks(req: SignalPreviewRequest):
         marks_dict = _load_marks_dict(req.source_dir, req.marks_type)
         key = _get_marks_key(req.file_path)
         # Try both _tracking and non-tracking variants
-        entry = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4")) or []
+        entry = marks_dict.get(key) or marks_dict.get(key.replace(".mf4", "_tracking.mf4"))
+        if req.marks_type == "GA":
+            # GA marks may be a legacy flat list or a v2 structured dict
+            periods = normalize_periods(entry)
+            return {"status": "success", "marks": entry if entry is not None else [], "periods": periods}
         if not isinstance(entry, list):
             entry = []
         return {"status": "success", "marks": entry}

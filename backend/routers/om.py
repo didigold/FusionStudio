@@ -926,6 +926,7 @@ class _OMReportingWorker:
         def run(self, req, loop, on_progress):
             global _active_worker
             from backend.routers.analysis import _load_marks_dict, _get_marks_key
+            from backend.core.ga_marks import flatten_middle_marks, normalize_periods
             from backend.core.om_report_builder import OMReportBuilder
             
             try:
@@ -981,8 +982,9 @@ class _OMReportingWorker:
                                     driver_marks = mv
                                     break
                         if not isinstance(driver_marks, list):
-                            driver_marks = []
-                            
+                            # Tolerate GA v2 structured payloads
+                            driver_marks = flatten_middle_marks(normalize_periods(driver_marks))
+
                         config = build_om_report_config(
                             file_path=file_path,
                             protocol=req.protocol,

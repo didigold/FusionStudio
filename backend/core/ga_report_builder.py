@@ -1015,10 +1015,22 @@ class GAReportBuilder:
                 
     def _draw_driver_behaviour_plot(self, ax):
         import matplotlib.pyplot as plt
+        from backend.core.ga_marks import normalize_periods, period_metrics
         ax.set_facecolor('white')
-        ax.set_title("Driver Behaviour", fontsize=9, fontweight='bold', color=self.COLORS['text'])
-        marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if t is not None])
-        if not marks:
+
+        periods = self.config.get('driver_periods')
+        if periods is None:
+            periods = normalize_periods(self.config.get('driver_marks', []) or [])
+        periods = [p for p in (periods or [])
+                   if any(p.get(k) is not None for k in ('move_start', 'gaze_on', 'move_end', 'road_on'))]
+
+        MAX_ANN = 5
+        title = "Driver Behaviour"
+        if len(periods) > MAX_ANN:
+            title += f"  (+{len(periods) - MAX_ANN} more periods)"
+        ax.set_title(title, fontsize=9, fontweight='bold', color=self.COLORS['text'])
+
+        if not periods:
             ax.text(0.5, 0.5, "Post-Processing Required", ha='center', va='center', fontsize=8, color=self.COLORS['text_light'], style='italic')
         else:
             max_t = None
@@ -1027,20 +1039,56 @@ class GAReportBuilder:
                 if ts:
                     try: max_t = max(max_t or 0, float(max(ts)))
                     except Exception: pass
-            if max_t is None: max_t = marks[-1] + 1.0
-            xs, ys, st, lt = [0.0], [0], 0, 0.0
-            for t in marks:
-                xs.extend([t, t]); ys.extend([st, 1-st]); st = 1-st; lt = t
-            xs.append(max_t); ys.append(st)
-            ax.step(xs, ys, where='post', color=self.COLORS['primary'], linewidth=0.8)
-            ax.set_ylim(-0.1, 1.1)
-            ax.set_yticks([0, 1])
-            ax.set_yticklabels(['Troad', 'Taway'], fontsize=7, color=self.COLORS['text_light'])
+            if max_t is None:
+                all_v = [v for p in periods for v in (p.get('move_start'), p.get('gaze_on'), p.get('move_end'), p.get('road_on')) if v is not None]
+                max_t = (max(all_v) + 1.0) if all_v else 10.0
+
+            # --- Trapezoidal gaze profile (On-road level on top, On-gaze level below) ---
+            ROAD, GAZE = 1.0, 0.0
+            xs, ys = [0.0], [ROAD]
+
+            def _push(x, y):
+                xs.append(max(float(x), xs[-1])); ys.append(y)
+
+            for p in periods:
+                ms, g = p.get('move_start'), p.get('gaze_on')
+                me, ro = p.get('move_end'), p.get('road_on')
+                d_start = ms if ms is not None else g   # transition-away begins
+                d_end = g if g is not None else ms      # gaze fixates on target
+                r_start = me if me is not None else ro  # transition-back begins
+                r_end = ro if ro is not None else me    # gaze fixates on road
+
+                if d_end is not None:
+                    if ys[-1] == ROAD:
+                        if d_start is not None and d_start < d_end and d_start >= xs[-1]:
+                            _push(d_start, ROAD); _push(d_end, GAZE)   # ramp down
+                        else:
+                            _push(d_end, ROAD); _push(d_end, GAZE)     # step down
+                    else:
+                        _push(d_end, GAZE)                             # hold gaze level
+                if r_end is not None and r_end > xs[-1]:
+                    if ys[-1] == GAZE:
+                        if r_start is not None and r_start < r_end and r_start >= xs[-1]:
+                            _push(r_start, GAZE); _push(r_end, ROAD)   # ramp up
+                        else:
+                            _push(r_end, GAZE); _push(r_end, ROAD)     # step up
+                    else:
+                        _push(r_end, ROAD)
+
+            _push(max_t, ys[-1])
+            ax.plot(xs, ys, color=self.COLORS['primary'], linewidth=1.1, zorder=4,
+                    solid_capstyle='round', solid_joinstyle='miter')
+            ax.set_xlim(0.0, max_t)
+            ax.set_ylim(-0.58, 1.74)
+            ax.set_yticks([GAZE, ROAD])
+            ax.set_yticklabels(['Taway', 'Troad'], fontsize=7, color=self.COLORS['text_light'])
+
             psig = self.config.get('pass_signal_name')
+            warn_time = None
             if psig:
-                pt = self.signal_times.get(psig)
-                if pt is not None: ax.axvline(x=pt, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9)
-            
+                warn_time = self.signal_times.get(psig)
+                if warn_time is not None: ax.axvline(x=warn_time, color=self._get_signal_color(psig), linestyle='-', linewidth=0.8, alpha=0.9, zorder=3)
+
             # For Unresponsive: draw vertical lines for each phase detection time
             _category = self.config.get('target_category', '')
             if 'Unresponsive' in _category:
@@ -1054,7 +1102,76 @@ class GAReportBuilder:
                     _t = _sig_times.get(f'phase_{_pi}')
                     if _t is not None:
                         _clr = _phase_colors[_pi % len(_phase_colors)]
-                        ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
+                        ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9, zorder=3)
+
+            # --- Dimension annotations (limited to avoid saturation) ---
+            def _ref(pp):
+                for k in ('gaze_on', 'move_start', 'move_end', 'road_on'):
+                    v = pp.get(k)
+                    if v is not None: return v
+                return 0.0
+
+            ann_idx = list(range(len(periods)))
+            if len(ann_idx) > MAX_ANN:
+                if warn_time is not None:
+                    ann_idx = sorted(ann_idx, key=lambda i: abs(_ref(periods[i]) - warn_time))[:MAX_ANN]
+                else:
+                    ann_idx = ann_idx[:MAX_ANN]
+                ann_idx.sort()
+            ann_set = set(ann_idx)
+
+            lbl_color = self.COLORS['text_light']
+            vats_color = self.COLORS.get('secondary', '#d93d04')
+
+            def _clamp_x(x):
+                if max_t > 1.0:
+                    return min(max(float(x), 0.02 * max_t), 0.98 * max_t)
+                return float(x)
+
+            def _dim(x1, x2, y, label, color, above=False, fs=5.0):
+                ax.annotate('', xy=(x2, y), xytext=(x1, y),
+                            arrowprops=dict(arrowstyle='<->', color=color, lw=0.6, shrinkA=0, shrinkB=0),
+                            annotation_clip=False, zorder=5)
+                if above:
+                    ax.text((x1 + x2) / 2.0, y + 0.05, label, fontsize=fs, color=color,
+                            ha='center', va='bottom', fontweight='bold', zorder=5, clip_on=False)
+                else:
+                    ax.text((x1 + x2) / 2.0, y - 0.05, label, fontsize=fs, color=color,
+                            ha='center', va='top', fontweight='bold', zorder=5, clip_on=False)
+
+            v_lbl_count = 0
+            vats_row = 0
+            for i in ann_idx:
+                p = periods[i]
+                ms, g, me, ro = p.get('move_start'), p.get('gaze_on'), p.get('move_end'), p.get('road_on')
+                mets = period_metrics(p)
+                if g is not None:
+                    ax.axvline(x=g, color=lbl_color, linestyle=':', linewidth=0.7, alpha=0.8, zorder=2)
+                    lvl = 1.66 if (v_lbl_count % 2 == 0) else 1.50
+                    v_lbl_count += 1
+                    ax.text(_clamp_x(g), lvl, f"$T_{{gaze,{i+1}}}$", fontsize=5.5, color=lbl_color,
+                            ha='center', va='bottom', zorder=5, clip_on=False)
+                if ro is not None:
+                    ax.axvline(x=ro, color=lbl_color, linestyle=':', linewidth=0.7, alpha=0.8, zorder=2)
+                    lvl = 1.66 if (v_lbl_count % 2 == 0) else 1.50
+                    v_lbl_count += 1
+                    ax.text(_clamp_x(ro), lvl, f"$T_{{Road,{i+1}}}$", fontsize=5.5, color=lbl_color,
+                            ha='center', va='bottom', zorder=5, clip_on=False)
+                if mets['t_trans_away'] is not None and mets['t_trans_away'] > 0:
+                    _dim(ms, g, 1.30, f"{mets['t_trans_away']:.2f}s", lbl_color, above=True)
+                if mets['t_vats'] is not None and mets['t_vats'] > 0:
+                    y_arr = -0.26 if (vats_row % 2 == 0) else -0.44
+                    vats_row += 1
+                    _dim(g, me, y_arr, f"$\\Delta T_{{VATS,{i+1}}}$ = {mets['t_vats']:.2f}s", vats_color, fs=5.5)
+                if mets['t_trans_back'] is not None and mets['t_trans_back'] > 0:
+                    _dim(me, ro, 1.30, f"{mets['t_trans_back']:.2f}s", lbl_color, above=True)
+                # Road fixation between this period and the next one (both annotated)
+                if ro is not None and (i + 1) in ann_set:
+                    nxt = periods[i + 1]
+                    nxt_start = nxt.get('move_start') if nxt.get('move_start') is not None else nxt.get('gaze_on')
+                    if nxt_start is not None and nxt_start > ro:
+                        _dim(ro, nxt_start, 1.10, f"{nxt_start - ro:.2f}s", lbl_color, above=True, fs=4.5)
+
         ax.set_xlabel("Time (s)", fontsize=7, color=self.COLORS['text_light'])
         ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
         ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],

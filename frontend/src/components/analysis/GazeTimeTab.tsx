@@ -50,6 +50,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import {
+  GA_MARK_SEQUENCE,
+  GA_MARK_META,
+  normalizeGaPeriods,
+  toGaStoragePayload,
+  flattenGaMarkers,
+  countGaMarks,
+  nextGaMarkSlot,
+  emptyGaPeriod,
+} from '@/lib/gaMarks';
+import type { GaPeriod, GaMarkKey, GaMarkerRef } from '@/lib/gaMarks';
 import { useAppStore } from '@/store/useAppStore';
 import { analysisApi } from '@/api/analysisApi';
 import { UPlotChart } from './UPlotChart';
@@ -146,14 +157,21 @@ export function GazeTimeTab() {
     hoveringChartRef.current = hoveringChart;
   }, [hoveringChart]);
 
-  const [marks, setMarks] = useState<number[]>([]);
-  const marksRef = useRef<number[]>([]);
-  useEffect(() => { marksRef.current = marks; }, [marks]);
+  const [periods, setPeriods] = useState<GaPeriod[]>([]);
+  const periodsRef = useRef<GaPeriod[]>([]);
+  useEffect(() => { periodsRef.current = periods; }, [periods]);
+
+  const totalMarks = useMemo(() => countGaMarks(periods), [periods]);
+  const nextSlot = useMemo(() => nextGaMarkSlot(periods), [periods]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [targetFile, setTargetFile] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+
+  const savePeriods = useCallback((next: GaPeriod[]) => {
+    if (targetFile) analysisApi.saveMarks(targetFile, toGaStoragePayload(next), analysisSourcePath, 'GA').catch(() => {});
+  }, [targetFile, analysisSourcePath]);
 
   const videoFileName = useMemo(() => {
     if (!targetFile) return 'video.avi';
@@ -404,65 +422,36 @@ export function GazeTimeTab() {
     ? subjectCases[currentCaseIdx + 1].split(/[\\/]/).pop()?.replace('.mf4', '').replace('_tracking', '')
     : null;
 
-  // Phase 2: Undo stack
-  const undoStackRef = useRef<{type: string; data: any}[]>([]);
+  // Phase 2: Undo stack (snapshots of periods taken before each mutation)
+  const undoStackRef = useRef<GaPeriod[][]>([]);
   const [undoCount, setUndoCount] = useState(0);
 
-  const addToUndoStack = useCallback((action: {type: string; data: any}) => {
-    undoStackRef.current.push(action);
+  const pushUndoSnapshot = useCallback(() => {
+    undoStackRef.current.push(periodsRef.current.map(p => ({ ...p })));
     setUndoCount(undoStackRef.current.length);
   }, []);
 
   const undoLastAction = useCallback(() => {
     const stack = undoStackRef.current;
     if (stack.length === 0) return;
-    const action = stack.pop()!;
+    const prev = stack.pop()!;
     setUndoCount(stack.length);
-
-    if (action.type === 'add') {
-      const t = action.data.time;
-      setMarks(prev => {
-        const idx = prev.lastIndexOf(t);
-        if (idx === -1) return prev;
-        const next = [...prev];
-        next.splice(idx, 1);
-        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
-        return next;
-      });
-    } else if (action.type === 'remove') {
-      const t = action.data.time;
-      setMarks(prev => {
-        const next = [...prev, t].sort((a, b) => a - b);
-        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
-        return next;
-      });
-    } else if (action.type === 'move') {
-      const { oldTime } = action.data;
-      setMarks(prev => {
-        const next = [...prev];
-        const idx = next.indexOf(action.data.newTime);
-        if (idx >= 0) {
-          next[idx] = oldTime;
-          next.sort((a, b) => a - b);
-          if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
-        }
-        return next;
-      });
-    }
-  }, [targetFile, analysisSourcePath]);
+    setPeriods(prev);
+    savePeriods(prev);
+  }, [savePeriods]);
 
   // Pan state
   const panRef = useRef<{startClientX: number; startMin: number; startMax: number} | null>(null);
 
   // Drag state for markers
-  const draggingRef = useRef<{index: number; startVal: number} | null>(null);
+  const draggingRef = useRef<{marker: GaMarkerRef; startVal: number} | null>(null);
   // Live value during drag (avoids stale index after sort)
   const dragLiveValRef = useRef<number | null>(null);
-  // Marker index that passed the 1s hover threshold (enables marker drag on mousedown)
-  const markerDragReadyRef = useRef<number | null>(null);
+  // Marker that passed the hover threshold (enables marker drag on mousedown)
+  const markerDragReadyRef = useRef<GaMarkerRef | null>(null);
 
   // Context menu state
-  const [contextMenu, setContextMenu] = useState<{x: number; y: number; markerIdx: number} | null>(null);
+  const [contextMenu, setContextMenu] = useState<{x: number; y: number; marker: GaMarkerRef} | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   // Dismiss context menu on any click
@@ -490,9 +479,16 @@ export function GazeTimeTab() {
         }
       });
       analysisApi.loadMarks(targetFile, analysisSourcePath, 'GA').then(res => {
-        if (res.data.status === 'success' && Array.isArray(res.data.marks)) setMarks(res.data.marks);
-        else setMarks([]);
+        if (res.data.status === 'success') {
+          // Backend returns canonical v2 periods; fall back to normalizing raw entry
+          const loaded = Array.isArray(res.data.periods)
+            ? normalizeGaPeriods(res.data.periods)
+            : normalizeGaPeriods(res.data.marks);
+          setPeriods(loaded);
+        } else setPeriods([]);
       });
+      undoStackRef.current = [];
+      setUndoCount(0);
       const baseName = targetFile.replace('_tracking.mf4', '').replace('.mf4', '');
       const camId = analysisSelectedCamera;
       const camSuffix = typeof camId === 'number' ? `cam${camId}` : String(camId);
@@ -531,7 +527,9 @@ export function GazeTimeTab() {
       setBottomSignal('');
       setTopData([[], []]);
       setBottomData([[], []]);
-      setMarks([]);
+      setPeriods([]);
+      undoStackRef.current = [];
+      setUndoCount(0);
       setVideoUrl(null);
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
@@ -588,36 +586,50 @@ export function GazeTimeTab() {
   }, []);
 
   const clearAllMarks = useCallback(() => {
-    undoStackRef.current.push({type: 'clear', data: {marks: [...marksRef.current]}});
-    setUndoCount(undoStackRef.current.length);
-    setMarks([]);
-    if (targetFile) analysisApi.saveMarks(targetFile, [], analysisSourcePath, 'GA').catch(() => {});
-  }, [targetFile, analysisSourcePath]);
+    pushUndoSnapshot();
+    setPeriods([]);
+    savePeriods([]);
+  }, [pushUndoSnapshot, savePeriods]);
 
   const clearLastMark = useCallback(() => {
-    const current = marksRef.current;
-    if (current.length > 0) {
-      const removed = current[current.length - 1];
-      addToUndoStack({type: 'remove', data: {time: removed}});
-      const newMarks = current.slice(0, -1);
-      setMarks(newMarks);
-      if (targetFile) analysisApi.saveMarks(targetFile, newMarks, analysisSourcePath, 'GA').catch(() => {});
+    const current = periodsRef.current;
+    if (countGaMarks(current) === 0) return;
+    pushUndoSnapshot();
+    const next = current.map(p => ({ ...p }));
+    // Remove the last filled slot of the last non-empty period
+    for (let pi = next.length - 1; pi >= 0; pi--) {
+      const filled = GA_MARK_SEQUENCE.filter(k => next[pi][k] != null);
+      if (filled.length === 0) continue;
+      next[pi][filled[filled.length - 1]] = null;
+      break;
     }
-  }, [targetFile, addToUndoStack, analysisSourcePath]);
+    const cleaned = next.filter(p => GA_MARK_SEQUENCE.some(k => p[k] != null));
+    setPeriods(cleaned);
+    savePeriods(cleaned);
+  }, [pushUndoSnapshot, savePeriods]);
 
-  const removeMarkerByIndex = useCallback((index: number) => {
-    const removed = marksRef.current[index];
-    if (removed == null) return;
-    addToUndoStack({type: 'remove', data: {time: removed, index}});
-    setMarks(prev => {
-      const next = [...prev];
-      const idx = next.indexOf(removed);
-      if (idx === -1) return prev;
-      next.splice(idx, 1);
-      if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
-      return next;
-    });
-  }, [targetFile, addToUndoStack, analysisSourcePath]);
+  const removeMarker = useCallback((ref: GaMarkerRef) => {
+    pushUndoSnapshot();
+    const next = periodsRef.current.map(p => ({ ...p }));
+    if (next[ref.periodIdx]) next[ref.periodIdx][ref.key] = null;
+    const cleaned = next.filter(p => GA_MARK_SEQUENCE.some(k => p[k] != null));
+    setPeriods(cleaned);
+    savePeriods(cleaned);
+  }, [pushUndoSnapshot, savePeriods]);
+
+  const changeMarkerType = useCallback((ref: GaMarkerRef, newKey: GaMarkKey) => {
+    if (ref.key === newKey) return;
+    pushUndoSnapshot();
+    const next = periodsRef.current.map(p => ({ ...p }));
+    const p = next[ref.periodIdx];
+    if (!p) return;
+    // Swap values between the old slot and the requested slot
+    const t = p[ref.key];
+    p[ref.key] = p[newKey];
+    p[newKey] = t;
+    setPeriods(next);
+    savePeriods(next);
+  }, [pushUndoSnapshot, savePeriods]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -637,26 +649,29 @@ export function GazeTimeTab() {
   }, [targetFile, clearAllMarks, clearLastMark, undoLastAction, goToNextCase, goToPrevCase, resetZoom, setShowBlur]);
 
   const addMarkAtTime = useCallback((t: number) => {
-    if (marksRef.current.includes(t)) return;
-    addToUndoStack({type: 'add', data: {time: t}});
+    const slot = nextGaMarkSlot(periodsRef.current);
+    pushUndoSnapshot();
     playSound('/sounds/tap_01.wav');
-    setMarks(prev => {
-        const next = [...prev, t].sort((a, b) => a - b);
-        if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
-        return next;
-    });
-  }, [targetFile, addToUndoStack, analysisSourcePath]);
+    const next = periodsRef.current.map(p => ({ ...p }));
+    while (next.length <= slot.periodIdx) next.push(emptyGaPeriod());
+    next[slot.periodIdx][slot.key] = t;
+    setPeriods(next);
+    savePeriods(next);
+  }, [pushUndoSnapshot, savePeriods]);
 
   // Find a marker by x pixel pos (plotting-area coords)
-  const findMarkerIndexAtPos = useCallback((u: uPlot, px: number): number | null => {
-    const currentMarks = marksRef.current;
+  const findMarkerAtPos = useCallback((u: uPlot, px: number): GaMarkerRef | null => {
+    const markers = flattenGaMarkers(periodsRef.current);
     const tol = 15;
-    for (let i = 0; i < currentMarks.length; i++) {
-      const mPx = u.valToPos(currentMarks[i], 'x');
-      if (Math.abs(mPx - px) <= tol) return i;
+    for (const m of markers) {
+      const mPx = u.valToPos(m.t, 'x');
+      if (Math.abs(mPx - px) <= tol) return m;
     }
     return null;
   }, []);
+
+  const sameMarker = useCallback((a: GaMarkerRef | null, b: GaMarkerRef | null) =>
+    a === b || (!!a && !!b && a.periodIdx === b.periodIdx && a.key === b.key), []);
 
   const createOptions = useCallback((label: string, color: string): uPlot.Options => ({
     width: 600, height: 200,
@@ -729,7 +744,7 @@ export function GazeTimeTab() {
           if (other) other.batch(() => other.setScale('x', { min: nMin, max: nMax }));
         };
 
-        let lastNearIdx: number | null = null;
+        let lastNear: GaMarkerRef | null = null;
         let markerHoverTimeout: any = null;
 
         const clearHoverTimeout = () => {
@@ -743,22 +758,22 @@ export function GazeTimeTab() {
           if (panRef.current || draggingRef.current) return;
           const rect = u.over.getBoundingClientRect();
           const px = e.clientX - rect.left;
-          const nearIdx = findMarkerIndexAtPos(u, px);
-          if (nearIdx != null) {
-            if (lastNearIdx !== nearIdx) {
+          const near = findMarkerAtPos(u, px);
+          if (near != null) {
+            if (!sameMarker(lastNear, near)) {
               clearHoverTimeout();
               markerDragReadyRef.current = null;
-              lastNearIdx = nearIdx;
-              
+              lastNear = near;
+
               // Start a 0.25s hover delay timer to activate the drag cursor
               markerHoverTimeout = setTimeout(() => {
                 u.over.style.setProperty('cursor', 'ew-resize', 'important');
-                markerDragReadyRef.current = nearIdx;
+                markerDragReadyRef.current = near;
               }, 250);
             }
           } else {
             clearHoverTimeout();
-            if (lastNearIdx != null) { markerDragReadyRef.current = null; lastNearIdx = null; }
+            if (lastNear != null) { markerDragReadyRef.current = null; lastNear = null; }
             u.over.style.removeProperty('cursor');
           }
         });
@@ -766,7 +781,7 @@ export function GazeTimeTab() {
         u.over.addEventListener('mouseleave', () => {
           clearHoverTimeout();
           markerDragReadyRef.current = null;
-          lastNearIdx = null;
+          lastNear = null;
           u.over.style.removeProperty('cursor');
         });
 
@@ -775,11 +790,11 @@ export function GazeTimeTab() {
           if (e.button !== 0) return;
           const rect = u.over.getBoundingClientRect();
           const px = e.clientX - rect.left;
-          // Only start marker drag if the 1s hover threshold was met
+          // Only start marker drag if the hover threshold was met
           if (markerDragReadyRef.current != null) {
-            const nearIdx = findMarkerIndexAtPos(u, px);
-            if (nearIdx != null && nearIdx === markerDragReadyRef.current) {
-              draggingRef.current = {index: nearIdx, startVal: marksRef.current[nearIdx]};
+            const near = findMarkerAtPos(u, px);
+            if (near != null && sameMarker(near, markerDragReadyRef.current)) {
+              draggingRef.current = { marker: near, startVal: near.t };
               markerDragReadyRef.current = null;
               // Keep cursor as ew-resize during drag
               u.over.style.setProperty('cursor', 'ew-resize', 'important');
@@ -811,18 +826,17 @@ export function GazeTimeTab() {
 
         u.over.addEventListener('mouseup', (e: MouseEvent) => {
           if (draggingRef.current) {
-            const { index, startVal } = draggingRef.current;
+            const { marker, startVal } = draggingRef.current;
             const newVal = dragLiveValRef.current;
             dragLiveValRef.current = null;
             if (newVal != null && Math.abs(newVal - startVal) > 0.001) {
-              addToUndoStack({type: 'move', data: {index, oldTime: startVal, newTime: newVal}});
-              setMarks(prev => {
-                const next = prev.filter(t => Math.abs(t - startVal) > 0.0001);
-                next.push(newVal);
-                next.sort((a, b) => a - b);
-                if (targetFile) analysisApi.saveMarks(targetFile, next, analysisSourcePath, 'GA').catch(() => {});
-                return next;
-              });
+              pushUndoSnapshot();
+              const next = periodsRef.current.map(p => ({ ...p }));
+              if (next[marker.periodIdx]) {
+                next[marker.periodIdx][marker.key] = newVal;
+                setPeriods(next);
+                savePeriods(next);
+              }
             }
             draggingRef.current = null;
             u.over.style.removeProperty('cursor');
@@ -847,9 +861,9 @@ export function GazeTimeTab() {
           e.preventDefault();
           const rect = u.over.getBoundingClientRect();
           const px = e.clientX - rect.left;
-          const nearIdx = findMarkerIndexAtPos(u, px);
-          if (nearIdx != null) {
-            setContextMenu({x: e.clientX, y: e.clientY, markerIdx: nearIdx});
+          const near = findMarkerAtPos(u, px);
+          if (near != null) {
+            setContextMenu({x: e.clientX, y: e.clientY, marker: near});
           }
         });
 
@@ -876,37 +890,47 @@ export function GazeTimeTab() {
       }],
       draw: [u => {
         const { ctx, bbox } = u; ctx.save();
-        const currentMarks = marksRef.current;
+        const currentPeriods = periodsRef.current;
 
-        for (let i = 0; i < currentMarks.length - 1; i += 2) {
-          const x1 = u.valToPos(currentMarks[i], 'x', true);
-          const x2 = u.valToPos(currentMarks[i+1], 'x', true);
-          ctx.fillStyle = 'rgba(255, 152, 0, 0.15)';
-          ctx.fillRect(x1, bbox.top, x2 - x1, bbox.height);
+        // Period shading: transition away (amber), VATS (orange), transition back (green)
+        for (const p of currentPeriods) {
+          const spans: Array<[number | null, number | null, string]> = [
+            [p.move_start, p.gaze_on, 'rgba(255, 193, 7, 0.10)'],
+            [p.gaze_on, p.move_end, 'rgba(255, 152, 0, 0.15)'],
+            [p.move_end, p.road_on, 'rgba(76, 175, 80, 0.10)'],
+          ];
+          for (const [a, b, color] of spans) {
+            if (a == null || b == null || b <= a) continue;
+            const x1 = u.valToPos(a, 'x', true);
+            const x2 = u.valToPos(b, 'x', true);
+            ctx.fillStyle = color;
+            ctx.fillRect(x1, bbox.top, x2 - x1, bbox.height);
+          }
         }
 
         const dragVal = dragLiveValRef.current;
-        const dragIdx = draggingRef.current?.index;
-        currentMarks.forEach((m, idx) => {
-          const val = (dragIdx === idx && dragVal != null) ? dragVal : m;
+        const dragMarker = draggingRef.current?.marker;
+        for (const m of flattenGaMarkers(currentPeriods)) {
+          const isDragging = !!dragMarker && dragMarker.periodIdx === m.periodIdx && dragMarker.key === m.key && dragVal != null;
+          const val = isDragging ? dragVal! : m.t;
           const x = u.valToPos(val, 'x', true);
           if (x >= 0 && x <= bbox.width + bbox.left) {
-            const isDragging = dragIdx === idx && dragVal != null;
+            const meta = GA_MARK_META[m.key];
             ctx.beginPath();
-            ctx.strokeStyle = isDragging ? '#ffb74d' : '#ff9800';
-            ctx.lineWidth = isDragging ? 2.5 : 1.5;
-            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = isDragging ? '#ffb74d' : meta.color;
+            ctx.lineWidth = isDragging ? 2.5 : 1.75;
+            if (meta.dash) ctx.setLineDash(meta.dash);
             ctx.moveTo(x, bbox.top);
             ctx.lineTo(x, bbox.top + bbox.height);
             ctx.stroke();
             ctx.setLineDash([]);
           }
-        });
+        }
 
         ctx.restore();
       }]
     }
-  }), [addMarkAtTime, sync.key, findMarkerIndexAtPos, addToUndoStack, targetFile, isDark]);
+  }), [addMarkAtTime, sync.key, findMarkerAtPos, sameMarker, pushUndoSnapshot, savePeriods, targetFile, isDark]);
 
   const topOptions = useMemo(() => createOptions(topSignal, '#00AAFF'), [topSignal, createOptions]);
   const bottomOptions = useMemo(() => createOptions(bottomSignal, '#00FF88'), [bottomSignal, createOptions]);
@@ -914,7 +938,7 @@ export function GazeTimeTab() {
   useEffect(() => {
     topChartRef.current?.redraw();
     bottomChartRef.current?.redraw();
-  }, [marks]);
+  }, [periods]);
 
   // Ref to throttle expensive React state updates from onTimeUpdate
   const lastStateUpdateRef = useRef<number>(0);
@@ -993,6 +1017,15 @@ export function GazeTimeTab() {
               >
                 <div className="absolute top-2 left-2 z-10 pointer-events-none">
                   <Badge variant="outline" className="bg-black/60 backdrop-blur-md border-white/5 text-[9px] font-bold text-[#00AAFF]">{topSignal}</Badge>
+                </div>
+                <div className="absolute top-2 right-2 z-10 pointer-events-none">
+                  <Badge
+                    variant="outline"
+                    className="bg-black/60 backdrop-blur-md border-white/5 text-[9px] font-bold"
+                    style={{ color: GA_MARK_META[nextSlot.key].color }}
+                  >
+                    Next: {GA_MARK_META[nextSlot.key].label} · P{nextSlot.periodIdx + 1}
+                  </Badge>
                 </div>
                 <UPlotChart options={topOptions} data={topData} className="w-full h-full" onReady={u => topChartRef.current = u} />
                 <div ref={topTooltipRef} style={{display: 'none', transform: 'translateY(-50%)'}}
@@ -1246,12 +1279,12 @@ export function GazeTimeTab() {
                                 <Undo2 className="w-3 h-3 text-muted-foreground" /> Undo
                                 <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+Z</DropdownMenuShortcut>
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-sm" onClick={clearLastMark} disabled={marks.length === 0}>
+                            <DropdownMenuItem className="text-sm" onClick={clearLastMark} disabled={totalMarks === 0}>
                                 <Eraser className="w-3 h-3 text-muted-foreground" /> Clear Last
                                 <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+D</DropdownMenuShortcut>
                             </DropdownMenuItem>
                             <AlertDialog open={confirmClearAll} onOpenChange={setConfirmClearAll}>
-                                <DropdownMenuItem className="text-sm" variant="destructive" disabled={marks.length === 0} onSelect={(e) => { e.preventDefault(); setConfirmClearAll(true); }}>
+                                <DropdownMenuItem className="text-sm" variant="destructive" disabled={totalMarks === 0} onSelect={(e) => { e.preventDefault(); setConfirmClearAll(true); }}>
                                     <Trash2 className="w-3 h-3" /> Clear All
                                     <DropdownMenuShortcut className="text-[10px] text-muted-foreground/60">Ctrl+Space</DropdownMenuShortcut>
                                 </DropdownMenuItem>
@@ -1264,7 +1297,7 @@ export function GazeTimeTab() {
                                             Clear All Markers?
                                         </AlertDialogTitle>
                                         <AlertDialogDescription className="text-sm text-muted-foreground max-w-[280px]">
-                                            This will permanently delete all <span className="text-red-400 font-extrabold">{marks.length}</span> markers. This action cannot be undone.
+                                            This will permanently delete all <span className="text-red-400 font-extrabold">{totalMarks}</span> markers. This action cannot be undone.
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter className="flex-row items-center justify-center gap-3 w-full mt-2">
@@ -1471,13 +1504,27 @@ export function GazeTimeTab() {
 
       {contextMenu && (
         <div
-          className="fixed z-50 bg-surface-2/95 border border-white/10 backdrop-blur-xl rounded-xl p-1 shadow-2xl"
+          className="fixed z-50 bg-surface-2/95 border border-white/10 backdrop-blur-xl rounded-xl p-1 shadow-2xl min-w-[160px]"
           style={{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}}
           onClick={() => setContextMenu(null)}
         >
+          <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-white/40">
+            {GA_MARK_META[contextMenu.marker.key].label} · P{contextMenu.marker.periodIdx + 1} · {contextMenu.marker.t.toFixed(2)}s
+          </div>
+          {GA_MARK_SEQUENCE.filter(k => k !== contextMenu.marker.key).map(k => (
+            <button
+              key={k}
+              className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-lg w-full transition-colors"
+              onMouseDown={(e) => { e.stopPropagation(); changeMarkerType(contextMenu.marker, k); setContextMenu(null); }}
+            >
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: GA_MARK_META[k].color }} />
+              Set as {GA_MARK_META[k].label}
+            </button>
+          ))}
+          <div className="h-px bg-white/10 my-1" />
           <button
             className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-white/80 hover:text-white hover:bg-white/5 rounded-lg w-full transition-colors"
-            onMouseDown={(e) => { e.stopPropagation(); removeMarkerByIndex(contextMenu.markerIdx); setContextMenu(null); }}
+            onMouseDown={(e) => { e.stopPropagation(); removeMarker(contextMenu.marker); setContextMenu(null); }}
           >
             <Trash2 className="w-3 h-3 text-red-400" />
             Delete Marker
