@@ -936,7 +936,14 @@ class GAReportBuilder:
         try:
             signals = self.config.get('signals', {})
             names = list(signals.keys())
-            # GA includes Driver Behaviour as an extra plot; cap total at 6
+            # GA includes Driver Behaviour as an extra plot; cap total at 6.
+            # Short Distraction scenarios (NDT & DRT) pack many gaze periods into
+            # Driver Behaviour, so cap at 5 (2-col bottom row) to give it more room:
+            # the last signal is dropped, Driver Behaviour is always kept.
+            _cat = str(self.config.get('target_category', ''))
+            _is_short = any(kw in _cat for kw in ("Short Distraction", "Phone Use"))
+            if _is_short and len(names) + 1 > 5:
+                names = names[:4]
             all_p = names + ['__DRIVER_BEHAVIOUR__']
             total_plots = min(len(all_p), 6)
 
@@ -1079,9 +1086,9 @@ class GAReportBuilder:
             ax.plot(xs, ys, color=self.COLORS['primary'], linewidth=1.1, zorder=4,
                     solid_capstyle='round', solid_joinstyle='miter')
             ax.set_xlim(0.0, max_t)
-            ax.set_ylim(-0.58, 1.74)
+            ax.set_ylim(-0.95, 1.95)
             ax.set_yticks([GAZE, ROAD])
-            ax.set_yticklabels(['Taway', 'Troad'], fontsize=7, color=self.COLORS['text_light'])
+            ax.set_yticklabels(['$T_{VATS}$', '$T_{Road}$'], fontsize=7, color=self.COLORS['text_light'])
 
             psig = self.config.get('pass_signal_name')
             warn_time = None
@@ -1104,7 +1111,7 @@ class GAReportBuilder:
                         _clr = _phase_colors[_pi % len(_phase_colors)]
                         ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9, zorder=3)
 
-            # --- Dimension annotations (limited to avoid saturation) ---
+            # --- CAD-style dimension annotations (limited to avoid saturation) ---
             def _ref(pp):
                 for k in ('gaze_on', 'move_start', 'move_end', 'road_on'):
                     v = pp.get(k)
@@ -1120,57 +1127,95 @@ class GAReportBuilder:
                 ann_idx.sort()
             ann_set = set(ann_idx)
 
-            lbl_color = self.COLORS['text_light']
-            vats_color = self.COLORS.get('secondary', '#d93d04')
+            dim_color = self.COLORS['text_light']
 
-            def _clamp_x(x):
-                if max_t > 1.0:
-                    return min(max(float(x), 0.02 * max_t), 0.98 * max_t)
-                return float(x)
+            def _dim(x1, x2, y, label, ext_from, force_interior=False, fs=4.5):
+                """Engineering dimension (ISO/DIN standard): extension lines, filled pointed arrowheads (-|> / <|-|>), value above/below line."""
+                if x1 is None or x2 is None or x1 >= x2:
+                    return
 
-            def _dim(x1, x2, y, label, color, above=False, fs=5.0):
-                ax.annotate('', xy=(x2, y), xytext=(x1, y),
-                            arrowprops=dict(arrowstyle='<->', color=color, lw=0.6, shrinkA=0, shrinkB=0),
-                            annotation_clip=False, zorder=5)
-                if above:
-                    ax.text((x1 + x2) / 2.0, y + 0.05, label, fontsize=fs, color=color,
-                            ha='center', va='bottom', fontweight='bold', zorder=5, clip_on=False)
+                if isinstance(ext_from, (tuple, list)):
+                    ef1, ef2 = ext_from
                 else:
-                    ax.text((x1 + x2) / 2.0, y - 0.05, label, fontsize=fs, color=color,
-                            ha='center', va='top', fontweight='bold', zorder=5, clip_on=False)
+                    ef1 = ef2 = ext_from
 
-            v_lbl_count = 0
-            vats_row = 0
+                d_ref = 1.0 if y > max(ef1, ef2) else -1.0
+
+                # Extension line at x1
+                d1 = 1.0 if y > ef1 else -1.0
+                ax.plot([x1, x1], [ef1 + 0.04 * d1, y + 0.05 * d1],
+                        color=dim_color, lw=0.3, alpha=0.7, zorder=4, clip_on=False)
+
+                # Extension line at x2
+                d2 = 1.0 if y > ef2 else -1.0
+                ax.plot([x2, x2], [ef2 + 0.04 * d2, y + 0.05 * d2],
+                        color=dim_color, lw=0.3, alpha=0.7, zorder=4, clip_on=False)
+
+                w = abs(x2 - x1)
+                # Autodetect small dimension interval unless forced interior
+                is_small = not force_interior and ((w / max_t < 0.035) or (w < 0.45))
+
+                if is_small:
+                    # Exterior dimensioning with filled pointed arrowheads (-|>)
+                    ax.plot([x1, x2], [y, y], color=dim_color, lw=0.22, zorder=5, clip_on=False)
+                    tail = max(0.02 * max_t, 0.4)
+                    # Left arrow pointing right into x1 (filled pointed head)
+                    ax.annotate('', xy=(x1, y), xytext=(max(0.0, x1 - tail), y),
+                                arrowprops=dict(arrowstyle='-|>', color=dim_color, lw=0.22,
+                                                shrinkA=0, shrinkB=0, mutation_scale=2.0),
+                                annotation_clip=False, zorder=5)
+                    # Right arrow pointing left into x2 (filled pointed head)
+                    ax.annotate('', xy=(x2, y), xytext=(x2 + tail, y),
+                                arrowprops=dict(arrowstyle='-|>', color=dim_color, lw=0.22,
+                                                shrinkA=0, shrinkB=0, mutation_scale=2.0),
+                                annotation_clip=False, zorder=5)
+                else:
+                    # Interior dimensioning with filled pointed arrowheads (<|-|>)
+                    ax.annotate('', xy=(x1, y), xytext=(x2, y),
+                                arrowprops=dict(arrowstyle='<|-|>', color=dim_color, lw=0.22,
+                                                shrinkA=0, shrinkB=0, mutation_scale=2.0),
+                                annotation_clip=False, zorder=5)
+
+                lx = (x1 + x2) / 2.0
+                if max_t > 1.0:
+                    lx = min(max(lx, 0.02 * max_t), 0.98 * max_t)
+                ax.text(lx, y + 0.06 * d_ref, label, fontsize=fs, color=dim_color,
+                        ha='center', va='bottom' if d_ref > 0 else 'top',
+                        fontweight='light', zorder=5, clip_on=False)
+
+            # Tier heights for CAD dimensioning:
+            # - Y_TOP_AWAY (1.30): Initial movement transition times (t_trans_away: move_start -> gaze_on)
+            # - Y_TOP_BACK (1.58): Final movement transition times (t_trans_back: move_end -> road_on)
+            # - Y_BOTTOM (-0.34): VATS and Road fixation durations (force_interior=True)
+            Y_TOP_AWAY = 1.30
+            Y_TOP_BACK = 1.58
+            Y_BOTTOM = -0.34
+
             for i in ann_idx:
                 p = periods[i]
                 ms, g, me, ro = p.get('move_start'), p.get('gaze_on'), p.get('move_end'), p.get('road_on')
                 mets = period_metrics(p)
-                if g is not None:
-                    ax.axvline(x=g, color=lbl_color, linestyle=':', linewidth=0.7, alpha=0.8, zorder=2)
-                    lvl = 1.66 if (v_lbl_count % 2 == 0) else 1.50
-                    v_lbl_count += 1
-                    ax.text(_clamp_x(g), lvl, f"$T_{{gaze,{i+1}}}$", fontsize=5.5, color=lbl_color,
-                            ha='center', va='bottom', zorder=5, clip_on=False)
-                if ro is not None:
-                    ax.axvline(x=ro, color=lbl_color, linestyle=':', linewidth=0.7, alpha=0.8, zorder=2)
-                    lvl = 1.66 if (v_lbl_count % 2 == 0) else 1.50
-                    v_lbl_count += 1
-                    ax.text(_clamp_x(ro), lvl, f"$T_{{Road,{i+1}}}$", fontsize=5.5, color=lbl_color,
-                            ha='center', va='bottom', zorder=5, clip_on=False)
-                if mets['t_trans_away'] is not None and mets['t_trans_away'] > 0:
-                    _dim(ms, g, 1.30, f"{mets['t_trans_away']:.2f}s", lbl_color, above=True)
-                if mets['t_vats'] is not None and mets['t_vats'] > 0:
-                    y_arr = -0.26 if (vats_row % 2 == 0) else -0.44
-                    vats_row += 1
-                    _dim(g, me, y_arr, f"$\\Delta T_{{VATS,{i+1}}}$ = {mets['t_vats']:.2f}s", vats_color, fs=5.5)
-                if mets['t_trans_back'] is not None and mets['t_trans_back'] > 0:
-                    _dim(me, ro, 1.30, f"{mets['t_trans_back']:.2f}s", lbl_color, above=True)
-                # Road fixation between this period and the next one (both annotated)
+
+                # 1. Initial movement time (transition away: move_start [1.0] -> gaze_on [0.0]) on TOP TIER 1
+                if ms is not None and g is not None and mets['t_trans_away'] is not None and mets['t_trans_away'] > 0:
+                    _dim(ms, g, Y_TOP_AWAY, f"{mets['t_trans_away']:.2f}s", ext_from=(1.0, 0.0))
+
+                # 2. VATS duration (gaze_on [0.0] -> move_end [0.0]) on BOTTOM LEVEL (force interior cotas)
+                if g is not None and me is not None and mets['t_vats'] is not None and mets['t_vats'] > 0:
+                    _dim(g, me, Y_BOTTOM, f"{mets['t_vats']:.2f}s", ext_from=0.0, force_interior=True)
+
+                # 3. Final movement time (transition back: move_end [0.0] -> road_on [1.0]) on TOP TIER 2
+                if me is not None and ro is not None and mets['t_trans_back'] is not None and mets['t_trans_back'] > 0:
+                    _dim(me, ro, Y_TOP_BACK, f"{mets['t_trans_back']:.2f}s", ext_from=(0.0, 1.0))
+
+                # 4. Road fixation duration (road_on [1.0] of period i -> move_start/gaze_on of period i+1) on BOTTOM LEVEL (force interior cotas)
                 if ro is not None and (i + 1) in ann_set:
                     nxt = periods[i + 1]
-                    nxt_start = nxt.get('move_start') if nxt.get('move_start') is not None else nxt.get('gaze_on')
+                    nxt_has_ms = nxt.get('move_start') is not None
+                    nxt_start = nxt.get('move_start') if nxt_has_ms else nxt.get('gaze_on')
+                    nxt_level = 1.0 if nxt_has_ms else 0.0
                     if nxt_start is not None and nxt_start > ro:
-                        _dim(ro, nxt_start, 1.10, f"{nxt_start - ro:.2f}s", lbl_color, above=True, fs=4.5)
+                        _dim(ro, nxt_start, Y_BOTTOM, f"{nxt_start - ro:.2f}s", ext_from=(1.0, nxt_level), force_interior=True)
 
         ax.set_xlabel("Time (s)", fontsize=7, color=self.COLORS['text_light'])
         ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)

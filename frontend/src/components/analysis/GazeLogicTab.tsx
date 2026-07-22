@@ -1265,10 +1265,13 @@ export function GazeLogicTab() {
 
   const [isCollapsibleOpen, setIsCollapsibleOpen] = useState(true);
 
+  const isShortDistraction = activeCategory.includes("Short Distraction") || activeCategory.includes("Phone Use");
+  const maxSignals = isShortDistraction ? 4 : 5;
+
   const columns: GridColDef[] = useMemo(() => [
     {
       field: "checked",
-      headerName: `${checkedCount}/5`,
+      headerName: `${checkedCount}/${maxSignals}`,
       width: 64,
       sortable: false,
       disableColumnMenu: true,
@@ -1279,7 +1282,7 @@ export function GazeLogicTab() {
             onCheckedChange={(checked) =>
               updateSignalField(activeCategory, params.row.name, "checked", !!checked)
             }
-            disabled={!params.value && checkedCount >= 5}
+            disabled={!params.value && checkedCount >= maxSignals}
             className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
           />
         </div>
@@ -1419,7 +1422,7 @@ export function GazeLogicTab() {
   // signalValuesCache is read via signalValuesCacheRef inside renderCell closures,
   // so it does NOT need to be in this dep array. This prevents DataGrid column
   // reconstruction (and full re-render) every time cached values arrive.
-  ], [checkedCount, activeCategory, loadedFiles, updateSignalField]);
+  ], [checkedCount, activeCategory, loadedFiles, updateSignalField, maxSignals]);
 
   const rows = useMemo(() => {
     return sortedFilteredSignals.map(sig => ({

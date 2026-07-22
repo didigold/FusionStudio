@@ -77,6 +77,38 @@ const playSound = (src: string) => {
   }
 };
 
+function findNextTimestampIndex(arr: number[], val: number, eps = 1e-5): number {
+  let low = 0;
+  let high = arr.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (arr[mid] > val + eps) {
+      ans = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  return ans;
+}
+
+function findPrevTimestampIndex(arr: number[], val: number, eps = 1e-5): number {
+  let low = 0;
+  let high = arr.length - 1;
+  let ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (arr[mid] < val - eps) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
 
 // --- CHART SKELETON COMPONENT ---
 const ChartSkeleton = ({ title, colorClass }: { title: string; colorClass: string }) => {
@@ -142,6 +174,10 @@ export function GazeTimeTab() {
   const [topData, setTopData] = useState<uPlot.AlignedData>([[], []]);
   const [bottomData, setBottomData] = useState<uPlot.AlignedData>([[], []]);
 
+  const topDataRef = useRef<uPlot.AlignedData>([[], []]);
+  useEffect(() => { topDataRef.current = topData; }, [topData]);
+  const bottomDataRef = useRef<uPlot.AlignedData>([[], []]);
+  useEffect(() => { bottomDataRef.current = bottomData; }, [bottomData]);
 
   const topSignalRef = useRef(topSignal);
   useEffect(() => { topSignalRef.current = topSignal; }, [topSignal]);
@@ -203,6 +239,15 @@ export function GazeTimeTab() {
   const durationRef = useRef(100);
   useEffect(() => { durationRef.current = duration; }, [duration]);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const blurVideoRef = useRef<HTMLVideoElement>(null);
+  const topChartRef = useRef<uPlot | null>(null);
+  const bottomChartRef = useRef<uPlot | null>(null);
+  const panRef = useRef<{startClientX: number; startMin: number; startMax: number} | null>(null);
+  const draggingRef = useRef<{marker: GaMarkerRef; startVal: number} | null>(null);
+  const dragLiveValRef = useRef<number | null>(null);
+  const markerDragReadyRef = useRef<GaMarkerRef | null>(null);
+
   // rAF video seek loop (avoids jank from setCursor seeking on every pixel)
   const seekRAF = useRef(0);
   useEffect(() => {
@@ -232,10 +277,30 @@ export function GazeTimeTab() {
     return () => cancelAnimationFrame(seekRAF.current);
   }, []);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const blurVideoRef = useRef<HTMLVideoElement>(null);
-  const topChartRef = useRef<uPlot | null>(null);
-  const bottomChartRef = useRef<uPlot | null>(null);
+
+
+  const updatePlayheadCursors = useCallback((time: number) => {
+    if (isSyncedRef.current && hoveringChartRef.current != null) return;
+    [topChartRef.current, bottomChartRef.current].forEach(u => {
+      if (u) {
+        const left = u.valToPos(time, 'x');
+        u.setCursor({ left, top: 0 });
+      }
+    });
+  }, []);
+
+  const stepToTime = useCallback((newTime: number) => {
+    const clamped = Math.min(durationRef.current, Math.max(0, newTime));
+    currentTimeRef.current = clamped;
+    setCurrentTime(clamped);
+    if (videoRef.current) {
+      videoRef.current.currentTime = clamped;
+    }
+    if (blurVideoRef.current) {
+      blurVideoRef.current.currentTime = clamped;
+    }
+    updatePlayheadCursors(clamped);
+  }, [updatePlayheadCursors]);
 
   // Video zoom state
   const [videoZoom, setVideoZoom] = useState(1);
@@ -440,15 +505,7 @@ export function GazeTimeTab() {
     savePeriods(prev);
   }, [savePeriods]);
 
-  // Pan state
-  const panRef = useRef<{startClientX: number; startMin: number; startMax: number} | null>(null);
 
-  // Drag state for markers
-  const draggingRef = useRef<{marker: GaMarkerRef; startVal: number} | null>(null);
-  // Live value during drag (avoids stale index after sort)
-  const dragLiveValRef = useRef<number | null>(null);
-  // Marker that passed the hover threshold (enables marker drag on mousedown)
-  const markerDragReadyRef = useRef<GaMarkerRef | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{x: number; y: number; marker: GaMarkerRef} | null>(null);
@@ -631,9 +688,85 @@ export function GazeTimeTab() {
     savePeriods(next);
   }, [pushUndoSnapshot, savePeriods]);
 
+  const addMarkAtTime = useCallback((t: number) => {
+    const slot = nextGaMarkSlot(periodsRef.current);
+    pushUndoSnapshot();
+    playSound('/sounds/tap_01.wav');
+    const next = periodsRef.current.map(p => ({ ...p }));
+    while (next.length <= slot.periodIdx) next.push(emptyGaPeriod());
+    next[slot.periodIdx][slot.key] = t;
+    setPeriods(next);
+    savePeriods(next);
+  }, [pushUndoSnapshot, savePeriods]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!targetFile) return;
+
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      // Handle Arrow keys navigation across timestamps
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const cur = currentTimeRef.current;
+        const topTs = topDataRef.current[0] as number[] | undefined;
+        const bottomTs = bottomDataRef.current[0] as number[] | undefined;
+        const ts = (topTs && topTs.length > 0) ? topTs : ((bottomTs && bottomTs.length > 0) ? bottomTs : null);
+
+        const isForward = e.key === 'ArrowRight' || e.key === 'ArrowUp';
+        const jumpCount = e.shiftKey ? 10 : 1;
+
+        if (ts && ts.length > 0) {
+          if (isForward) {
+            const idx = findNextTimestampIndex(ts, cur);
+            if (idx !== -1) {
+              const targetIdx = Math.min(ts.length - 1, idx + jumpCount - 1);
+              stepToTime(ts[targetIdx]);
+            } else {
+              stepToTime(durationRef.current);
+            }
+          } else {
+            const idx = findPrevTimestampIndex(ts, cur);
+            if (idx !== -1) {
+              const targetIdx = Math.max(0, idx - jumpCount + 1);
+              stepToTime(ts[targetIdx]);
+            } else {
+              stepToTime(0);
+            }
+          }
+        } else {
+          const stepSize = e.shiftKey ? 0.1 : 0.01;
+          stepToTime(isForward ? cur + stepSize : cur - stepSize);
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' || (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey && !e.metaKey)) {
+        e.preventDefault();
+        const markTime = hoverTimeRef.current ?? currentTimeRef.current;
+        addMarkAtTime(markTime);
+        return;
+      }
+
+      if (e.code === 'Space' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        if (videoRef.current) {
+          if (isPlayingRef.current) {
+            videoRef.current.pause();
+            blurVideoRef.current?.pause();
+            setIsPlaying(false);
+          } else {
+            videoRef.current.play();
+            blurVideoRef.current?.play();
+            setIsPlaying(true);
+          }
+        }
+        return;
+      }
+
       if (e.ctrlKey && e.code === 'Space') { e.preventDefault(); clearAllMarks(); }
       if (e.ctrlKey && e.key.toLowerCase() === 'd') { e.preventDefault(); clearLastMark(); }
       if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undoLastAction(); }
@@ -646,18 +779,9 @@ export function GazeTimeTab() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [targetFile, clearAllMarks, clearLastMark, undoLastAction, goToNextCase, goToPrevCase, resetZoom, setShowBlur]);
+  }, [targetFile, clearAllMarks, clearLastMark, undoLastAction, goToNextCase, goToPrevCase, resetZoom, setShowBlur, addMarkAtTime, stepToTime]);
 
-  const addMarkAtTime = useCallback((t: number) => {
-    const slot = nextGaMarkSlot(periodsRef.current);
-    pushUndoSnapshot();
-    playSound('/sounds/tap_01.wav');
-    const next = periodsRef.current.map(p => ({ ...p }));
-    while (next.length <= slot.periodIdx) next.push(emptyGaPeriod());
-    next[slot.periodIdx][slot.key] = t;
-    setPeriods(next);
-    savePeriods(next);
-  }, [pushUndoSnapshot, savePeriods]);
+
 
   // Find a marker by x pixel pos (plotting-area coords)
   const findMarkerAtPos = useCallback((u: uPlot, px: number): GaMarkerRef | null => {
@@ -943,15 +1067,7 @@ export function GazeTimeTab() {
   // Ref to throttle expensive React state updates from onTimeUpdate
   const lastStateUpdateRef = useRef<number>(0);
 
-  const updatePlayheadCursors = useCallback((time: number) => {
-    if (hoveringChartRef.current != null) return;
-    [topChartRef.current, bottomChartRef.current].forEach(u => {
-      if (u) {
-        const left = u.valToPos(time, 'x');
-        u.setCursor({ left, top: 0 });
-      }
-    });
-  }, []);
+
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1488,8 +1604,13 @@ export function GazeTimeTab() {
                             size="icon" 
                             variant="ghost" 
                             onClick={toggleSync} 
-                            className="h-7 w-7 rounded-lg hover:bg-accent text-foreground flex items-center justify-center disabled:opacity-30"
-                            title={isSynced ? 'Disable Mouse Sync' : 'Enable Mouse Sync'}
+                            className={cn(
+                                "h-7 w-7 rounded-lg transition-colors flex items-center justify-center disabled:opacity-30",
+                                isSynced 
+                                    ? "hover:bg-accent text-foreground" 
+                                    : "bg-amber-500/20 text-amber-500 border border-amber-500/30 hover:bg-amber-500/30"
+                            )}
+                            title={isSynced ? 'Mouse Sync Active (Click to disable and use Arrow keys)' : 'Mouse Sync Disabled (Use Arrow keys ← → for precise timestamp selection)'}
                         >
                             {isSynced ? <Mouse className="w-3.5 h-3.5" /> : <MouseOff className="w-3.5 h-3.5" />}
                         </Button>
