@@ -433,9 +433,9 @@ export function TrackingTab() {
         {analysisChronosRunning && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 animate-in zoom-in duration-300">
             <Badge
-              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-white/10 bg-black/60 backdrop-blur-md text-foreground transition-all duration-500 whitespace-nowrap flex items-center gap-2 shadow-xl shadow-black/40"
+              className="px-4 py-1.5 text-xs font-bold tracking-widest border border-white/10 bg-black/60 backdrop-blur-md text-white transition-all duration-500 whitespace-nowrap flex items-center justify-center gap-2 shadow-xl shadow-black/40 w-[240px]"
             >
-              <Spinner className="w-3 h-3 border-foreground/30 border-t-foreground" />
+              <Spinner className="w-3 h-3 border-white/30 border-t-white" />
               <span>
                 {stats.engine || "ENGINE ACTIVE"} - {Math.round(analysisChronosProgress)}%
               </span>
@@ -450,21 +450,21 @@ export function TrackingTab() {
         {/* HUD Overlay - Bottom Centered Group (H, V, FPS) */}
         {analysisChronosRunning && (
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-20 animate-in zoom-in duration-300">
-          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
-            <MoveHorizontal className="w-3 h-3 text-orange-500" />
-            <span className="text-xs font-bold text-orange-500 tracking-tighter">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 w-[100px]">
+            <MoveHorizontal className="w-3 h-3 text-orange-500 shrink-0" />
+            <span className="text-xs font-bold text-orange-500 tracking-tighter text-right font-mono">
               h: {stats.h_val?.toFixed(2)}
             </span>
           </div>
-          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
-            <MoveVertical className="w-3 h-3 text-blue-500" />
-            <span className="text-xs font-bold text-blue-500 tracking-tighter">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 w-[100px]">
+            <MoveVertical className="w-3 h-3 text-blue-500 shrink-0" />
+            <span className="text-xs font-bold text-blue-500 tracking-tighter text-right font-mono">
               v: {stats.v_val?.toFixed(2)}
             </span>
           </div>
-          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-2">
-            <CircleGauge className="w-3.5 h-3.5 text-[#2da44e]" />
-            <span className="text-xs font-bold text-[#2da44e] tracking-tighter">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 w-[90px]">
+            <CircleGauge className="w-3.5 h-3.5 text-[#2da44e] shrink-0" />
+            <span className="text-xs font-bold text-[#2da44e] tracking-tighter text-right font-mono">
               {Math.round(stats.fps)} FPS
             </span>
           </div>

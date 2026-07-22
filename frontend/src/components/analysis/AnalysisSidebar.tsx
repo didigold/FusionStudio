@@ -235,7 +235,11 @@ function ExpandableGroup({
                   variant={activeTab === item.value ? "active" : "default"}
                   size="sm"
                   onClick={() => handleItemClick(item.value)}
-                  className={cn("relative pl-10", !sidebarOpen && "pl-0")}
+                  className={cn(
+                    "relative pl-10",
+                    !sidebarOpen && "pl-0",
+                    !sidebarOpen && item.showSpinner && "animate-pulse bg-primary/10 text-primary"
+                  )}
                 >
                   <motion.div
                     animate={
@@ -303,7 +307,10 @@ function SidebarItem({
       variant={isActive ? "active" : "default"}
       size="sm"
       onClick={() => onTabChange(value)}
-      className="relative"
+      className={cn(
+        "relative",
+        !sidebarOpen && spinner && "animate-pulse bg-primary/10 text-primary"
+      )}
     >
       <motion.div
         animate={isActive ? { scale: [0.8, 1.15, 1] } : { scale: 1 }}
@@ -327,13 +334,8 @@ function SidebarItem({
       >
         {label}
       </span>
-      {spinner && (
-        <div
-          className={cn(
-            "transition-all duration-300",
-            sidebarOpen ? "ml-auto" : "absolute right-1 top-1",
-          )}
-        >
+      {spinner && sidebarOpen && (
+        <div className="ml-auto transition-all duration-300">
           <Spinner className="size-3 text-primary/60" />
         </div>
       )}
@@ -695,7 +697,10 @@ function LogSidebarButton({ isLogWriting }: { isLogWriting: boolean }) {
       variant={isActive ? "active" : "default"}
       size="sm"
       onClick={() => onTabChange("log")}
-      className="relative"
+      className={cn(
+        "relative",
+        !sidebarOpen && isLogWriting && "animate-pulse bg-primary/10 text-primary"
+      )}
     >
       <motion.div
         animate={isActive ? { scale: [0.8, 1.15, 1] } : { scale: 1 }}
@@ -723,49 +728,45 @@ function LogSidebarButton({ isLogWriting }: { isLogWriting: boolean }) {
         <div
           className={cn(
             "transition-all duration-300 flex items-center justify-center shrink-0",
-            sidebarOpen ? "ml-auto w-5 h-5" : "absolute right-1 top-1",
+            sidebarOpen ? "ml-auto w-5 h-5" : "absolute right-0.5 top-0.5 scale-75",
           )}
         >
-          {sidebarOpen ? (
-            <svg
-              fill="currentColor"
-              className="text-primary w-4 h-4"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <circle cx="4" cy="12" r="3" opacity="1">
-                <animate
-                  id="spinner_qYjJ"
-                  begin="0;spinner_t4KZ.end-0.25s"
-                  attributeName="opacity"
-                  dur="0.75s"
-                  values="1;.2"
-                  fill="freeze"
-                />
-              </circle>
-              <circle cx="12" cy="12" r="3" opacity=".4">
-                <animate
-                  begin="spinner_qYjJ.begin+0.15s"
-                  attributeName="opacity"
-                  dur="0.75s"
-                  values="1;.2"
-                  fill="freeze"
-                />
-              </circle>
-              <circle cx="20" cy="12" r="3" opacity=".3">
-                <animate
-                  id="spinner_t4KZ"
-                  begin="spinner_qYjJ.begin+0.3s"
-                  attributeName="opacity"
-                  dur="0.75s"
-                  values="1;.2"
-                  fill="freeze"
-                />
-              </circle>
-            </svg>
-          ) : (
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          )}
+          <svg
+            fill="currentColor"
+            className="text-primary w-4 h-4"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle cx="4" cy="12" r="3" opacity="1">
+              <animate
+                id="spinner_qYjJ"
+                begin="0;spinner_t4KZ.end-0.25s"
+                attributeName="opacity"
+                dur="0.75s"
+                values="1;.2"
+                fill="freeze"
+              />
+            </circle>
+            <circle cx="12" cy="12" r="3" opacity=".4">
+              <animate
+                begin="spinner_qYjJ.begin+0.15s"
+                attributeName="opacity"
+                dur="0.75s"
+                values="1;.2"
+                fill="freeze"
+              />
+            </circle>
+            <circle cx="20" cy="12" r="3" opacity=".3">
+              <animate
+                id="spinner_t4KZ"
+                begin="spinner_qYjJ.begin+0.3s"
+                attributeName="opacity"
+                dur="0.75s"
+                values="1;.2"
+                fill="freeze"
+              />
+            </circle>
+          </svg>
         </div>
       )}
     </SidebarMenuButton>
