@@ -3,6 +3,7 @@ Matplotlib-based Report Builder for FusionStudio.
 Generates professional A4 engineering reports with logos, graphs, tables.
 """
 import os
+import re
 import numpy as np
 from datetime import datetime
 from backend.core.utils import resource_path, shared_asset_path
@@ -121,8 +122,20 @@ class GAReportBuilder:
             self.max_time = 140.0
         
         import matplotlib.pyplot as plt
-        plt.rcParams['font.family'] = 'Calibri'
-        plt.rcParams['font.sans-serif'] = ['Calibri', 'Arial', 'DejaVu Sans']
+        from matplotlib import font_manager
+        
+        # Load Sofia Sans fonts from assets if available
+        sofia_dir = resource_path('assets/fonts/SofiaSans')
+        if os.path.exists(sofia_dir):
+            try:
+                for f in os.listdir(sofia_dir):
+                    if f.endswith('.ttf'):
+                        font_manager.fontManager.addfont(os.path.join(sofia_dir, f))
+            except Exception as e:
+                print(f"Error loading Sofia Sans fonts: {e}")
+                
+        plt.rcParams['font.family'] = 'Sofia Sans'
+        plt.rcParams['font.sans-serif'] = ['Sofia Sans', 'Calibri', 'Arial', 'DejaVu Sans']
         
     def _ensure_all_signal_times(self):
         """Ensure signal_times is populated for all signals before any plotting begins."""
@@ -250,6 +263,112 @@ class GAReportBuilder:
         plt.close(self.fig)
         return os.path.abspath(output_path)
     
+    def _parse_path_info(self, path_str: str):
+        if not path_str:
+            return "Unknown", "Unknown", "Unknown"
+        import re
+        # Normalize separators
+        normalized = path_str.replace('\\', '/')
+        parts = [p.strip() for p in normalized.split('/') if p.strip()]
+        
+        driver = "Unknown"
+        scenario = "Unknown"
+        test_case = "Unknown"
+        
+        # Look for a part matching E\d+ or P\d+
+        driver_idx = -1
+        for idx, part in enumerate(parts):
+            if re.match(r'^[EP]\d+$', part, re.IGNORECASE):
+                driver = part
+                driver_idx = idx
+                break
+        
+        if driver == "Unknown":
+            # Check for starts with E or P followed by digits
+            for idx, part in enumerate(parts):
+                if re.match(r'^[EP]\d+', part, re.IGNORECASE):
+                    driver = part
+                    driver_idx = idx
+                    break
+                    
+        if driver_idx != -1:
+            # Scenario is the next folder
+            if driver_idx + 1 < len(parts) - 1:
+                scenario = parts[driver_idx + 1]
+                # Test Case is the folder after or filename if no other folder
+                remaining = parts[driver_idx + 2:]
+                if remaining:
+                    if len(remaining) > 1:
+                        test_case = remaining[0]
+                    else:
+                        test_case = os.path.splitext(remaining[-1])[0]
+            elif driver_idx + 1 == len(parts) - 1:
+                # Driver followed directly by filename
+                test_case = os.path.splitext(parts[driver_idx + 1])[0]
+        else:
+            # No driver folder found, parse from the end
+            if len(parts) >= 3:
+                driver = parts[-3]
+                scenario = parts[-2]
+                test_case = os.path.splitext(parts[-1])[0]
+            elif len(parts) == 2:
+                scenario = parts[-2]
+                test_case = os.path.splitext(parts[-1])[0]
+            elif len(parts) == 1:
+                test_case = os.path.splitext(parts[-1])[0]
+
+        # Clean names
+        scenario = re.sub(r'^[PE]\d+[-_]', '', scenario)  # Remove P01_ prefix
+        test_case = re.sub(r'^(CBR|OOP|OM|GA)_', '', test_case, flags=re.IGNORECASE)  # Remove CBR_ prefix
+        test_case = re.sub(r'_\d+$', '', test_case)  # Remove trailing numbers like _1, _2
+        
+        # Replace underscores with spaces and strip
+        driver = driver.replace('_', ' ').strip()
+        scenario = scenario.replace('_', ' ').strip()
+        test_case = test_case.replace('_', ' ').strip()
+        
+        return driver, scenario, test_case
+
+    def _get_report_type(self):
+        """Map the target category/filename to a high-level report type."""
+        category = str(self.config.get('target_category', ''))
+        filename = str(self.config.get('filename', ''))
+        
+        if "OoP" in category or "CSR" in category or "Occupant" in category:
+            return "Occupant Monitoring"
+        if "Distraction" in category:
+            return "Distraction"
+        if any(k in category for k in ("Fatigue", "Drowsiness", "Sleep", "Microsleep", "Unresponsive")):
+            return "Fatigue"
+        
+        # Fallback based on filename prefix
+        base = os.path.splitext(filename)[0]
+        if re.match(r'^D\d+', base, re.IGNORECASE):
+            return "Distraction"
+        if re.match(r'^F\d+', base, re.IGNORECASE):
+            return "Fatigue"
+        if re.match(r'^O\d+', base, re.IGNORECASE):
+            return "Occlusion"
+        if "ADDW" in base.upper():
+            return "ADDW"
+        
+        return "Unknown"
+
+    def _get_scenario_label(self):
+        """Extract a compact scenario label from target_category."""
+        category = str(self.config.get('target_category', ''))
+        if not category:
+            return "Unknown"
+        
+        # Extract parenthetical suffix (e.g. "Long Distraction (NDT)" -> "NDT")
+        match = re.search(r'\(([^)]+)\)', category)
+        if match:
+            return match.group(1).strip()
+        
+        # Clean common prefixes for cleaner display
+        cleaned = re.sub(r'^(Unresponsive driver)\s*[-—]', '', category).strip()
+        return cleaned
+
     def _add_header(self):
         header_ax = self.fig.add_axes([self.MARGIN_X, 0.935, self.CONTENT_WIDTH, 0.05])
         header_ax.axis('off')
@@ -258,14 +377,34 @@ class GAReportBuilder:
         if os.path.exists(company_logo_path):
             self._add_logo(header_ax, company_logo_path, (0.0, 0.5), max_size=(0.045, 0.22))
         
-        # Use relative path if available, otherwise default protocol version
-        banner_text = self.config.get('relative_path')
-        if not banner_text:
-            banner_text = "euro-ncap-protocol-safe-driving-driver-engagement-v11"
-            
-        header_ax.text(0.5, 0.5, banner_text, 
-                      fontsize=9, color=self.COLORS['text_light'],
-                      ha='center', va='center', transform=header_ax.transAxes)
+        path_str = self.config.get('relative_path') or self.config.get('filename') or ""
+        driver, _scenario, _test_case = self._parse_path_info(path_str)
+        report_type = self._get_report_type()
+        scenario_label = self._get_scenario_label()
+        
+        header_ax.text(0.15, 0.76, f"Driver: {driver}", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='left', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.15, 0.48, f"Type: {report_type}", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='left', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.15, 0.20, f"Scenario: {scenario_label}", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='left', va='center', transform=header_ax.transAxes)
+        
+        vehicle = self.config.get('vehicle', '')
+        engineer = self.config.get('engineer', '')
+        track = self.config.get('track', '')
+        
+        header_ax.text(0.82, 0.76, f"Vehicle: {vehicle}" if vehicle else "", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='right', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.82, 0.48, f"Engineer: {engineer}" if engineer else "", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='right', va='center', transform=header_ax.transAxes)
+        header_ax.text(0.82, 0.20, f"Track: {track}" if track else "", 
+                      fontsize=8.5, color=self.COLORS['text_light'],
+                      ha='right', va='center', transform=header_ax.transAxes)
         
         oem_name = self.config.get('oem_name', '')
         if not oem_name:
@@ -716,45 +855,87 @@ class GAReportBuilder:
         try:
             signals = self.config.get('signals', {})
             names = list(signals.keys())
-            total_plots = len(names) + 1
-            band_btm = 0.88 - self.band_height
-            p_top, p_btm = band_btm - 0.025, 0.23 
-            p_h = p_top - p_btm
-            fax = self.fig.add_axes([self.MARGIN_X, p_btm, self.CONTENT_WIDTH, p_h])
-            fax.axis('off')
-            self._draw_frame_with_header(fax, "SIGNAL(S) ANALYSIS", header_height_ratio=0.08)
-            pad_x = 0.04
-            avl_w, start_x = self.CONTENT_WIDTH - (2 * pad_x), self.MARGIN_X + pad_x
+            # GA includes Driver Behaviour as an extra plot; cap total at 6
             all_p = names + ['__DRIVER_BEHAVIOUR__']
-            if total_plots <= 2: nr, rcfg = 1, [2]
-            elif total_plots == 3: nr, rcfg = 2, [2, 1]
-            elif total_plots <= 4: nr, rcfg = 2, [2, 2]
-            else: nr, rcfg = 2, [3, 3]
-            rgap = 0.03
-            rh = (p_h - (rgap * (nr - 1))) / nr
-            pidx = 0
-            for ridx, nc in enumerate(rcfg):
-                pspc = 0.06
-                rw = avl_w - (nc - 1) * pspc
-                cw = rw / nc
-                sx = start_x + (avl_w - (nc * cw + (nc-1)*pspc)) / 2 if nc < max(rcfg) else start_x
-                for col in range(nc):
-                    if pidx >= len(all_p): break
-                    pname = all_p[pidx]
-                    lt = sx + col * (cw + pspc)
-                    off = 0.025 if ridx == 0 else 0
-                    rt = p_top - ridx * (rh + rgap)
-                    bt = rt - rh + (0.055 if nr == 1 else 0.03) - off
-                    ax = self.fig.add_axes([lt, bt, cw, rh - (0.09 if nr == 1 else 0.06)])
-                    if pname == '__DRIVER_BEHAVIOUR__': self._draw_driver_behaviour_plot(ax)
-                    else: self._draw_signal_plot(ax, pname, signals[pname])
-                    pidx += 1
-        except Exception: raise
+            total_plots = min(len(all_p), 6)
+
+            band_bottom = 0.88 - self.band_height
+            plot_top_frame = band_bottom - 0.025
+            plot_bottom_frame = 0.23
+            total_height_frame = plot_top_frame - plot_bottom_frame
+
+            frame_ax = self.fig.add_axes(
+                [self.MARGIN_X, plot_bottom_frame, self.CONTENT_WIDTH, total_height_frame]
+            )
+            frame_ax.axis('off')
+            self._draw_frame_with_header(frame_ax, "SIGNAL(S) ANALYSIS", header_height_ratio=0.08)
+
+            internal_padding_left = 0.05
+            internal_padding_right = 0.02
+            available_plot_width = self.CONTENT_WIDTH - internal_padding_left - internal_padding_right
+            plot_start_x = self.MARGIN_X + internal_padding_left
+
+            if total_plots == 1:
+                n_rows = 1
+                rows_config = [1]
+            elif total_plots == 2:
+                n_rows = 1
+                rows_config = [2]
+            elif total_plots == 3:
+                n_rows = 2
+                rows_config = [2, 1]
+            elif total_plots == 4:
+                n_rows = 2
+                rows_config = [2, 2]
+            elif total_plots == 5:
+                n_rows = 2
+                rows_config = [3, 2]
+            else:
+                n_rows = 2
+                rows_config = [3, 3]
+
+            row_gap = 0.03
+            available_height = total_height_frame - (row_gap * (n_rows - 1))
+            row_height = available_height / n_rows
+
+            plot_idx = 0
+            for row_idx, n_cols in enumerate(rows_config):
+                plot_spacing = 0.03
+                row_width = available_plot_width - (n_cols - 1) * plot_spacing
+                col_width = row_width / n_cols
+
+                if n_cols < max(rows_config):
+                    start_x = plot_start_x + (
+                        available_plot_width - (n_cols * col_width + (n_cols - 1) * plot_spacing)
+                    ) / 2
+                else:
+                    start_x = plot_start_x
+
+                for col in range(n_cols):
+                    if plot_idx >= total_plots:
+                        break
+                    pname = all_p[plot_idx]
+
+                    left = start_x + col * (col_width + plot_spacing)
+                    extra_top_offset = 0.025 if row_idx == 0 else 0
+                    row_top = plot_top_frame - row_idx * (row_height + row_gap)
+                    bottom = row_top - row_height + (0.055 if n_rows == 1 else 0.03) - extra_top_offset
+                    width = col_width
+                    height = row_height - (0.09 if n_rows == 1 else 0.06)
+
+                    ax = self.fig.add_axes([left, bottom, width, height])
+                    if pname == '__DRIVER_BEHAVIOUR__':
+                        self._draw_driver_behaviour_plot(ax)
+                    else:
+                        self._draw_signal_plot(ax, pname, signals[pname])
+                    plot_idx += 1
+        except Exception:
+            raise
                 
     def _draw_driver_behaviour_plot(self, ax):
         import matplotlib.pyplot as plt
         ax.set_facecolor('white')
-        ax.set_title("Driver Behaviour", fontsize=8, fontweight='bold', color=self.COLORS['text'])
+        ax.set_title("Driver Behaviour", fontsize=9, fontweight='bold', color=self.COLORS['text'])
         marks = sorted([float(t) for t in (self.config.get('driver_marks', []) or []) if t is not None])
         if not marks:
             ax.text(0.5, 0.5, "Post-Processing Required", ha='center', va='center', fontsize=8, color=self.COLORS['text_light'], style='italic')
@@ -773,7 +954,7 @@ class GAReportBuilder:
             ax.step(xs, ys, where='post', color=self.COLORS['primary'], linewidth=0.8)
             ax.set_ylim(-0.1, 1.1)
             ax.set_yticks([0, 1])
-            ax.set_yticklabels(['Troad', 'Taway'], fontsize=6, color=self.COLORS['text_light'])
+            ax.set_yticklabels(['Troad', 'Taway'], fontsize=7, color=self.COLORS['text_light'])
             psig = self.config.get('pass_signal_name')
             if psig:
                 pt = self.signal_times.get(psig)
@@ -793,7 +974,7 @@ class GAReportBuilder:
                     if _t is not None:
                         _clr = _phase_colors[_pi % len(_phase_colors)]
                         ax.axvline(x=_t, color=_clr, linestyle='-', linewidth=0.7, alpha=0.9)
-        ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
+        ax.set_xlabel("Time (s)", fontsize=7, color=self.COLORS['text_light'])
         ax.grid(True, linestyle='--', color=self.COLORS['grid'], alpha=0.5, linewidth=0.5)
         ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
                        direction='in', color=self.COLORS['border_light'])
@@ -814,7 +995,7 @@ class GAReportBuilder:
             try: tn, is_nt = float(thr), True
             except (ValueError, TypeError): is_nt = False
         ax.set_facecolor('white')
-        ax.set_title(dn, fontsize=8, fontweight='bold', color=self.COLORS['text'])
+        ax.set_title(dn, fontsize=9, fontweight='bold', color=self.COLORS['text'])
         if not ts or not smp:
             ax.text(0.5, 0.5, "No Data", ha='center', va='center'); ax.axis('off'); return
         vmap = None
@@ -839,7 +1020,7 @@ class GAReportBuilder:
                     b, a = signal.butter(4, [lo, hi], btype='band')
                     sn = signal.filtfilt(b, a, sn); suf = f" ({minf}-{maxf} Hz)"
                  except Exception: pass
-             ax.set_title(dn + suf, fontsize=8, fontweight='bold', color=self.COLORS['text'])
+             ax.set_title(dn + suf, fontsize=9, fontweight='bold', color=self.COLORS['text'])
              # Only draw horizontal threshold line for non-Unresponsive scenarios
              _category = self.config.get('target_category', '')
              if self.config.get('show_thresholds', False) and th > 0 and 'Unresponsive' not in _category:
@@ -901,8 +1082,8 @@ class GAReportBuilder:
                 _dur = _sig_times.get(f'phase_{_pi}_duration')
                 if _t is not None and _dur is not None and _dur > 0:
                     ax.axvspan(_t, _t + _dur, color=self.COLORS.get('secondary', '#d93d04'), alpha=0.15)
-        ax.set_xlabel("Time (s)", fontsize=6, color=self.COLORS['text_light'])
-        ax.set_ylabel(unt, fontsize=6, color=self.COLORS['text_light'])
+        ax.set_xlabel("Time (s)", fontsize=7, color=self.COLORS['text_light'])
+        ax.set_ylabel(unt, fontsize=7, color=self.COLORS['text_light'])
         if not is_ns and vmap:
             y_vals = list(vmap.values())
             raw_lbls = [(v.decode('utf-8') if isinstance(v, bytes) else str(v)) for v in vmap.keys()]
@@ -920,9 +1101,9 @@ class GAReportBuilder:
             # Draw labels rotated 90° at two vertical offset levels to avoid overlap
             for i, (y, lbl) in enumerate(zip(y_vals, cleaned_lbls)):
                 # Alternate between two x columns: close and far from axis
-                x_offset = -0.02 - (0.07 * (i % 2))
+                x_offset = -0.015 - (0.035 * (i % 2))
                 ax.text(x_offset, y, lbl, transform=ax.get_yaxis_transform(),
-                        ha='center', va='center', fontsize=5, color=self.COLORS['text_light'],
+                        ha='center', va='center', fontsize=6, color=self.COLORS['text_light'],
                         rotation=90, rotation_mode='anchor')
         ax.tick_params(axis='both', labelsize=6, colors=self.COLORS['text_light'],
                        direction='in', color=self.COLORS['border_light'])
@@ -1412,8 +1593,7 @@ class GAReportBuilder:
 
     def _add_footer(self):
         fax = self.fig.add_axes([self.MARGIN_X, 0.015, self.CONTENT_WIDTH, 0.04]); fax.axis('off')
-        category = self.config.get('target_category', '')
-        test_date = self.config.get('test_date', datetime.now())
+        test_date = self.config.get('test_date') or datetime.now()
         if test_date.tzinfo is not None:
             offset = test_date.strftime('%z')
             if offset:
@@ -1425,11 +1605,64 @@ class GAReportBuilder:
         else:
             lt = f"Date: {test_date.strftime('%d/%m/%Y %H:%M:%S')}"
         if self.config.get('filename'): lt += f" | File: {self.config.get('filename')}"
-        if self.config.get('vehicle'): lt += f" | Vehicle: {self.config.get('vehicle')}"
-        fax.text(0.0, 0.4, lt, fontsize=6, color=self.COLORS['text_light'], ha='left', va='center')
-        rt = f"Analyst: {self.config.get('analyst', '')} | Engineer: {self.config.get('engineer', '')}"
-        if self.config.get('track'): rt += f" | Track: {self.config.get('track', '')}"
-        fax.text(1.0, 0.4, rt, fontsize=6, color=self.COLORS['text_light'], ha='right', va='center')
+        if self.config.get('analyst'): lt += f" | Analyst: {self.config.get('analyst')}"
+        fax.text(0.0, 0.4, lt, fontsize=7, color=self.COLORS['text_light'], ha='left', va='center')
+        
+        try:
+            from backend.config.version import APP_VERSION
+            version_str1 = "FusionStudio™"
+            version_str2 = f"build_{APP_VERSION}"
+        except Exception:
+            version_str1 = "FusionStudio™"
+            version_str2 = "build_Unknown"
+            
+        logo_loaded = False
+        try:
+            from PIL import Image
+            import numpy as np
+            from matplotlib.offsetbox import HPacker, VPacker, OffsetImage, TextArea, AnnotationBbox
+            
+            logo_path = resource_path('assets/apple-touch-icon.png')
+            if os.path.exists(logo_path):
+                img = Image.open(logo_path).convert('RGBA')
+                # Keep it at a clean 32x32 size for high res, zoom down to size
+                img = img.resize((32, 32), Image.LANCZOS)
+                
+                # Shift circle down by padding the top with transparent pixels
+                img_np = np.array(img)
+                padded_np = np.zeros((img_np.shape[0] + 4, img_np.shape[1], 4), dtype=img_np.dtype)
+                padded_np[4:, :, :] = img_np
+                
+                imagebox = OffsetImage(padded_np, zoom=0.25)
+                textbox1 = TextArea(version_str1, textprops=dict(
+                    fontsize=7, 
+                    color=self.COLORS['text'], 
+                    fontweight='bold',
+                    fontfamily='Sofia Sans',
+                    ha='right',
+                    va='center'
+                ))
+                row1 = HPacker(children=[imagebox, textbox1], align="center", pad=0, sep=4)
+                
+                textbox2 = TextArea(version_str2, textprops=dict(
+                    fontsize=6, 
+                    color=self.COLORS['text_light'], 
+                    fontweight='normal',
+                    fontfamily='Sofia Sans',
+                    ha='right',
+                    va='center'
+                ))
+                
+                packer = VPacker(children=[row1, textbox2], align="right", pad=0, sep=2)
+                ab = AnnotationBbox(packer, (1.0, 0.4), xycoords='axes fraction', 
+                                    box_alignment=(1.0, 0.5), frameon=False)
+                fax.add_artist(ab)
+                logo_loaded = True
+        except Exception as e:
+            print(f"Error drawing app logo in footer: {e}")
+            
+        if not logo_loaded:
+            fax.text(1.0, 0.4, f"{version_str1}\n{version_str2}", fontsize=7, color=self.COLORS['text'], ha='right', va='center', fontweight='bold')
 
     def _draw_frame_with_header(self, ax, title, header_height_ratio=0.15):
         import matplotlib.patches as patches
@@ -1451,6 +1684,10 @@ class GAReportBuilder:
         f = patches.PathPatch(rr_path, facecolor='white', edgecolor=self.COLORS['border'], linewidth=1.5, transform=ax.transAxes, clip_on=False)
         ax.add_patch(f)
         
+        # Target header height in inches for consistent visual banner size
+        target_header_height_in = 0.28
+        header_height_ratio = target_header_height_in / H_in
+        
         # Draw the header background rectangle
         hr = patches.Rectangle((0.0, 1.0 - header_height_ratio), 1.0, header_height_ratio, facecolor=self.COLORS['frame_header'], edgecolor='none', transform=ax.transAxes)
         # Clip the header background to the rounded rectangle shape
@@ -1462,7 +1699,7 @@ class GAReportBuilder:
         ax.add_patch(b)
         
         # Add the header title text
-        ax.text(0.5, 1.0 - header_height_ratio/2, title, fontsize=8, fontweight='bold', color=self.COLORS['primary'], ha='center', va='center', zorder=6, transform=ax.transAxes)
+        ax.text(0.5, 1.0 - header_height_ratio/2, title, fontsize=9, fontweight='bold', color=self.COLORS['primary'], ha='center', va='center', zorder=6, transform=ax.transAxes)
 
     def _add_logo(self, ax, image_path: str, position: tuple, max_size: tuple = (1.0, 1.0)):
         from PIL import Image
